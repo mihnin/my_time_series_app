@@ -10,7 +10,7 @@ from utils import setup_logger, save_model, load_model, read_logs, MODEL_PATH
 import pandas as pd
 import logging
 
-# (Опционально) проверка активации conda-окружения
+# (Опционально) проверка активации conda-окружения (если используется)
 if not os.path.exists(os.path.join(sys.prefix, 'conda-meta')):
     st.warning("⚠️ Conda окружение не активировано! Запустите команду:")
     st.code("conda activate my_time_series_app")
