@@ -21,10 +21,12 @@ def train_model(
     time_limit,
     presets,
     eval_metric,
-    known_covariates=None
+    known_covariates=None,
+    hyperparameters=None
 ):
     """
-    Обучает TimeSeriesPredictor.
+    Обучает TimeSeriesPredictor с учётом (опционального) hyperparameters,
+    чтобы ограничить модели только выбранными пользователем.
     """
     logging.info("Инициализация TimeSeriesPredictor...")
     predictor = TimeSeriesPredictor(
@@ -33,12 +35,16 @@ def train_model(
         eval_metric=eval_metric,
         known_covariates_names=known_covariates if known_covariates else None
     )
-    logging.info(f"Начало fit() с time_limit={time_limit}, presets={presets}, eval_metric={eval_metric}")
+    logging.info(
+        f"Начало fit() с time_limit={time_limit}, presets={presets}, eval_metric={eval_metric}, "
+        f"hyperparameters={hyperparameters}"
+    )
 
     predictor.fit(
         train_data=train_ts_df,
         time_limit=time_limit,
-        presets=presets
+        presets=presets,
+        hyperparameters=hyperparameters
     )
     logging.info("Обучение модели завершено.")
     return predictor
@@ -47,10 +53,11 @@ def train_model(
 def forecast(predictor, ts_df, known_covariates=None):
     """
     Выполняет прогноз и возвращает DataFrame, индекс=MultiIndex(item_id, timestamp).
-    Колонки по умолчанию квантили (0.1, 0.2, ...).
+    Колонки по умолчанию — квантильные (0.1, 0.2, 0.3...).
     """
     logging.info("Вызов predictor.predict()...")
     predictions = predictor.predict(ts_df, known_covariates=known_covariates)
     logging.info("Прогнозирование завершено.")
     return predictions
+
 
