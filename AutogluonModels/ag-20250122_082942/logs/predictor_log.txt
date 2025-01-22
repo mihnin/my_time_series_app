@@ -1,0 +1,81 @@
+Beginning AutoGluon training... Time limit = 60s
+AutoGluon will save models to 'C:\my_time_series_app\AutogluonModels\ag-20250122_082942'
+=================== System Info ===================
+AutoGluon Version:  1.2
+Python Version:     3.10.16
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26120
+CPU Count:          24
+GPU Count:          0
+Memory Avail:       41.43 GB / 63.15 GB (65.6%)
+Disk Space Avail:   475.91 GB / 1861.53 GB (25.6%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': MASE,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 5,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 60,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'h'
+Provided train_data has 148060 rows, 200 time series. Median time series length is 700 (min=700, max=960). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'MASE'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2025-01-22 11:29:42
+Models that will be trained: ['Naive', 'SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos[bolt_small]', 'TemporalFusionTransformer']
+Training timeseries model Naive. Training for up to 6.7s of the 59.9s of remaining time.
+	-5.2272       = Validation score (-MASE)
+	0.08    s     = Training runtime
+	2.81    s     = Validation (prediction) runtime
+Training timeseries model SeasonalNaive. Training for up to 7.1s of the 57.0s of remaining time.
+	-0.9875       = Validation score (-MASE)
+	0.09    s     = Training runtime
+	0.14    s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 8.1s of the 56.8s of remaining time.
+	-0.5015       = Validation score (-MASE)
+	7.66    s     = Training runtime
+	0.28    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 8.1s of the 48.8s of remaining time.
+	-1.1788       = Validation score (-MASE)
+	7.72    s     = Training runtime
+	0.28    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 8.2s of the 40.8s of remaining time.
+	Time limit exceeded... Skipping ETS.
+Training timeseries model Theta. Training for up to 8.0s of the 32.1s of remaining time.
+	Time limit exceeded... Skipping Theta.
+Training timeseries model Chronos[bolt_small]. Training for up to 10.7s of the 32.1s of remaining time.
+	-0.4264       = Validation score (-MASE)
+	0.08    s     = Training runtime
+	2.11    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 15.0s of the 29.9s of remaining time.
+	-5.2571       = Validation score (-MASE)
+	13.90   s     = Training runtime
+	0.17    s     = Validation (prediction) runtime
+Fitting simple weighted ensemble.
+	Ensemble weights: {'Chronos[bolt_small]': 0.75, 'RecursiveTabular': 0.25}
+	-0.4151       = Validation score (-MASE)
+	0.19    s     = Training runtime
+	2.39    s     = Validation (prediction) runtime
+Training complete. Models trained: ['Naive', 'SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'Chronos[bolt_small]', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 44.37 s
+Best model: WeightedEnsemble
+Best model score: -0.4151
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
