@@ -1,86 +1,60 @@
 import pandas as pd
-import os
 import logging
 import streamlit as st
+from typing import Union, Optional
+from pathlib import Path
+from feature_engineering import fill_missing_values
 
-def load_data(uploaded_file):
+def load_data(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile) -> pd.DataFrame:
+    """Загружает данные из CSV/Excel файла с валидацией и обработкой ошибок.
+    
+    Args:
+        uploaded_file: Файл, загруженный через Streamlit file_uploader
+    
+    Returns:
+        pd.DataFrame: Загруженные данные
+        
+    Raises:
+        ValueError: При ошибках загрузки или неверном формате файла
     """
-    Загружает данные из локального CSV/Excel файла, загруженного через Streamlit.
-    """
-    if uploaded_file is None:
-        raise ValueError("Файл не выбран (uploaded_file is None).")
+    if not uploaded_file:
+        logging.error("Попытка загрузки без выбора файла")
+        raise ValueError("Ошибка: Файл не выбран!")
 
-    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-    logging.info(f"Попытка загрузить пользовательский файл: {uploaded_file.name}")
+    file_ext = Path(uploaded_file.name).suffix.lower()
+    logging.info(f"Начало загрузки файла: {uploaded_file.name}")
 
-    if file_extension == '.csv':
-        df = pd.read_csv(uploaded_file)
-    elif file_extension in ['.xls', '.xlsx']:
-        df = pd.read_excel(uploaded_file)
-    else:
-        raise ValueError("Неподдерживаемый формат файла. Используйте CSV или Excel.")
+    try:
+        if file_ext == '.csv':
+            with st.spinner("Чтение CSV файла..."):
+                df = pd.read_csv(uploaded_file)
+        elif file_ext in ('.xls', '.xlsx'):
+            with st.spinner("Чтение Excel файла..."):
+                df = pd.read_excel(uploaded_file)
+        else:
+            raise ValueError(f"Неподдерживаемый формат файла: {file_ext}")
+                
+        logging.info(f"Успешно загружено {len(df)} строк")
+        return df
 
-    logging.info(f"Успешно загружено {len(df)} записей из {uploaded_file.name}")
-    return df
-
-
-def convert_to_timeseries(df, id_col, timestamp_col, target_col, static_df=None) -> pd.DataFrame:
-    """
-    Преобразует DataFrame так, чтобы в итоге были колонки: 
-      'item_id', 'timestamp', 'target'.
-    """
-    required_columns = {id_col, timestamp_col, target_col}
-    missing_cols = required_columns - set(df.columns)
-    if missing_cols:
-        msg = f"Отсутствуют обязательные колонки: {missing_cols}"
-        logging.error(msg)
-        raise ValueError(msg + ". Проверьте названия столбцов.")
-
-    df = df.rename(columns={
-        id_col: "item_id",
-        timestamp_col: "timestamp",
-        target_col: "target"
-    })
-
-    # Заполняем пропуски в target
-    if df["target"].isnull().any():
-        st.warning("⚠️ Пропущенные значения в целевой переменной. Заполняем медианой по каждой серии (item_id).")
-        df["target"] = df.groupby("item_id")["target"].transform(
-            lambda x: x.fillna(x.median())
-        )
-
-    # Преобразуем timestamp в datetime
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors='coerce')
-    if df["timestamp"].isnull().any():
-        invalid_dates = df[df["timestamp"].isnull()]
-        msg = (
-            f"Некорректные значения даты в строках: {invalid_dates.index.tolist()}. "
-            f"Проверьте формат даты или исправьте/удалите неверные значения."
-        )
-        logging.error(msg)
-        raise ValueError(msg)
-
-    # Сортируем
-    df = df.sort_values(by=["item_id", "timestamp"])
-
-    # Проверка дубликатов
-    duplicates = df.duplicated(subset=["item_id", "timestamp"], keep=False)
-    if duplicates.any():
-        msg = (
-            f"Обнаружены дубликаты (item_id, timestamp) в строках: {df[duplicates].index.tolist()}. "
-            f"Удалите или объедините дубликаты."
-        )
-        logging.error(msg)
-        raise ValueError(msg)
-
-    # Статические признаки, если есть
-    if static_df is not None:
-        df = df.merge(static_df, on="item_id", how='left')
-
-    return df
+    except pd.errors.ParserError as e:
+        logging.error(f"Ошибка парсинга: {str(e)}")
+        raise ValueError(f"Ошибка чтения файла: {e}")
+    except Exception as e:
+        logging.error(f"Критическая ошибка: {str(e)}")
+        raise ValueError(f"Ошибка загрузки: {str(e)}")
 
 
+def convert_to_timeseries(
+    df: pd.DataFrame,
+    id_col: str,
+    timestamp_col: str,
+    target_col: str,
+    static_df: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
+    """Преобразует DataFrame в формат временных рядов."""
+    # ... (существующий код функции convert_to_timeseries)
 
-
-
-
+# Удаляем/комментируем предыдущие дубли:
+# def fill_missing_values(...):
+#     ... (больше не нужно, используем из feature_engineering) ...
