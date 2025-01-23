@@ -2,8 +2,11 @@ import logging
 import os
 from autogluon.timeseries import TimeSeriesPredictor
 
-LOG_PATH = "train_logs.log"
-MODEL_PATH = "saved_model"
+from pathlib import Path
+import datetime
+
+LOG_PATH = Path("logs") / f"train_{datetime.datetime.now().strftime('%Y%m%d')}.log"
+MODEL_PATH = Path("saved_models") / datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
 def setup_logger():
     """
@@ -13,6 +16,8 @@ def setup_logger():
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
+        # Создаем директорию для логов если не существует
+        os.makedirs(LOG_PATH.parent, exist_ok=True)
         file_handler = logging.FileHandler(LOG_PATH)
         file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
         logger.addHandler(file_handler)
@@ -52,5 +57,3 @@ def read_logs():
         with open(LOG_PATH, "r") as f:
             return f.read()
     return "Лог-файл отсутствует."
-
-

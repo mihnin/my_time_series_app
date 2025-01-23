@@ -14,7 +14,9 @@ def generate_data(start_date, end_date, countries, cities, shops):
         target = random.randint(10, 500)  # Random sales numbers
         data.append([date.strftime('%Y-%m-%d'), country, city, shop, target])
 
-    return pd.DataFrame(data, columns=['Date', 'Country', 'City', 'Shop', 'Target'])
+    df = pd.DataFrame(data, columns=['Date', 'Country', 'City', 'Shop', 'Target'])
+    df['Target'] = pd.to_numeric(df['Target'], errors='coerce')  # Ensure Target is numeric
+    return df
 
 # Define categorical values
 countries = ['USA', 'Canada', 'UK']
