@@ -1,25 +1,23 @@
 import logging
-from autogluon.timeseries import TimeSeriesDataFrame
-from autogluon.timeseries import TimeSeriesPredictor
-#test
+from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
 def make_timeseries_dataframe(df, static_df=None):
     """
-    Создаёт TimeSeriesDataFrame из pandas DataFrame, где колонки: item_id, timestamp, target.
-    При необходимости, подключает static_df (статические фичи).
+    Создаёт TimeSeriesDataFrame из pandas DataFrame, где колонки: [item_id, timestamp, target].
+    При необходимости прикрепляет static_features_df со столбцом "item_id".
     """
     ts_df = TimeSeriesDataFrame.from_data_frame(
         df,
         id_column="item_id",
         timestamp_column="timestamp",
-        static_features_df=static_df  # Если есть словарь {item_id -> static feats}
+        static_features_df=static_df  # static_df должно содержать колонку item_id
     )
     return ts_df
 
-def forecast(predictor, ts_df, known_covariates=None):
+def forecast(predictor: TimeSeriesPredictor, ts_df, known_covariates=None):
     """
     Выполняет прогноз и возвращает DataFrame (MultiIndex: item_id, timestamp).
-    Колонки по умолчанию — квантильные (0.1, 0.2, 0.3...).
+    Колонки по умолчанию — квантильные (0.1, 0.2, ..., 0.9) или среднее (0.5).
     """
     logging.info("Вызов predictor.predict()...")
     predictions = predictor.predict(ts_df, known_covariates=known_covariates)

@@ -1,23 +1,29 @@
 import pandas as pd
 import streamlit as st
-import logging
 import holidays
+import logging
 
 def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None) -> pd.DataFrame:
     """
     Выполняет заполнение пропусков (только для числовых столбцов).
     - "Constant=0": для float/int -> 0
     - "Group mean": groupby(group_cols) и fillna(mean)
-    - "Forward fill": ffill/bfill (при желании, внутри групп)
+    - "Forward fill": ffill/bfill
     - "None": не трогаем
     """
     numeric_cols = df.select_dtypes(include=["float", "int"]).columns
+
+    # Если нужен фикс для ворнинга pandas при groupby (length-1 list-like)
+    # if group_cols and len(group_cols) == 1:
+    #     group_cols = (group_cols[0],)
+
     if method == "None":
         return df
     elif method == "Constant=0":
         df[numeric_cols] = df[numeric_cols].fillna(0)
     elif method == "Forward fill":
         if group_cols:
+            # сортируем, чтобы ffill корректно сработал
             df = df.sort_values(by=group_cols, na_position="last")
             df[numeric_cols] = df.groupby(group_cols)[numeric_cols].apply(lambda g: g.ffill().bfill())
         else:
@@ -44,6 +50,7 @@ def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_
 
     min_year = df[date_col].dt.year.min()
     max_year = df[date_col].dt.year.max()
+
     ru_holidays = holidays.country_holidays(country="RU", years=range(min_year, max_year + 1))
 
     def is_holiday(dt):
@@ -51,3 +58,4 @@ def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_
 
     df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
     return df
+
