@@ -1,14 +1,11 @@
 import logging
 import os
-import datetime
-import pandas as pd
 from autogluon.timeseries import TimeSeriesPredictor
 
 MODEL_PATH = "saved_models/ag_model"
 LOG_FILE = "logs/app.log"
 
 def setup_logger():
-    """Инициализирует логгер с записью в файл и уровень INFO."""
     if not os.path.exists("logs"):
         os.makedirs("logs")
     logging.basicConfig(
@@ -40,3 +37,4 @@ def read_logs() -> str:
         return "Лог-файл не найден."
     with open(LOG_FILE, "r", encoding="utf-8") as f:
         return f.read()
+
