@@ -233,7 +233,7 @@ def main():
     model_choices = [all_models_opt]+model_keys
     chosen_models = st.sidebar.multiselect("Модели AutoGluon", model_choices, default=[all_models_opt])
 
-    presets = st.sidebar.selectbox("Presets", ["fast_quality","medium_quality","high_quality","best_quality"], index=1)
+    presets = st.sidebar.selectbox("Presets", ["fast_training","medium_quality","high_quality","best_quality"], index=1)
     prediction_length = st.sidebar.number_input("prediction_length", min_value=1, max_value=365, value=10)
     time_limit = st.sidebar.number_input("time_limit (sec)", min_value=10, max_value=36000, value=60)
     mean_only = st.sidebar.checkbox("Прогнозировать только среднее (mean)?", value=False)
