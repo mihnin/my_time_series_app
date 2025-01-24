@@ -1,6 +1,5 @@
 import logging
 import os
-from autogluon.timeseries import TimeSeriesPredictor
 
 LOG_FILE = "logs/app.log"
 
@@ -16,7 +15,7 @@ def setup_logger():
     logging.info("========== Приложение запущено ==========")
 
 def read_logs() -> str:
-    """Читает и возвращает содержимое лог-файла, игнорируя битые байты."""
+    """Читает и возвращает содержимое лог-файла (c заменой некорректных байт)."""
     if not os.path.exists(LOG_FILE):
         return "Лог-файл не найден."
     with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:

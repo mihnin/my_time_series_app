@@ -6,9 +6,9 @@ import logging
 def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None) -> pd.DataFrame:
     """
     Заполняет пропуски (только для числовых столбцов).
-      - "Constant=0": все NaN -> 0
-      - "Forward fill": ffill/bfill (при желании внутри групп)
-      - "Group mean": fillna средним внутри групп
+      - "Constant=0": NaN -> 0
+      - "Forward fill": ffill/bfill
+      - "Group mean": fillna средним в группе
       - "None": не трогаем
     """
     numeric_cols = df.select_dtypes(include=["float", "int"]).columns
@@ -17,15 +17,13 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
         group_cols = []
 
     if len(group_cols) == 1:
-        group_cols = (group_cols[0],)  # убрать FutureWarning pandas
+        group_cols = (group_cols[0],)  # убрать предупреждение pandas
 
     if method == "None":
         return df
-
     elif method == "Constant=0":
         df[numeric_cols] = df[numeric_cols].fillna(0)
         return df
-
     elif method == "Forward fill":
         if group_cols:
             df = df.sort_values(by=group_cols, na_position="last")
@@ -33,7 +31,6 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
         else:
             df[numeric_cols] = df[numeric_cols].ffill().bfill()
         return df
-
     elif method == "Group mean":
         if group_cols:
             df = df.sort_values(by=group_cols, na_position="last")
@@ -46,10 +43,9 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
 
     return df
 
-
 def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_col="russian_holiday") -> pd.DataFrame:
     """
-    Добавляет колонку holiday_col (0 или 1) для праздников РФ.
+    Добавляет колонку holiday_col (0 или 1) для праздников РФ (дату берем из date_col).
     """
     if date_col not in df.columns:
         st.warning("Колонка даты не найдена, не можем добавить признак праздника.")
@@ -67,6 +63,7 @@ def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_
 
     df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
     return df
+
 
 
 
