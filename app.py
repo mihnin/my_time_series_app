@@ -24,7 +24,7 @@ from src.utils.utils import (
 from autogluon.timeseries import TimeSeriesPredictor
 
 #############################
-# Дополнительные словари
+# Справка / словари
 #############################
 METRICS_DICT = {
     "SQL (Scaled quantile loss)": "Масштабированная квантильная ошибка",
@@ -67,32 +67,16 @@ AG_MODELS = {
     "ChronosModel": "Chronos pretrained"
 }
 
-#############################
-# Страница справки (Help)
-#############################
 def show_help_page():
     st.title("Справка / Помощь")
     st.markdown("""
 **В этом приложении**:
 - Загрузите 2 файла: **Train (обяз.)** и **Forecast (необяз.)**.
-- Укажите колонки с датой (**Date**), **target** и **ID** временного ряда.
-- Можете выбрать **частоту** (freq): auto, D, H, M, B...
-- Учитывайте **праздники** РФ (добавится колонка `russian_holiday`=0/1).
-- Задавайте **статические колонки** (например, страна, город).
-- Устанавливайте способы **заполнения пропусков**.
-- Обучите модель AutoGluon (`TimeSeriesPredictor`), сделайте прогноз.
-- Сохраните результаты в Excel, где увидите:
-  - *TrainData*, *ForecastData* (с колонкой `russian_holiday`, если выбран чекбокс),
-  - *Leaderboard*, *Predictions*,
-  - *StaticTrainFeatures* и *StaticForeFeatures* (с вашими стат. фичами).
-  
-**Важно**: Модель автоматически сохраняется в `AutogluonModels`.  
+- Укажите колонки с датой, target и ID, выберите freq, учтите праздники, заполните пропуски.
+- Обучите модель, сделайте прогноз, сохраните Excel.
+- Модель лежит в `AutogluonModels`.
     """)
 
-
-#############################
-# Основная функция (Streamlit)
-#############################
 def main():
     setup_logger()
 
@@ -105,7 +89,7 @@ def main():
 
     st.title("AutoGluon Приложение: Прогнозирование временных рядов")
 
-    # -------- Инициализация session_state --------
+    # 1. Инициализация в session_state
     if "df" not in st.session_state:
         st.session_state["df"] = None
     if "df_forecast" not in st.session_state:
@@ -118,8 +102,6 @@ def main():
         st.session_state["predictions"] = None
     if "fit_summary" not in st.session_state:
         st.session_state["fit_summary"] = None
-
-    # Храним static features для Train и Forecast (для Excel)
     if "static_df_train" not in st.session_state:
         st.session_state["static_df_train"] = None
     if "static_df_fore" not in st.session_state:
@@ -127,8 +109,8 @@ def main():
 
     # ========== (1) Загрузка данных ==========
     st.sidebar.header("1. Загрузка данных (Train+Forecast)")
-    train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv","xls","xlsx"])
-    forecast_file = st.sidebar.file_uploader("Forecast (необязательно)", type=["csv","xls","xlsx"])
+    train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv","xls","xlsx"], key="train_file")
+    forecast_file = st.sidebar.file_uploader("Forecast (необязательно)", type=["csv","xls","xlsx"], key="forecast_file")
 
     if st.sidebar.button("Загрузить данные"):
         if not train_file:
@@ -170,10 +152,10 @@ def main():
     possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
     static_feats = st.sidebar.multiselect("Статические колонки:", possible_static, default=[])
 
-    # Праздники РФ
+    # Чекбокс Праздники
     use_holidays = st.sidebar.checkbox("Учитывать праздники РФ?", value=False)
 
-    # Предварительный график Target (если df загружен и колонки выбраны)
+    # Если df загружен и колонки выбраны, покажем график Target
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
             df_plot = df_current.copy()
@@ -185,13 +167,13 @@ def main():
                     df_plot.sort_values(dt_col),
                     x=dt_col, y=tgt_col,
                     color=id_col,
-                    title="График целевого признака во времени (по ID)"
+                    title="График Target по ID"
                 )
             else:
                 fig_target = px.line(
                     df_plot.sort_values(dt_col),
                     x=dt_col, y=tgt_col,
-                    title="График целевого признака во времени"
+                    title="График Target (без ID)"
                 )
             st.subheader("Предварительный анализ Target")
             st.plotly_chart(fig_target, use_container_width=True)
@@ -207,7 +189,7 @@ def main():
     group_cols_for_fill = []
     if fill_method in ["Group mean","Forward fill"]:
         group_cols_for_fill = st.sidebar.multiselect(
-            "Колонки для группировки при заполнении",
+            "Колонки для группировки",
             static_feats
         )
 
@@ -219,18 +201,15 @@ def main():
     # ========== (5) Метрика, модели, пресет, time_limit ==========
     st.sidebar.header("5. Метрика и модели")
     metrics_list = list(METRICS_DICT.keys())
-    if "MASE (Mean absolute scaled error)" in metrics_list:
-        def_idx = metrics_list.index("MASE (Mean absolute scaled error)")
-    else:
-        def_idx = 0
+    def_idx = metrics_list.index("MASE (Mean absolute scaled error)") if "MASE (Mean absolute scaled error)" in metrics_list else 0
     chosen_metric = st.sidebar.selectbox("Метрика", metrics_list, index=def_idx)
 
     all_models_opt = "* (все)"
     model_keys = list(AG_MODELS.keys())
-    model_choices = [all_models_opt] + model_keys
+    model_choices = [all_models_opt]+model_keys
     chosen_models = st.sidebar.multiselect("Модели AutoGluon", model_choices, default=[all_models_opt])
 
-    # Пресеты (В актуальных версиях AG: "fast_training", "medium_quality", "high_quality", "best_quality" ...)
+    # Пресеты (в новых версиях AutoGluon: fast_training, medium_quality, high_quality, best_quality)
     presets_list = ["fast_training","medium_quality","high_quality","best_quality"]
     presets = st.sidebar.selectbox("Presets", presets_list, index=1)
 
@@ -239,47 +218,42 @@ def main():
     mean_only = st.sidebar.checkbox("Прогнозировать только среднее (mean)?", value=False)
 
     # ========== Кнопка "Обучить модель" ==========
-    st.sidebar.header("Обучение модели")
+    st.sidebar.header("6. Обучение модели")
     if st.sidebar.button("Обучить модель"):
         df_train = st.session_state.get("df")
         if df_train is None:
             st.warning("Сначала загрузите Train!")
         else:
-            # Проверяем, выбраны ли колонки
-            if dt_col=="<нет>" or tgt_col=="<нет>" or id_col=="<нет>":
-                st.error("Укажите колонки: дата, target, ID.")
+            # Добавим проверку, выбраны ли колонки
+            if dt_col == "<нет>" or tgt_col == "<нет>" or id_col == "<нет>":
+                st.error("Проверьте, что вы выбрали колонки: дата, target, и ID!")
             else:
                 try:
-                    # Копируем df_train -> df2 и добавляем праздники / заполняем пропуски
                     df2 = df_train.copy()
                     df2[dt_col] = pd.to_datetime(df2[dt_col], errors="coerce")
 
                     if use_holidays:
                         df2 = add_russian_holiday_feature(df2, date_col=dt_col, holiday_col="russian_holiday")
-
                     df2 = fill_missing_values(df2, fill_method, group_cols_for_fill)
 
-                    # Сохраняем обновлённый df2 обратно, чтобы в results.xlsx попала колонка
+                    # Перезаписываем st.session_state["df"], чтобы при сохранении
+                    # эта колонка (russian_holiday) осталась
                     st.session_state["df"] = df2
 
-                    # Формируем static_df
                     static_df = None
                     if static_feats:
                         tmp = df2[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
                         tmp.rename(columns={id_col: "item_id"}, inplace=True)
                         static_df = tmp
 
-                    # Convert to timeseries
                     df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
                     ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
 
-                    # Сохраняем stat. features для Excel
                     if ts_df.static_features is not None and len(ts_df.static_features) > 0:
                         st.session_state["static_df_train"] = ts_df.static_features.copy()
                     else:
                         st.session_state["static_df_train"] = None
 
-                    # Приведение к freq
                     actual_freq = None
                     if chosen_freq != "auto (угадать)":
                         freq_short = chosen_freq.split(" ")[0]
@@ -287,7 +261,6 @@ def main():
                         ts_df = ts_df.fill_missing_values(method="ffill")
                         actual_freq = freq_short
 
-                    # Hyperparams
                     if (len(chosen_models) == 1 and chosen_models[0] == all_models_opt) or len(chosen_models) == 0:
                         hyperparams = None
                     else:
@@ -321,7 +294,7 @@ def main():
                             raise
 
                     st.session_state["predictor"] = predictor
-                    st.success("Модель обучена! (сохранена AutoGluon в AutogluonModels)")
+                    st.success("Модель успешно обучена! (AutoGluon сохранил её в AutogluonModels)")
 
                     lb = predictor.leaderboard(ts_df)
                     st.session_state["leaderboard"] = lb
@@ -343,94 +316,92 @@ def main():
                     logging.error(str(ex))
 
     # ========== Кнопка "Сделать прогноз" ==========
-    st.sidebar.header("Прогноз")
+    st.sidebar.header("7. Прогноз")
     if st.sidebar.button("Сделать прогноз"):
         predictor = st.session_state.get("predictor")
         if predictor is None:
             st.warning("Сначала обучите модель!")
         else:
-            df_fore = st.session_state.get("df_forecast")
-            df_train = st.session_state.get("df")
-
-            if df_train is None:
-                st.error("Нет train данных, загрузите заново!")
+            # Тоже проверяем, выбраны ли колонки
+            if dt_col == "<нет>" or tgt_col == "<нет>" or id_col == "<нет>":
+                st.error("Проверьте, что вы выбрали колонки: дата, target, и ID!")
             else:
-                try:
-                    # Если forecast не загружен - делаем прогноз на train
-                    if df_fore is not None:
-                        st.subheader("Прогноз на FORECAST (загруженный)")
-                        df_pred = df_fore.copy()
-                    else:
-                        st.subheader("Прогноз на TRAIN (forecast не загружен)")
-                        df_pred = df_train.copy()
+                df_fore = st.session_state.get("df_forecast")
+                df_train = st.session_state.get("df")
 
-                    df_pred[dt_col] = pd.to_datetime(df_pred[dt_col], errors="coerce")
+                if df_train is None:
+                    st.error("Нет train данных, загрузите заново!")
+                else:
+                    try:
+                        if df_fore is not None:
+                            st.subheader("Прогноз на FORECAST (загруженный)")
+                            df_pred = df_fore.copy()
+                        else:
+                            st.subheader("Прогноз на TRAIN (не загружен Forecast)")
+                            df_pred = df_train.copy()
 
-                    if use_holidays:
-                        df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
+                        df_pred[dt_col] = pd.to_datetime(df_pred[dt_col], errors="coerce")
 
-                    df_pred = fill_missing_values(df_pred, fill_method, group_cols_for_fill)
+                        if use_holidays:
+                            df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
+                        df_pred = fill_missing_values(df_pred, fill_method, group_cols_for_fill)
 
-                    # ВАЖНО: перезаписываем df_forecast (если оно не None), чтобы сохранить holiday-колонку
-                    if df_fore is not None:
-                        st.session_state["df_forecast"] = df_pred
-                    else:
-                        # Если нет файла, то meтод "Сделать прогноз" работает на train, 
-                        # можно тоже обновить st.session_state["df"] 
-                        st.session_state["df"] = df_pred
+                        # Перезапишем session_state, чтобы сохранить holiday-колонку
+                        if df_fore is not None:
+                            st.session_state["df_forecast"] = df_pred
+                        else:
+                            st.session_state["df"] = df_pred
 
-                    static_df = None
-                    if static_feats:
-                        tmp = df_pred[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
-                        tmp.rename(columns={id_col: "item_id"}, inplace=True)
-                        static_df = tmp
+                        static_df = None
+                        if static_feats:
+                            tmp = df_pred[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
+                            tmp.rename(columns={id_col: "item_id"}, inplace=True)
+                            static_df = tmp
 
-                    if tgt_col not in df_pred.columns:
-                        df_pred[tgt_col] = None
+                        if tgt_col not in df_pred.columns:
+                            df_pred[tgt_col] = None
 
-                    df_prepared = convert_to_timeseries(df_pred, id_col, dt_col, tgt_col)
-                    ts_df = make_timeseries_dataframe(df_prepared, static_df=static_df)
+                        df_prepared = convert_to_timeseries(df_pred, id_col, dt_col, tgt_col)
+                        ts_df = make_timeseries_dataframe(df_prepared, static_df=static_df)
 
-                    # Сохраняем stat.features для Excel
-                    if ts_df.static_features is not None and len(ts_df.static_features) > 0:
-                        st.session_state["static_df_fore"] = ts_df.static_features.copy()
-                    else:
-                        st.session_state["static_df_fore"] = None
+                        if ts_df.static_features is not None and len(ts_df.static_features) > 0:
+                            st.session_state["static_df_fore"] = ts_df.static_features.copy()
+                        else:
+                            st.session_state["static_df_fore"] = None
 
-                    if chosen_freq != "auto (угадать)":
-                        freq_short = chosen_freq.split(" ")[0]
-                        ts_df = ts_df.convert_frequency(freq_short)
-                        ts_df = ts_df.fill_missing_values(method="ffill")
+                        if chosen_freq != "auto (угадать)":
+                            freq_short = chosen_freq.split(" ")[0]
+                            ts_df = ts_df.convert_frequency(freq_short)
+                            ts_df = ts_df.fill_missing_values(method="ffill")
 
-                    preds = forecast(predictor, ts_df)
-                    st.session_state["predictions"] = preds
+                        preds = forecast(predictor, ts_df)
+                        st.session_state["predictions"] = preds
 
-                    st.subheader("Предсказанные значения (первые строки)")
-                    st.dataframe(preds.reset_index().head())
+                        st.subheader("Предсказанные значения (первые строки)")
+                        st.dataframe(preds.reset_index().head())
 
-                    # Пример графиков
-                    if "0.5" in preds.columns:
-                        preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
-                        unique_ids = preds_df["item_id"].unique()
-                        st.subheader("Графики прогноза (0.5) по первым категориям")
-                        max_graphs = 3
-                        for i, uid in enumerate(unique_ids[:max_graphs]):
-                            subset = preds_df[preds_df["item_id"] == uid]
-                            fig_ = px.line(
-                                subset, x="timestamp", y="prediction",
-                                title=f"Прогноз для item_id={uid} (0.5)",
-                                markers=True
-                            )
-                            st.plotly_chart(fig_, use_container_width=True)
-                    else:
-                        st.info("Нет колонки '0.5' (mean_only=False или квантиль отключены).")
+                        if "0.5" in preds.columns:
+                            preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
+                            unique_ids = preds_df["item_id"].unique()
+                            st.subheader("Графики прогноза (0.5) по первым категориям")
+                            max_graphs = 3
+                            for i, uid in enumerate(unique_ids[:max_graphs]):
+                                subset = preds_df[preds_df["item_id"] == uid]
+                                fig_ = px.line(
+                                    subset, x="timestamp", y="prediction",
+                                    title=f"Прогноз для item_id={uid} (0.5)",
+                                    markers=True
+                                )
+                                st.plotly_chart(fig_, use_container_width=True)
+                        else:
+                            st.info("Нет колонки '0.5' — возможно mean_only=False или квантиль отключены.")
 
-                except Exception as ex:
-                    st.error(f"Ошибка прогноза: {ex}")
-                    logging.error(str(ex))
+                    except Exception as ex:
+                        st.error(f"Ошибка прогноза: {ex}")
+                        logging.error(str(ex))
 
-    # ========== Сохранение в Excel, Логи ==========
-    st.sidebar.header("Сохранение / Логи")
+    # ========== Сохранение в Excel / Логи ==========
+    st.sidebar.header("8. Сохранение результатов")
     save_path = st.sidebar.text_input("Excel-файл (results.xlsx)", "results.xlsx")
 
     if st.sidebar.button("Сохранить результаты"):
@@ -443,31 +414,24 @@ def main():
             static_train = st.session_state.get("static_df_train")
             static_fore  = st.session_state.get("static_df_fore")
 
+            import openpyxl
             with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
-                # TrainData
                 if df_train is not None:
                     df_train.to_excel(writer, sheet_name="TrainData", index=False)
-
-                # ForecastData
                 if df_fore is not None:
                     df_fore.to_excel(writer, sheet_name="ForecastData", index=False)
-
-                # Leaderboard
                 if lb is not None:
                     lb.to_excel(writer, sheet_name="Leaderboard", index=False)
-
-                # Predictions
                 if preds is not None:
                     preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False)
 
-                # Static features
+                # Статические фичи (если есть)
                 if static_train is not None and not static_train.empty:
                     static_train.to_excel(writer, sheet_name="StaticTrainFeatures")
                 if static_fore is not None and not static_fore.empty:
                     static_fore.to_excel(writer, sheet_name="StaticForeFeatures")
 
             st.success(f"Сохранено в {save_path}")
-
         except Exception as ex:
             st.error(f"Ошибка сохранения: {ex}")
 
@@ -476,5 +440,5 @@ def main():
         st.subheader("Логи")
         st.text(logs_)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
