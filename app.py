@@ -10,15 +10,11 @@ from src.features.feature_engineering import fill_missing_values, add_russian_ho
 from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.utils.utils import (
     setup_logger,
-    save_model,
-    load_model,
-    read_logs,
-    MODEL_PATH
+    read_logs  # нет больше save_model / load_model
 )
-
 from autogluon.timeseries import TimeSeriesPredictor
 
-# ----- Cловари и константы -----
+# ----- Словари и константы -----
 METRICS_DICT = {
     "SQL (Scaled quantile loss)": "Масштабированная квантильная ошибка",
     "WQL (Weighted quantile loss)": "Взвешенная квантильная ошибка",
@@ -68,12 +64,13 @@ def show_help_page():
     st.markdown("""
     **В этом приложении вы можете:**
     - Загрузить 2 файла: Train (обяз.) и Forecast (необяз.).
-    - Указать колонки с датой, значением (target), ID ряда.
-    - Выбрать частоту (freq): auto (пусть AutoGluon сам решит) или D/H/M/W/B.
-    - Добавлять статические фичи (до 3) — например, город, страну, категорию товара и т.д.
-    - Учитывать праздники РФ, заполнять пропуски несколькими способами, и т.д.
+    - Указать колонки с датой, target, ID временного ряда.
+    - Выбрать частоту (freq): auto или D/H/M/B/etc.
+    - Добавлять статические фичи, учитывать праздники, заполнять пропуски.
     - Обучить модель AutoGluon (TimeSeriesPredictor) и сделать прогноз.
-    - Сохранить результаты и обученную модель.
+    - Результаты можно сохранить в Excel.  
+    **Важно:** модель автоматически сохраняется AutoGluon в папке `AutogluonModels`, 
+    откуда вы сможете взять её при необходимости.
     """)
 
 def main():
@@ -232,17 +229,13 @@ def main():
                     static_df = None
                     if static_feats:
                         tmp = df2[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
-                        # Переименуем id_col => item_id
                         tmp.rename(columns={id_col: "item_id"}, inplace=True)
-                        # Важно: в static_features_df обязательно должна быть колонка "item_id"
-                        # Остальные статические колонки оставляем как есть
-                        # (city, country, category и т.п.)
                         static_df = tmp
 
-                    # Основной df для TimeSeries (переносим id_col -> item_id)
+                    # Основной df для TimeSeries
                     df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
 
-                    # Создаём TimeSeriesDataFrame, прикрепляем static_df
+                    # Создаём TimeSeriesDataFrame
                     ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
 
                     # Приведение к freq, если выбрано
@@ -272,6 +265,7 @@ def main():
                         quantile_levels=q_levels
                     )
 
+                    # Во время fit AutoGluon сам сохранит модель в папку AutogluonModels
                     predictor.fit(
                         train_data=ts_df,
                         time_limit=time_limit,
@@ -316,7 +310,6 @@ def main():
                 st.error("Нет train данных, загрузите заново!")
             else:
                 try:
-                    # Используем Forecast-файл, если есть, иначе train
                     if df_fore is not None:
                         st.subheader("Прогноз на FORECAST")
                         df_pred = df_fore.copy()
@@ -331,22 +324,19 @@ def main():
 
                     df_pred = fill_missing_values(df_pred, fill_method, group_cols_for_fill)
 
-                    # Собираем static_df аналогично
                     static_df = None
                     if static_feats:
                         tmp = df_pred[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
                         tmp.rename(columns={id_col: "item_id"}, inplace=True)
                         static_df = tmp
 
-                    # Если target нет в forecast, добавляем
                     if tgt_col not in df_pred.columns:
                         df_pred[tgt_col] = None
 
                     df_prepared = convert_to_timeseries(df_pred, id_col, dt_col, tgt_col)
                     ts_df = make_timeseries_dataframe(df_prepared, static_df=static_df)
 
-                    # Приведение freq, если нужно
-                    if predictor and chosen_freq != "auto (угадать)":
+                    if chosen_freq != "auto (угадать)":
                         freq_short = chosen_freq.split(" ")[0]
                         ts_df = ts_df.convert_frequency(freq_short)
                         ts_df = ts_df.fill_missing_values(method="ffill")
@@ -357,7 +347,6 @@ def main():
                     st.subheader("Предсказанные значения (первые строки)")
                     st.dataframe(preds.reset_index().head())
 
-                    # Отрисуем график по квантильной колонке "0.5", если есть
                     if "0.5" in preds.columns:
                         preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
                         unique_ids = preds_df["item_id"].unique()
@@ -378,7 +367,7 @@ def main():
                     st.error(f"Ошибка прогноза: {ex}")
                     logging.error(str(ex))
 
-    # ========== (Кнопки) Сохранение результатов и модели ==========
+    # ========== (Кнопка) Сохранение результатов, Логи (Без сохранения модели!) ==========
     st.sidebar.header("Сохранение/Логи")
     save_path = st.sidebar.text_input("Excel-файл (results.xlsx)", "results.xlsx")
 
@@ -402,24 +391,6 @@ def main():
             st.success(f"Сохранено в {save_path}")
         except Exception as ex:
             st.error(f"Ошибка сохранения: {ex}")
-
-    if st.sidebar.button("Сохранить модель"):
-        predictor = st.session_state.get("predictor")
-        if predictor is None:
-            st.warning("Нет обученной модели.")
-        else:
-            try:
-                save_model(predictor)
-                st.success(f"Модель сохранена в {MODEL_PATH}")
-            except Exception as e:
-                st.error(f"Ошибка: {e}")
-
-    if st.sidebar.button("Загрузить модель"):
-        try:
-            st.session_state["predictor"] = load_model()
-            st.success("Модель загружена.")
-        except Exception as e:
-            st.error(f"Ошибка: {e}")
 
     if st.sidebar.button("Показать логи"):
         logs_ = read_logs()
