@@ -1,0 +1,137 @@
+Beginning AutoGluon training... Time limit = 60s
+AutoGluon will save models to 'C:\my_time_series_app\AutogluonModels\ag-20250123_141143'
+=================== System Info ===================
+AutoGluon Version:  1.2
+Python Version:     3.10.16
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26120
+CPU Count:          24
+GPU Count:          0
+Memory Avail:       46.98 GB / 63.15 GB (74.4%)
+Disk Space Avail:   467.10 GB / 1861.53 GB (25.1%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': MASE,
+ 'hyperparameters': 'default',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 10,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 60,
+ 'verbosity': 2}
+
+Beginning AutoGluon training... Time limit = 60s
+AutoGluon will save models to 'C:\my_time_series_app\AutogluonModels\ag-20250123_141153'
+=================== System Info ===================
+AutoGluon Version:  1.2
+Python Version:     3.10.16
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26120
+CPU Count:          24
+GPU Count:          0
+Memory Avail:       46.36 GB / 63.15 GB (73.4%)
+Disk Space Avail:   467.10 GB / 1861.53 GB (25.1%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': MASE,
+ 'freq': 'D',
+ 'hyperparameters': 'default',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 10,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 60,
+ 'verbosity': 2}
+
+Provided train_data has 18580 rows, 13 time series. Median time series length is 1441 (min=1329, max=1459). 
+
+Provided data contains following columns:
+	target: 'target'
+	past_covariates:
+		categorical:        ['Country', 'City']
+		continuous (float): []
+
+To learn how to fix incorrectly inferred types, please see documentation for TimeSeriesPredictor.fit
+
+AutoGluon will gauge predictive performance using evaluation metric: 'MASE'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2025-01-23 17:11:53
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'NPTS', 'DynamicOptimizedTheta', 'AutoETS', 'ChronosZeroShot[bolt_base]', 'ChronosFineTuned[bolt_small]', 'TemporalFusionTransformer', 'DeepAR', 'PatchTST', 'TiDE']
+Training timeseries model SeasonalNaive. Training for up to 4.6s of the 60.0s of remaining time.
+	-1.0262       = Validation score (-MASE)
+	0.02    s     = Training runtime
+	2.24    s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 4.8s of the 57.7s of remaining time.
+	-1.0311       = Validation score (-MASE)
+	0.71    s     = Training runtime
+	0.18    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 5.2s of the 56.8s of remaining time.
+	-1.4401       = Validation score (-MASE)
+	1.21    s     = Training runtime
+	0.09    s     = Validation (prediction) runtime
+Training timeseries model NPTS. Training for up to 5.6s of the 55.5s of remaining time.
+	-2.2520       = Validation score (-MASE)
+	0.02    s     = Training runtime
+	0.12    s     = Validation (prediction) runtime
+Training timeseries model DynamicOptimizedTheta. Training for up to 6.2s of the 55.4s of remaining time.
+	Time limit exceeded... Skipping DynamicOptimizedTheta.
+Training timeseries model AutoETS. Training for up to 6.9s of the 55.4s of remaining time.
+	-0.8750       = Validation score (-MASE)
+	0.02    s     = Training runtime
+	2.59    s     = Validation (prediction) runtime
+Training timeseries model ChronosZeroShot[bolt_base]. Training for up to 7.5s of the 52.8s of remaining time.
+	-0.9463       = Validation score (-MASE)
+	0.01    s     = Training runtime
+	1.93    s     = Validation (prediction) runtime
+Training timeseries model ChronosFineTuned[bolt_small]. Training for up to 8.5s of the 50.8s of remaining time.
+	Skipping covariate_regressor since the dataset contains no covariates or static features.
+	Saving fine-tuned model to C:\my_time_series_app\AutogluonModels\ag-20250123_141153\models\ChronosFineTuned[bolt_small]\W0\fine-tuned-ckpt
+	-0.9898       = Validation score (-MASE)
+	8.16    s     = Training runtime
+	0.12    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 8.5s of the 42.5s of remaining time.
+	-1.0040       = Validation score (-MASE)
+	7.84    s     = Training runtime
+	0.02    s     = Validation (prediction) runtime
+Training timeseries model DeepAR. Training for up to 8.7s of the 34.7s of remaining time.
+	-0.9978       = Validation score (-MASE)
+	7.93    s     = Training runtime
+	0.06    s     = Validation (prediction) runtime
+Training timeseries model PatchTST. Training for up to 8.9s of the 26.7s of remaining time.
+	-0.9254       = Validation score (-MASE)
+	8.09    s     = Training runtime
+	0.01    s     = Validation (prediction) runtime
+Training timeseries model TiDE. Training for up to 9.3s of the 18.5s of remaining time.
+	-0.9574       = Validation score (-MASE)
+	8.52    s     = Training runtime
+	0.02    s     = Validation (prediction) runtime
+Fitting simple weighted ensemble.
+	Ensemble weights: {'AutoETS': 1.0}
+	-0.8750       = Validation score (-MASE)
+	0.22    s     = Training runtime
+	2.59    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'NPTS', 'AutoETS', 'ChronosZeroShot[bolt_base]', 'ChronosFineTuned[bolt_small]', 'TemporalFusionTransformer', 'DeepAR', 'PatchTST', 'TiDE', 'WeightedEnsemble']
+Total runtime: 50.24 s
+Best model: AutoETS
+Best model score: -0.8750
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
