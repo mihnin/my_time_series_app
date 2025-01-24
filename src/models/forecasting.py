@@ -3,8 +3,8 @@ from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
 def make_timeseries_dataframe(df, static_df=None):
     """
-    Создаёт TimeSeriesDataFrame из pandas DataFrame, где колонки: (item_id, timestamp, target).
-    При необходимости прикрепляет static_features_df со столбцом "item_id".
+    Создаёт TimeSeriesDataFrame из df (столбцы item_id/timestamp/target).
+    Если есть static_df, добавляет его как static_features_df.
     """
     ts_df = TimeSeriesDataFrame.from_data_frame(
         df,
@@ -16,13 +16,14 @@ def make_timeseries_dataframe(df, static_df=None):
 
 def forecast(predictor: TimeSeriesPredictor, ts_df, known_covariates=None):
     """
-    Выполняет прогноз и возвращает DataFrame (MultiIndex: item_id, timestamp).
-    Колонки: квантильные (0.1,0.2,...,0.9) или среднее (0.5), если mean_only.
+    Вызывает predictor.predict() и возвращает получившийся DataFrame
+    (индекс = MultiIndex(item_id, timestamp)).
     """
     logging.info("Вызов predictor.predict()...")
     preds = predictor.predict(ts_df, known_covariates=known_covariates)
     logging.info("Прогнозирование завершено.")
     return preds
+
 
 
 
