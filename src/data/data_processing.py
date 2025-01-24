@@ -33,10 +33,12 @@ def load_data(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile) -> p
         raise ValueError(f"Ошибка загрузки: {str(e)}")
 
 
-def convert_to_timeseries(df: pd.DataFrame, 
-                          id_col: str, 
-                          timestamp_col: str, 
-                          target_col: str) -> pd.DataFrame:
+def convert_to_timeseries(
+    df: pd.DataFrame,
+    id_col: str,
+    timestamp_col: str,
+    target_col: str
+) -> pd.DataFrame:
     """
     Преобразует DataFrame в формат, где столбцы строго item_id/timestamp/target,
     и сортирует по (item_id, timestamp).
@@ -51,3 +53,17 @@ def convert_to_timeseries(df: pd.DataFrame,
     df_local.sort_values(["item_id", "timestamp"], inplace=True)
     df_local.reset_index(drop=True, inplace=True)
     return df_local
+
+def show_dataset_stats(df: pd.DataFrame):
+    """
+    Выводит в Streamlit простую статистику:
+      - describe() (min, max, mean...)
+      - количество пропусков
+    """
+    st.write("**Параметры (describe) для числовых столбцов**:")
+    st.write(df.describe(include=[float,int]))
+
+    st.write("**Количество пропусков (NaN) по столбцам**:")
+    missing_info = df.isnull().sum()
+    st.write(missing_info)
+
