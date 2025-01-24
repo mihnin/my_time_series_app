@@ -16,10 +16,11 @@ def setup_logger():
     logging.info("========== Приложение запущено ==========")
 
 def read_logs() -> str:
-    """Читает и возвращает содержимое лог-файла с игнорированием битых байт."""
+    """Читает и возвращает содержимое лог-файла, игнорируя битые байты."""
     if not os.path.exists(LOG_FILE):
         return "Лог-файл не найден."
     with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
         return f.read()
+
 
 

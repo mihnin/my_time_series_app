@@ -7,21 +7,16 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
     """
     Заполняет пропуски (только для числовых столбцов) следующими способами:
       - "Constant=0": все NaN -> 0
-      - "Forward fill": ffill/bfill (возможно внутри групп)
+      - "Forward fill": ffill/bfill (при желании внутри групп)
       - "Group mean": fillna средним значением внутри групп
       - "None": не трогать
-
-    Аргументы:
-      df (pd.DataFrame): исходные данные
-      method (str): метод заполнения
-      group_cols (List[str]): столбцы, по которым группируем
     """
     numeric_cols = df.select_dtypes(include=["float", "int"]).columns
 
     if not group_cols:
-        group_cols = []  # чтобы не было ошибки при проверках ниже
+        group_cols = []
 
-    # Если у нас единственный столбец для группировки, превращаем его в кортеж (col,)
+    # Если у нас единственный столбец для группировки -> кортеж
     if len(group_cols) == 1:
         group_cols = (group_cols[0],)
 
@@ -35,29 +30,27 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
     elif method == "Forward fill":
         if group_cols:
             df = df.sort_values(by=group_cols, na_position="last")
-            df[numeric_cols] = df.groupby(group_cols)[numeric_cols].transform(
-                lambda g: g.ffill().bfill()
-            )
+            df[numeric_cols] = df.groupby(group_cols)[numeric_cols].transform(lambda g: g.ffill().bfill())
         else:
             df[numeric_cols] = df[numeric_cols].ffill().bfill()
         return df
 
     elif method == "Group mean":
-        if not group_cols:
-            for c in numeric_cols:
-                df[c] = df[c].fillna(df[c].mean())
-        else:
+        if group_cols:
             df = df.sort_values(by=group_cols, na_position="last")
             for c in numeric_cols:
                 df[c] = df.groupby(group_cols)[c].transform(lambda x: x.fillna(x.mean()))
+        else:
+            for c in numeric_cols:
+                df[c] = df[c].fillna(df[c].mean())
         return df
 
     return df
 
-
 def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_col="russian_holiday") -> pd.DataFrame:
     """
     Добавляет бинарный признак праздников РФ (1 = праздник, 0 = нет).
+    Если даты не в диапазоне, возможно 0 везде.
     """
     if date_col not in df.columns:
         st.warning("Колонка даты не найдена, не можем добавить признак праздника.")

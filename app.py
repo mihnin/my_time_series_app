@@ -5,16 +5,18 @@ import os
 import logging
 
 # ========== Импорт наших модулей ==========
-from src.data.data_processing import load_data, convert_to_timeseries
+from src.data.data_processing import load_data, convert_to_timeseries, show_dataset_stats
 from src.features.feature_engineering import fill_missing_values, add_russian_holiday_feature
 from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.utils.utils import (
     setup_logger,
-    read_logs  # нет больше save_model / load_model
+    read_logs
 )
 from autogluon.timeseries import TimeSeriesPredictor
 
-# ----- Словари и константы -----
+#############################
+# Справочная информация
+#############################
 METRICS_DICT = {
     "SQL (Scaled quantile loss)": "Масштабированная квантильная ошибка",
     "WQL (Weighted quantile loss)": "Взвешенная квантильная ошибка",
@@ -62,15 +64,41 @@ AG_MODELS = {
 def show_help_page():
     st.title("Справка / Помощь")
     st.markdown("""
-    **В этом приложении вы можете:**
-    - Загрузить 2 файла: Train (обяз.) и Forecast (необяз.).
-    - Указать колонки с датой, target, ID временного ряда.
-    - Выбрать частоту (freq): auto или D/H/M/B/etc.
-    - Добавлять статические фичи, учитывать праздники, заполнять пропуски.
-    - Обучить модель AutoGluon (TimeSeriesPredictor) и сделать прогноз.
-    - Результаты можно сохранить в Excel.  
-    **Важно:** модель автоматически сохраняется AutoGluon в папке `AutogluonModels`, 
-    откуда вы сможете взять её при необходимости.
+**В этом приложении вы можете:**
+- Загрузить 2 файла: **Train (обяз.)** и **Forecast (необяз.)**.
+- Указать колонки с датой, **target**, **ID** временного ряда.
+- Выбрать частоту (freq): `auto` или `D/H/M/B/etc`.
+- Добавлять **статические фичи** (город, страна, характеристики товара),
+  учитывать **праздники** (колонка `russian_holiday` = 0/1), 
+  заполнять пропуски (`Constant=0`, `Group mean`, `Forward fill` и т.д.).
+- **Обучить** модель AutoGluon (`TimeSeriesPredictor`) и сделать **прогноз**.
+- Сохранить результаты в Excel.
+- **Важно**: модель автоматически сохраняется в папку **AutogluonModels**.
+  Если нужно — заберите её изтуда.
+
+---
+
+### Как работают праздники
+- При включении “Учитывать праздники РФ?” создаём/заполняем колонку `russian_holiday` (0/1) в вашем df.
+- Если не видите её “физически”, убедитесь, что:
+  1) Галочка стоит,
+  2) Колонка даты распознана как datetime,
+  3) Годы попадают в диапазон.
+
+### Как работают статические поля
+- Мы передаём их в `TimeSeriesDataFrame(..., static_features_df=...)`.
+- **Они не хранятся** как обычные столбцы в финальном df. 
+  Вы можете посмотреть их через `ts_df.static_features`.
+- При обучении модель (AutoGluon) учтёт эти поля.
+
+### Статистика при загрузке
+- После загрузки Train мы выводим `df.describe()` и кол-во пропусков.
+- Это покажет min, max, среднее и т.д.
+
+### Если AutoGluon не смог определить freq="auto"
+- Мы ловим ошибку и просим вас указать freq (D, H, M...).
+
+Удачного использования!
     """)
 
 def main():
@@ -114,6 +142,11 @@ def main():
                 st.success("Train-файл загружен!")
                 st.dataframe(df_train.head(5))
 
+                # Покажем основную статистику (min, max, mean...) + кол-во NaN
+                st.subheader("Статистика по Train")
+                show_dataset_stats(df_train)
+
+                # Forecast
                 if forecast_file:
                     df_fore = load_data(forecast_file)
                     st.session_state["df_forecast"] = df_fore
@@ -122,6 +155,7 @@ def main():
                 else:
                     st.session_state["df_forecast"] = None
                     st.info("Forecast не загружен.")
+
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
 
@@ -143,7 +177,7 @@ def main():
 
     use_holidays = st.sidebar.checkbox("Учитывать праздники РФ?", value=False)
 
-    # Покажем график Target во времени, если дата/таргет выбраны
+    # Предварительный график (Target vs Date)
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
             df_plot = df_current.copy()
@@ -204,7 +238,7 @@ def main():
     time_limit = st.sidebar.number_input("time_limit (sec)", min_value=10, max_value=36000, value=60)
     mean_only = st.sidebar.checkbox("Прогнозировать только среднее (mean)?", value=False)
 
-    # ========== (Кнопка) Обучить модель ==========
+    # ========== (Кнопка) Обучение ==========
     st.sidebar.header("Обучение модели")
     if st.sidebar.button("Обучить модель"):
         df_train = st.session_state.get("df")
@@ -225,17 +259,15 @@ def main():
                     # Пропуски
                     df2 = fill_missing_values(df2, fill_method, group_cols_for_fill)
 
-                    # Формируем static_df (содержит колонку item_id)
+                    # static_df (статические фичи)
                     static_df = None
                     if static_feats:
                         tmp = df2[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
                         tmp.rename(columns={id_col: "item_id"}, inplace=True)
                         static_df = tmp
 
-                    # Основной df для TimeSeries
+                    # Формируем df_ready
                     df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
-
-                    # Создаём TimeSeriesDataFrame
                     ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
 
                     # Приведение к freq, если выбрано
@@ -256,32 +288,38 @@ def main():
                     eval_key = chosen_metric.split(" ")[0]
                     q_levels = [0.5] if mean_only else None
 
-                    st.info("Начинаем обучение...")
                     predictor = TimeSeriesPredictor(
                         target="target",
                         prediction_length=prediction_length,
                         eval_metric=eval_key,
-                        freq=actual_freq,
+                        freq=actual_freq,  # если None, попробует авто
                         quantile_levels=q_levels
                     )
 
-                    # Во время fit AutoGluon сам сохранит модель в папку AutogluonModels
-                    predictor.fit(
-                        train_data=ts_df,
-                        time_limit=time_limit,
-                        presets=presets,
-                        hyperparameters=hyperparams
-                    )
-                    st.session_state["predictor"] = predictor
-                    st.success("Модель успешно обучена!")
+                    st.info("Начинаем обучение...")
+                    try:
+                        predictor.fit(
+                            train_data=ts_df,
+                            time_limit=time_limit,
+                            presets=presets,
+                            hyperparameters=hyperparams
+                        )
+                    except ValueError as e:
+                        # Ловим ошибку "Frequency of train_data is not provided and cannot be inferred..."
+                        if "cannot be inferred" in str(e):
+                            st.error("AutoGluon не смог определить частоту (freq='auto'). Укажите freq вручную.")
+                            raise
+                        else:
+                            raise
 
-                    # Лидерборд
+                    st.session_state["predictor"] = predictor
+                    st.success("Модель успешно обучена! (Сохранена AutoGluon в AutogluonModels)")
+
                     lb = predictor.leaderboard(ts_df)
                     st.session_state["leaderboard"] = lb
                     st.subheader("Лидерборд (Leaderboard)")
                     st.dataframe(lb)
 
-                    # fit_summary
                     summ = predictor.fit_summary()
                     st.session_state["fit_summary"] = summ
 
@@ -311,7 +349,7 @@ def main():
             else:
                 try:
                     if df_fore is not None:
-                        st.subheader("Прогноз на FORECAST")
+                        st.subheader("Прогноз на FORECAST (загруженный файл)")
                         df_pred = df_fore.copy()
                     else:
                         st.subheader("Прогноз на TRAIN (т.к. forecast не загружен)")
@@ -324,6 +362,7 @@ def main():
 
                     df_pred = fill_missing_values(df_pred, fill_method, group_cols_for_fill)
 
+                    # Статические фичи для FORECAST
                     static_df = None
                     if static_feats:
                         tmp = df_pred[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
@@ -347,6 +386,7 @@ def main():
                     st.subheader("Предсказанные значения (первые строки)")
                     st.dataframe(preds.reset_index().head())
 
+                    # Пример вывода графика (0.5)
                     if "0.5" in preds.columns:
                         preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
                         unique_ids = preds_df["item_id"].unique()
@@ -361,14 +401,14 @@ def main():
                             )
                             st.plotly_chart(fig_, use_container_width=True)
                     else:
-                        st.info("Нет колонки '0.5' (mean_only=False или квантильные отключены).")
+                        st.info("Нет колонки '0.5' (mean_only=False или квантили отключены).")
 
                 except Exception as ex:
                     st.error(f"Ошибка прогноза: {ex}")
                     logging.error(str(ex))
 
-    # ========== (Кнопка) Сохранение результатов, Логи (Без сохранения модели!) ==========
-    st.sidebar.header("Сохранение/Логи")
+    # ========== (Кнопка) Сохранение результатов, Логи ==========
+    st.sidebar.header("Сохранение / Логи")
     save_path = st.sidebar.text_input("Excel-файл (results.xlsx)", "results.xlsx")
 
     if st.sidebar.button("Сохранить результаты"):
