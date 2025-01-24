@@ -54,16 +54,18 @@ def convert_to_timeseries(
     df_local.reset_index(drop=True, inplace=True)
     return df_local
 
+
 def show_dataset_stats(df: pd.DataFrame):
     """
     Выводит в Streamlit простую статистику:
-      - describe() (min, max, mean...)
-      - количество пропусков
+      - describe() (min, max, mean, std)
+      - количество пропусков (NaN)
     """
-    st.write("**Параметры (describe) для числовых столбцов**:")
+    st.write("**Основные статистики (describe) для числовых столбцов**:")
     st.write(df.describe(include=[float,int]))
 
-    st.write("**Количество пропусков (NaN) по столбцам**:")
+    st.write("**Количество пропусков (NaN) по столбцам:**")
     missing_info = df.isnull().sum()
     st.write(missing_info)
+
 
