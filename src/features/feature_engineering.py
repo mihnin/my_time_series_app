@@ -5,20 +5,19 @@ import logging
 
 def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None) -> pd.DataFrame:
     """
-    Заполняет пропуски (только для числовых столбцов) следующими способами:
+    Заполняет пропуски (только для числовых столбцов).
       - "Constant=0": все NaN -> 0
       - "Forward fill": ffill/bfill (при желании внутри групп)
-      - "Group mean": fillna средним значением внутри групп
-      - "None": не трогать
+      - "Group mean": fillna средним внутри групп
+      - "None": не трогаем
     """
     numeric_cols = df.select_dtypes(include=["float", "int"]).columns
 
     if not group_cols:
         group_cols = []
 
-    # Если у нас единственный столбец для группировки -> кортеж
     if len(group_cols) == 1:
-        group_cols = (group_cols[0],)
+        group_cols = (group_cols[0],)  # убрать FutureWarning pandas
 
     if method == "None":
         return df
@@ -47,10 +46,10 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
 
     return df
 
+
 def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_col="russian_holiday") -> pd.DataFrame:
     """
-    Добавляет бинарный признак праздников РФ (1 = праздник, 0 = нет).
-    Если даты не в диапазоне, возможно 0 везде.
+    Добавляет колонку holiday_col (0 или 1) для праздников РФ.
     """
     if date_col not in df.columns:
         st.warning("Колонка даты не найдена, не можем добавить признак праздника.")
@@ -68,5 +67,6 @@ def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_
 
     df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
     return df
+
 
 
