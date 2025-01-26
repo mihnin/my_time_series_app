@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -10,7 +11,7 @@ import json
 from autogluon.timeseries import TimeSeriesPredictor
 from openpyxl.styles import PatternFill
 
-# Импортируем convert_to_timeseries один раз на верхнем уровне
+# ВАЖНО: импортируем convert_to_timeseries один раз здесь, без повторного импорта в кнопках
 from src.data.data_processing import (
     load_data,
     convert_to_timeseries,
@@ -28,14 +29,17 @@ from src.utils.utils import (
     setup_logger,
     read_logs
 )
-from help_page import show_help_page  # поправьте путь, если нужно
+from help_page import show_help_page  # <-- если у вас help_page.py в src, путь должен быть src.help_page
 
+
+# === Глобальные константы ===
 CONFIG_PATH = "config/config.yaml"
 MODEL_DIR = "AutogluonModels/TimeSeriesModel"
 MODEL_INFO_FILE = "model_info.json"
 
 
 def load_config(path: str):
+    """Загружает конфиг YAML, возвращает METRICS_DICT и AG_MODELS."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Файл конфигурации {path} не найден.")
     with open(path, "r", encoding="utf-8") as f:
@@ -44,12 +48,17 @@ def load_config(path: str):
     ag_models = data.get("ag_models", {})
     return metrics_dict, ag_models
 
+
 METRICS_DICT, AG_MODELS = load_config(CONFIG_PATH)
 
 
 def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
                        fill_method_val, group_cols_fill_val, use_holidays_val,
                        metric, presets, chosen_models, mean_only):
+    """
+    Сохраняем все настройки в JSON, чтобы при повторном запуске/обновлении страницы
+    можно было восстановить эти параметры.
+    """
     os.makedirs(MODEL_DIR, exist_ok=True)
     info_dict = {
         "dt_col": dt_col,
@@ -58,7 +67,7 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
         "static_feats": static_feats,
         "freq_val": freq_val,
         "fill_method_val": fill_method_val,
-        "group_cols_for_fill_val": group_cols_fill_val,
+        "group_cols_fill_val": group_cols_fill_val,  # может быть []
         "use_holidays_val": use_holidays_val,
         "metric": metric,
         "presets": presets,
@@ -71,6 +80,7 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
 
 
 def load_model_metadata():
+    """Загружаем сохранённые настройки из model_info.json (если есть)."""
     path_json = os.path.join(MODEL_DIR, MODEL_INFO_FILE)
     if not os.path.exists(path_json):
         return None
@@ -83,28 +93,35 @@ def load_model_metadata():
 
 
 def try_load_existing_model():
+    """
+    Если в папке MODEL_DIR есть модель (TimeSeriesPredictor),
+    загружаем и восстанавливаем настройки (dt_col, freq, и т.д.)
+    из model_info.json (если есть).
+    """
     if not os.path.exists(MODEL_DIR):
         return
     try:
         loaded_predictor = TimeSeriesPredictor.load(MODEL_DIR)
         st.session_state["predictor"] = loaded_predictor
         st.info(f"Загружена ранее обученная модель из {MODEL_DIR}")
+
         meta = load_model_metadata()
         if meta:
-            st.session_state["dt_col_key"] = meta["dt_col"]
-            st.session_state["tgt_col_key"] = meta["tgt_col"]
-            st.session_state["id_col_key"]  = meta["id_col"]
-            st.session_state["static_feats_key"] = meta["static_feats"]
-            st.session_state["freq_key"] = meta["freq_val"]
-            st.session_state["fill_method_key"] = meta["fill_method_val"]
-            st.session_state["group_cols_for_fill_key"] = meta["group_cols_fill_val"]
-            st.session_state["use_holidays_key"] = meta["use_holidays_val"]
-            st.session_state["metric_key"] = meta["metric"]
-            st.session_state["presets_key"] = meta["presets"]
-            st.session_state["models_key"] = meta["chosen_models"]
-            st.session_state["mean_only_key"] = meta["mean_only"]
+            # Используем .get(..., default), чтобы не было KeyError
+            st.session_state["dt_col_key"] = meta.get("dt_col", "<нет>")
+            st.session_state["tgt_col_key"] = meta.get("tgt_col", "<нет>")
+            st.session_state["id_col_key"]  = meta.get("id_col", "<нет>")
+            st.session_state["static_feats_key"] = meta.get("static_feats", [])
+            st.session_state["freq_key"] = meta.get("freq_val", "auto (угадать)")
+            st.session_state["fill_method_key"] = meta.get("fill_method_val", "None")
+            st.session_state["group_cols_for_fill_key"] = meta.get("group_cols_fill_val", [])
+            st.session_state["use_holidays_key"] = meta.get("use_holidays_val", False)
+            st.session_state["metric_key"] = meta.get("metric", "MASE (Mean absolute scaled error)")
+            st.session_state["presets_key"] = meta.get("presets", "medium_quality")
+            st.session_state["models_key"] = meta.get("chosen_models", ["* (все)"])
+            st.session_state["mean_only_key"] = meta.get("mean_only", False)
 
-            st.info("Настройки (колонки, метрика, presets и др.) восстановлены из model_info.json")
+            st.info("Настройки (колонки, метрика, freq и т.д.) восстановлены из model_info.json")
     except Exception as e:
         st.warning(f"Не удалось автоматически загрузить модель из {MODEL_DIR}. Ошибка: {e}")
 
@@ -113,13 +130,12 @@ def main():
     setup_logger()
     logging.info("=== Запуск приложения Streamlit (main) ===")
 
-    # Попытаемся загрузить обученную модель (если уже сохранена)
+    # Пытаемся загрузить уже обученную модель, если есть
     if "predictor" not in st.session_state or st.session_state["predictor"] is None:
         try_load_existing_model()
 
     pages = ["Главная", "Help"]
     choice = st.sidebar.selectbox("Навигация", pages, key="page_choice")
-    logging.info(f"Выбрана страница: {choice}")
 
     if choice == "Help":
         show_help_page()
@@ -127,7 +143,7 @@ def main():
 
     st.title("AutoGluon Приложение: Прогнозирование временных рядов")
 
-    # Инициализируем ключи в session_state, если их нет
+    # Инициализируем нужные ключи session_state (если нет)
     if "df" not in st.session_state:
         st.session_state["df"] = None
     if "df_forecast" not in st.session_state:
@@ -145,13 +161,7 @@ def main():
     if "static_df_fore" not in st.session_state:
         st.session_state["static_df_fore"] = None
 
-    # -- Дополнительно храним имя и score лучшей модели
-    if "best_model_name" not in st.session_state:
-        st.session_state["best_model_name"] = None
-    if "best_model_score" not in st.session_state:
-        st.session_state["best_model_score"] = None
-
-    # ========== 1) Загрузка ==========
+    # ========== 1) Загрузка данных ==========
     st.sidebar.header("1. Загрузка данных")
     train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv","xls","xlsx"], key="train_file_uploader")
     forecast_file = st.sidebar.file_uploader("Forecast (необязательно)", type=["csv","xls","xlsx"], key="forecast_file_uploader")
@@ -180,7 +190,8 @@ def main():
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
 
-    # ========== 2) Настройка столбцов ==========
+    # ========== 2) Настройка колонок, пропусков, freq, моделей и т.д. ==========
+
     st.sidebar.header("2. Колонки датасета")
     df_current = st.session_state["df"]
     if df_current is not None:
@@ -188,7 +199,7 @@ def main():
     else:
         all_cols = []
 
-    # Проверим, если сохранённые колонки не подходят - сбросим на "<нет>"
+    # Проверяем сохранённые колонки, если их нет - "<нет>"
     dt_stored = st.session_state.get("dt_col_key", "<нет>")
     if dt_stored not in ["<нет>"] + all_cols:
         st.session_state["dt_col_key"] = "<нет>"
@@ -212,60 +223,38 @@ def main():
     st.sidebar.header("Статические признаки (до 3)")
     possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
     static_feats = st.sidebar.multiselect(
-        "Статические колонки:", possible_static,
+        "Статические колонки:",
+        possible_static,
         default=st.session_state["static_feats_key"],
         key="static_feats_key"
     )
 
-    use_holidays = st.sidebar.checkbox("Учитывать праздники РФ?", value=st.session_state.get("use_holidays_key", False),
-                                       key="use_holidays_key")
-
-    if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
-        try:
-            df_plot = df_current.copy()
-            df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce")
-            df_plot = df_plot.dropna(subset=[dt_col])
-
-            if id_col != "<нет>":
-                fig_target = px.line(df_plot.sort_values(dt_col),
-                                     x=dt_col, y=tgt_col,
-                                     color=id_col,
-                                     title="График Target по ID")
-            else:
-                fig_target = px.line(df_plot.sort_values(dt_col),
-                                     x=dt_col, y=tgt_col,
-                                     title="График Target (без ID)")
-
-            st.subheader("Предварительный анализ Target")
-            st.plotly_chart(fig_target, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Не удалось построить график: {e}")
-
-    # ========== 3) Пропуски ==========
-    st.sidebar.header("3. Обработка пропусков")
-    fill_method = st.sidebar.selectbox(
-        "Способ заполнения пропусков",
-        ["None", "Constant=0", "Group mean", "Forward fill"],
-        key="fill_method_key"
+    use_holidays = st.sidebar.checkbox(
+        "Учитывать праздники РФ?",
+        value=st.session_state.get("use_holidays_key", False),
+        key="use_holidays_key"
     )
+
+    st.sidebar.header("3. Обработка пропусков")
+    fill_options = ["None", "Constant=0", "Group mean", "Forward fill"]
+    fill_method = st.sidebar.selectbox("Способ заполнения пропусков", fill_options, key="fill_method_key")
+
     group_cols_for_fill = []
     if fill_method in ["Group mean","Forward fill"]:
-        group_cols_for_fill = st.sidebar.multiselect("Колонки для группировки", static_feats, key="group_cols_for_fill_key")
+        group_cols_for_fill = st.sidebar.multiselect(
+            "Колонки для группировки",
+            static_feats,
+            key="group_cols_for_fill_key"
+        )
 
-    # ========== 4) Частота ==========
     st.sidebar.header("4. Частота (freq)")
     freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)"]
     chosen_freq = st.sidebar.selectbox("freq", freq_options, index=0, key="freq_key")
 
-    # ========== 5) Метрика и модели ==========
     st.sidebar.header("5. Метрика и модели")
     metrics_list = list(METRICS_DICT.keys())
-    default_metric_idx = 0
-    if "MASE (Mean absolute scaled error)" in metrics_list:
-        default_metric_idx = metrics_list.index("MASE (Mean absolute scaled error)")
-
     if st.session_state.get("metric_key", None) not in metrics_list:
-        st.session_state["metric_key"] = metrics_list[default_metric_idx]
+        st.session_state["metric_key"] = metrics_list[0]
 
     chosen_metric = st.sidebar.selectbox(
         "Метрика", metrics_list,
@@ -277,7 +266,8 @@ def main():
     model_keys = list(AG_MODELS.keys())
     model_choices = [all_models_opt] + model_keys
     chosen_models = st.sidebar.multiselect(
-        "Модели AutoGluon", model_choices,
+        "Модели AutoGluon",
+        model_choices,
         default=st.session_state.get("models_key", [all_models_opt]),
         key="models_key"
     )
@@ -296,7 +286,32 @@ def main():
                                     value=st.session_state.get("mean_only_key", False),
                                     key="mean_only_key")
 
-    # ========== 6) Кнопка обучения ==========
+    # Предварительный график
+    if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
+        try:
+            df_plot = df_current.copy()
+            df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce")
+            df_plot = df_plot.dropna(subset=[dt_col])
+
+            if id_col != "<нет>":
+                fig_target = px.line(
+                    df_plot.sort_values(dt_col),
+                    x=dt_col, y=tgt_col,
+                    color=id_col,
+                    title="График Target по ID"
+                )
+            else:
+                fig_target = px.line(
+                    df_plot.sort_values(dt_col),
+                    x=dt_col, y=tgt_col,
+                    title="График Target (без ID)"
+                )
+            st.subheader("Предварительный анализ Target")
+            st.plotly_chart(fig_target, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Не удалось построить график: {e}")
+
+    # ========== 6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")
     if st.sidebar.button("Обучить модель", key="fit_model_btn"):
         df_train = st.session_state.get("df")
@@ -311,12 +326,12 @@ def main():
                 st.error("Выберите корректно колонки: дата, target, ID!")
             else:
                 try:
-                    # Удаляем предыдущие модели
+                    # Удаляем старые модели
                     shutil.rmtree("AutogluonModels", ignore_errors=True)
 
                     freq_val = st.session_state.get("freq_key", "auto (угадать)")
                     fill_method_val = st.session_state.get("fill_method_key", "None")
-                    group_cols_fill_val = st.session_state.get("group_cols_for_fill_key", [])
+                    group_cols_val = st.session_state.get("group_cols_for_fill_key", [])
                     use_holidays_val = st.session_state.get("use_holidays_key", False)
                     chosen_metric_val = st.session_state.get("metric_key")
                     chosen_models_val = st.session_state.get("models_key")
@@ -329,23 +344,18 @@ def main():
                     if use_holidays_val:
                         df2 = add_russian_holiday_feature(df2, date_col=dt_col, holiday_col="russian_holiday")
 
-                    df2 = fill_missing_values(df2, fill_method_val, group_cols_fill_val)
+                    df2 = fill_missing_values(df2, fill_method_val, group_cols_val)
                     st.session_state["df"] = df2
 
                     static_feats_val = st.session_state.get("static_feats_key", [])
                     static_df = None
                     if static_feats_val:
                         tmp = df2[[id_col] + static_feats_val].drop_duplicates(subset=[id_col]).copy()
-                        tmp.rename(columns={id_col: "item_id"}, inplace=True)
+                        tmp.rename(columns={id_col:"item_id"}, inplace=True)
                         static_df = tmp
 
                     df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
                     ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-
-                    if ts_df.static_features is not None and len(ts_df.static_features) > 0:
-                        st.session_state["static_df_train"] = ts_df.static_features.copy()
-                    else:
-                        st.session_state["static_df_train"] = None
 
                     actual_freq = None
                     if freq_val != "auto (угадать)":
@@ -354,10 +364,10 @@ def main():
                         ts_df = ts_df.fill_missing_values(method="ffill")
                         actual_freq = freq_short
 
-                    hyperparams = None
                     all_models_opt = "* (все)"
-                    if not ((len(chosen_models_val) == 1 and chosen_models_val[0] == all_models_opt)
-                            or len(chosen_models_val) == 0):
+                    if (len(chosen_models_val) == 1 and chosen_models_val[0] == all_models_opt) or len(chosen_models_val) == 0:
+                        hyperparams = None
+                    else:
                         no_star = [m for m in chosen_models_val if m != all_models_opt]
                         hyperparams = {m:{} for m in no_star}
 
@@ -366,7 +376,7 @@ def main():
 
                     predictor = TimeSeriesPredictor(
                         target="target",
-                        prediction_length=st.session_state.get("prediction_length_key", 10),
+                        prediction_length=prediction_length,
                         eval_metric=eval_key,
                         freq=actual_freq,
                         quantile_levels=q_levels,
@@ -374,12 +384,23 @@ def main():
                     )
 
                     st.info("Начинаем обучение...")
-                    predictor.fit(
-                        train_data=ts_df,
-                        time_limit=st.session_state.get("time_limit_key", 60),
-                        presets=presets_val,
-                        hyperparameters=hyperparams
-                    )
+                    try:
+                        predictor.fit(
+                            train_data=ts_df,
+                            time_limit=time_limit,
+                            presets=presets_val,
+                            hyperparameters=hyperparams
+                        )
+                    except ValueError as e:
+                        # Если не смог угадать freq
+                        if "cannot be inferred" in str(e):
+                            st.error(
+                                "Для параметра 4. Частота (freq) - укажите конкретное значение. "
+                                "Система не смог определить частоту автоматически."
+                            )
+                            return
+                        else:
+                            raise
 
                     st.session_state["predictor"] = predictor
                     st.success("Модель успешно обучена!")
@@ -392,22 +413,19 @@ def main():
                     summ = predictor.fit_summary()
                     st.session_state["fit_summary"] = summ
 
-                    # <-- Важно: здесь мы берём лучшую модель и score, и СТРАИВАЕМ их в session_state
-                    best_model = lb.iloc[0]["model"]
-                    best_score = lb.iloc[0]["score_val"]
-                    st.session_state["best_model_name"] = best_model
-                    st.session_state["best_model_score"] = best_score
-
-                    st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
+                    if not lb.empty:
+                        best_model = lb.iloc[0]["model"]
+                        best_score = lb.iloc[0]["score_val"]
+                        st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
 
                     with st.expander("Fit Summary"):
                         st.text(summ)
 
-                    # Сохраняем параметры колонок, метрики и т.д.
+                    # Сохраняем настройки
                     save_model_metadata(
                         dt_col, tgt_col, id_col,
                         static_feats_val, freq_val,
-                        fill_method_val, group_cols_fill_val,
+                        fill_method_val, group_cols_val,
                         use_holidays_val, chosen_metric_val,
                         presets_val, chosen_models_val, mean_only_val
                     )
@@ -436,6 +454,7 @@ def main():
                     st.error("Нет train и forecast данных!")
                 else:
                     try:
+                        # Если есть forecast, прогнозируем на нем, иначе – на train
                         if df_fore is not None:
                             st.subheader("Прогноз на FORECAST")
                             df_pred = df_fore.copy()
@@ -484,17 +503,11 @@ def main():
                         st.subheader("Предсказанные значения (первые строки)")
                         st.dataframe(preds.reset_index().head())
 
-                        # Выведем ещё раз, какая модель была лучшей
-                        best_model_name = st.session_state.get("best_model_name", None)
-                        best_model_score = st.session_state.get("best_model_score", None)
-                        if best_model_name is not None:
-                            st.info(f"Модель, которая выиграла при обучении: {best_model_name}, score_val={best_model_score:.4f}")
-
                         # Графики
                         if "0.5" in preds.columns:
                             preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
                             unique_ids = preds_df["item_id"].unique()
-                            st.subheader("Графики прогноза (0.5) по ID (первые)")
+                            st.subheader("Графики прогноза (0.5) (первые)")
                             max_graphs = 3
                             for i, uid in enumerate(unique_ids[:max_graphs]):
                                 subset = preds_df[preds_df["item_id"] == uid]
@@ -509,7 +522,7 @@ def main():
                     except Exception as ex:
                         st.error(f"Ошибка прогноза: {ex}")
 
-    # ========== 8) Сохранение результатов (Excel, с подсветкой) ==========
+    # ========== 8) Сохранение результатов (Excel) ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
     save_path = st.sidebar.text_input("Excel-файл", "results.xlsx", key="save_path_key")
     if st.sidebar.button("Сохранить результаты", key="save_btn"):
@@ -538,40 +551,32 @@ def main():
                 if stt_fore is not None and not stt_fore.empty:
                     stt_fore.to_excel(writer, sheet_name="StaticForeFeatures")
 
-                # Теперь подкрашиваем лучшую модель 
-                best_model_name = st.session_state.get("best_model_name", None)
-                best_model_score = st.session_state.get("best_model_score", None)
-                
-                if lb is not None and best_model_name is not None:
+                # Допустим, подсвечиваем лучшую модель:
+                if lb is not None and not lb.empty:
                     workbook = writer.book
                     sheet = writer.sheets["Leaderboard"]
-                    
-                    # Ищем в lb строку, где model == best_model_name
-                    # (не используем idxmin() повторно)
-                    if best_model_name in lb["model"].values:
-                        row_idx_list = lb.index[lb["model"] == best_model_name].tolist()
-                        if row_idx_list:
-                            best_idx = row_idx_list[0]  # берем первую подходящую строку
-                            
-                            # Подсветим зелёным
-                            fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                            row_excel = best_idx + 2  # +2, т.к. первая строка – заголовок
-                            for col_idx in range(1, lb.shape[1] + 1):
-                                cell = sheet.cell(row=row_excel, column=col_idx)
-                                cell.fill = fill_green
+                    best_idx = lb.iloc[0].name  # первая строка, но можно искать min score
+                    best_model_name = lb.iloc[0]["model"]
+                    best_score = lb.iloc[0]["score_val"]
 
-                            explanation_row = lb.shape[0] + 3
-                            explanation = (
-                                f"Лучшая модель (из обучения): {best_model_name}\n"
-                                f"score_val={best_model_score:.4f} (запомнено при обучении)"
-                            )
-                            sheet.cell(row=explanation_row, column=1).value = explanation
+                    fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    row_excel = best_idx + 2  # +2 т.к. первая строка в Excel - заголовки
+                    for col_idx in range(1, lb.shape[1] + 1):
+                        cell = sheet.cell(row=row_excel, column=col_idx)
+                        cell.fill = fill_green
+
+                    explanation_row = lb.shape[0] + 3
+                    explanation = (
+                        f"Лучшая модель: {best_model_name}\n"
+                        f"Причина: минимальный score_val = {best_score:.4f}"
+                    )
+                    sheet.cell(row=explanation_row, column=1).value = explanation
 
             st.success(f"Сохранено в {save_path}")
         except Exception as ex:
             st.error(f"Ошибка сохранения: {ex}")
 
-    # ========== 9) Показ логов приложения ==========
+    # ========== 9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
     if st.sidebar.button("Показать логи", key="show_logs_btn"):
         logs_ = read_logs()
