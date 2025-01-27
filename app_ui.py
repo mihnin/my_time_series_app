@@ -22,8 +22,7 @@ def load_config(path: str):
 
 
 METRICS_DICT, AG_MODELS = load_config(CONFIG_PATH)
-
-metrics_list = list(METRICS_DICT.keys())  # ["SQL (Scaled quantile loss)", "WQL (Weighted quantile loss)", ...]
+metrics_list = list(METRICS_DICT.keys())
 presets_list = ["fast_training", "medium_quality", "high_quality", "best_quality"]
 all_models_opt = "* (все)"
 model_keys = list(AG_MODELS.keys())
@@ -36,16 +35,16 @@ def setup_ui():
 
     st.title("AutoGluon Приложение: Прогнозирование временных рядов")
 
-    # Инициализация некоторых ключей в сессии, чтобы не было ошибок
+    # Инициализация session_state ключей:
     session_keys = [
-        "df", "predictor", "leaderboard", "predictions", "fit_summary", 
+        "df", "predictor", "leaderboard", "predictions", "fit_summary",
         "static_df_train", "static_df_fore", "best_model_name", "best_model_score",
         "df_forecast", "metric_key", "presets_key", "models_key"
     ]
     for key in session_keys:
         if key not in st.session_state:
             if key == "metric_key":
-                st.session_state[key] = metrics_list[0]  # По умолчанию первый вариант метрики
+                st.session_state[key] = metrics_list[0]
             elif key == "presets_key":
                 st.session_state[key] = "medium_quality"
             elif key == "models_key":
@@ -53,13 +52,13 @@ def setup_ui():
             else:
                 st.session_state[key] = None
 
-    # Удаляем df_forecast и st.session_state["static_df_fore"] (не используется)
+    # Удаляем df_forecast и static_df_fore (не используется в данной версии)
     if "df_forecast" in st.session_state:
         del st.session_state["df_forecast"]
     if "static_df_fore" in st.session_state:
         del st.session_state["static_df_fore"]
 
-    # ========== 1) Загрузка ==========
+    # ========== (1) Загрузка ==========
     st.sidebar.header("1. Загрузка данных")
     train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv","xls","xlsx"], key="train_file_uploader")
 
@@ -80,12 +79,11 @@ def setup_ui():
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
 
-    # ========== 2) Настройка колонок ==========
+    # ========== (2) Настройка колонок ==========
     st.sidebar.header("2. Колонки датасета")
     df_current = st.session_state["df"]
     all_cols = list(df_current.columns) if df_current is not None else []
 
-    # Проверка, что сохранённые колонки всё ещё актуальны
     if "dt_col_key" not in st.session_state:
         st.session_state["dt_col_key"] = "<нет>"
     if "tgt_col_key" not in st.session_state:
@@ -117,34 +115,33 @@ def setup_ui():
                                           default=static_feats_stored,
                                           key="static_feats_key")
 
-    # Праздники
     if "use_holidays_key" not in st.session_state:
         st.session_state["use_holidays_key"] = False
-    use_holidays = st.sidebar.checkbox("Учитывать праздники РФ?", 
-                                       value=st.session_state["use_holidays_key"],
-                                       key="use_holidays_key")
+    st.sidebar.checkbox("Учитывать праздники РФ?",
+                        value=st.session_state["use_holidays_key"],
+                        key="use_holidays_key")
 
-    # ========== 3) Пропуски ==========
+    # ========== (3) Пропуски ==========
     st.sidebar.header("3. Обработка пропусков")
     fill_options = ["None", "Constant=0", "Group mean", "Forward fill"]
     if "fill_method_key" not in st.session_state:
         st.session_state["fill_method_key"] = "None"
-    fill_method = st.sidebar.selectbox("Способ заполнения пропусков", fill_options, key="fill_method_key")
+    st.sidebar.selectbox("Способ заполнения пропусков", fill_options, key="fill_method_key")
 
     if "group_cols_for_fill_key" not in st.session_state:
         st.session_state["group_cols_for_fill_key"] = []
-    group_cols_for_fill = st.sidebar.multiselect("Колонки для группировки",
-                                                 static_feats,
-                                                 key="group_cols_for_fill_key")
+    st.sidebar.multiselect("Колонки для группировки",
+                           static_feats,
+                           key="group_cols_for_fill_key")
 
-    # ========== 4) Частота (freq) ==========
+    # ========== (4) Частота (freq) ==========
     st.sidebar.header("4. Частота (freq)")
     freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)"]
     if "freq_key" not in st.session_state:
         st.session_state["freq_key"] = "auto (угадать)"
     st.sidebar.selectbox("freq", freq_options, index=0, key="freq_key")
 
-    # ========== 5) Метрика и модели ==========
+    # ========== (5) Метрика и модели ==========
     st.sidebar.header("5. Метрика и модели")
     st.sidebar.selectbox("Метрика", metrics_list,
                          index=metrics_list.index(st.session_state["metric_key"]),
@@ -158,10 +155,9 @@ def setup_ui():
                          index=presets_list.index(st.session_state["presets_key"]),
                          key="presets_key")
 
-    # Параметры обучения
     st.sidebar.number_input("prediction_length", 1, 365, 10, key="prediction_length_key")
     st.sidebar.number_input("time_limit (sec)", 10, 36000, 60, key="time_limit_key")
-    st.sidebar.checkbox("Прогнозировать только среднее (mean)?", 
+    st.sidebar.checkbox("Прогнозировать только среднее (mean)?",
                         value=st.session_state.get("mean_only_key", False),
                         key="mean_only_key")
 
@@ -182,27 +178,28 @@ def setup_ui():
         except Exception as e:
             st.warning(f"Не удалось построить график: {e}")
 
-    # ========== 6) Обучение модели ==========
+    # ========== (6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")
     st.sidebar.checkbox("Обучение, Прогноз и Сохранение", key="train_predict_save_checkbox")
     st.sidebar.button("Обучить модель", key="fit_model_btn")
 
-    # ========== 7) Прогноз ==========
+    # ========== (7) Прогноз ==========
     st.sidebar.header("7. Прогноз")
     st.sidebar.button("Сделать прогноз", key="predict_btn")
 
-    # ========== 8) Сохранение результатов ==========
+    # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
     st.sidebar.text_input("Excel-файл", "results.xlsx", key="save_path_key")
     st.sidebar.button("Сохранить результаты", key="save_btn")
 
-    # ========== 9) Логи приложения ==========
+    # ========== (9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
     st.sidebar.button("Показать логи", key="show_logs_btn")
     st.sidebar.button("Скачать логи", key="download_logs_btn")
 
-    # ========== 10) Выгрузка моделей и логов ==========
+    # ========== (10) Выгрузка моделей и логов ==========
     st.sidebar.header("10. Выгрузка моделей и логов")
     st.sidebar.button("Скачать все содержимое AutogluonModels", key="download_model_and_logs")
 
     return page_choice
+

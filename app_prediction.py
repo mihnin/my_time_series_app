@@ -35,6 +35,7 @@ def run_prediction():
         df_pred[dt_col] = pd.to_datetime(df_pred[dt_col], errors="coerce")
 
         if st.session_state.get("use_holidays_key", False):
+            st.info("Признак `russian_holiday` включён при прогнозировании.")
             df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
 
         df_pred = fill_missing_values(
@@ -70,11 +71,11 @@ def run_prediction():
         st.subheader("Предсказанные значения (первые строки)")
         st.dataframe(preds.reset_index().head())
 
-        # Повторно выводим лучшую модель (с обучения)
+        # Повторно выводим лучшую модель
         best_name = st.session_state.get("best_model_name", None)
         best_score = st.session_state.get("best_model_score", None)
         if best_name is not None:
-            st.info(f"Лучшая модель при обучении была: {best_name}, score_val={best_score:.4f}")
+            st.info(f"Лучшая модель при обучении: {best_name}, score_val={best_score:.4f}")
 
         # Графики
         if "0.5" in preds.columns:
@@ -91,7 +92,7 @@ def run_prediction():
                 )
                 st.plotly_chart(fig_, use_container_width=True)
         else:
-            st.info("Нет колонки '0.5' — возможно mean_only=False или отключены квантили.")
+            st.info("Колонка '0.5' не найдена — возможно mean_only=False или квантильные прогнозы отключены.")
 
         return True
 

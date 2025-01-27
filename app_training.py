@@ -28,7 +28,6 @@ def run_training():
         return False
 
     try:
-        # Очищаем предыдущие модели
         shutil.rmtree("AutogluonModels", ignore_errors=True)
 
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
@@ -46,6 +45,7 @@ def run_training():
         df2[dt_col] = pd.to_datetime(df2[dt_col], errors="coerce")
 
         if use_holidays_val:
+            st.info("Признак `russian_holiday` добавлен и будет учитываться при обучении модели.")
             df2 = add_russian_holiday_feature(df2, date_col=dt_col, holiday_col="russian_holiday")
 
         df2 = fill_missing_values(df2, fill_method_val, group_cols_val)
@@ -68,7 +68,6 @@ def run_training():
             ts_df = ts_df.fill_missing_values(method="ffill")
             actual_freq = freq_short
 
-        # Готовим hyperparams
         hyperparams = None
         all_models_opt = "* (все)"
         if (len(chosen_models_val) == 1 and chosen_models_val[0] == all_models_opt) or len(chosen_models_val) == 0:
@@ -99,7 +98,7 @@ def run_training():
             )
         except ValueError as e:
             if "cannot be inferred" in str(e):
-                st.error("Для параметра (freq) - укажите конкретное значение. Система не смог определить частоту автоматически.")
+                st.error("Не удалось определить частоту автоматически. Укажите частоту явно (freq).")
                 return False
             else:
                 raise
@@ -137,7 +136,7 @@ def run_training():
             st.session_state["best_model_score"] = best_score
             st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
 
-        # Сохраняем настройки в JSON (model_info.json)
+        # Сохраняем настройки в JSON
         save_model_metadata(
             dt_col, tgt_col, id_col,
             static_feats_val, freq_val,
@@ -152,4 +151,3 @@ def run_training():
         st.error(f"Ошибка обучения: {ex}")
         logging.error(f"Training Exception: {ex}")
         return False
-

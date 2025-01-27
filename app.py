@@ -24,12 +24,11 @@ def main():
     # Отрисовка бокового меню и основной страницы
     page_choice = setup_ui()
 
-    # Если выбрана страница Help
     if page_choice == "Help":
         show_help_page()
         return
 
-    # ===== Обработка нажатия кнопки "Обучить модель" (fit_model_btn) =====
+    # ====== Обработка нажатия кнопки "Обучить модель" ======
     if st.session_state.get("fit_model_btn"):
         train_success = run_training()
         if train_success and st.session_state.get("train_predict_save_checkbox"):
@@ -40,16 +39,16 @@ def main():
                 if save_result:
                     st.info("Обучение, прогноз и сохранение результатов выполнены успешно!")
 
-    # ===== Обработка нажатия кнопки "Сделать прогноз" (predict_btn) =====
+    # ====== "Сделать прогноз" ======
     if st.session_state.get("predict_btn"):
         run_prediction()
 
-    # ===== Обработка нажатия кнопки "Сохранить результаты" (save_btn) =====
+    # ====== "Сохранить результаты" ======
     if st.session_state.get("save_btn"):
         save_path_val = st.session_state.get("save_path_key", "results.xlsx")
         save_result = save_results_to_excel(save_path_val)
 
-    # ===== Дополнительные кнопки (логи, скачивание и т.д.) =====
+    # ====== Доп. кнопки: логи, скачать логи, скачать архив ======
 
     # Показать логи
     if st.session_state.get("show_logs_btn"):
@@ -67,7 +66,7 @@ def main():
             mime="text/plain",
         )
 
-    # Скачать всю папку AutogluonModels + логи
+    # Скачать архив (модели + логи)
     if st.session_state.get("download_model_and_logs"):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
@@ -78,7 +77,8 @@ def main():
                         full_path = os.path.join(root, file)
                         rel_path = os.path.relpath(full_path, start=model_dir)
                         zf.write(full_path, arcname=os.path.join("AutogluonModels", rel_path))
-            # Добавим логи, если есть
+
+            # Добавим логи
             log_file_path = "logs/app.log"
             if os.path.exists(log_file_path):
                 zf.write(log_file_path, arcname="logs/app.log")
