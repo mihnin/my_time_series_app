@@ -33,20 +33,16 @@ def load_data(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile) -> p
         raise ValueError(f"Ошибка загрузки: {str(e)}")
 
 
-def convert_to_timeseries(df: pd.DataFrame,
-                          id_col: str,
-                          timestamp_col: str,
-                          target_col: str) -> pd.DataFrame:
-    """
-    Преобразует DataFrame в формат (item_id, timestamp, target)
-    и сортирует по (item_id, timestamp).
-    """
+def convert_to_timeseries(df: pd.DataFrame, id_col: str, timestamp_col: str, target_col: str) -> pd.DataFrame:
     df_local = df.copy()
     df_local.rename(columns={
         id_col: "item_id",
         timestamp_col: "timestamp",
         target_col: "target"
     }, inplace=True)
+
+    # Добавляем строку для принудительного приведения item_id к str
+    df_local["item_id"] = df_local["item_id"].astype(str)
 
     df_local.sort_values(["item_id", "timestamp"], inplace=True)
     df_local.reset_index(drop=True, inplace=True)
