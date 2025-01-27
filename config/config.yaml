@@ -1,15 +1,15 @@
 metrics_dict:
-  "SQL (Scaled quantile loss)": "Масштабированная квантильная ошибка"
-  "WQL (Weighted quantile loss)": "Взвешенная квантильная ошибка"
-  "MAE (Mean absolute error)": "Средняя абсолютная ошибка"
-  "MAPE (Mean absolute percentage error)": "Средняя абсолютная процентная ошибка"
-  "MASE (Mean absolute scaled error)": "Средняя абсолютная масштабированная ошибка"
-  "MSE (Mean squared error)": "Среднеквадратичная ошибка"
-  "RMSE (Root mean squared error)": "Корень из среднеквадратичной ошибки"
-  "RMSLE (Root mean squared logarithmic error)": "Корень из среднеквадратичной логарифмической ошибки"
-  "RMSSE (Root mean squared scaled error)": "Корень из среднеквадратичной масштабированной ошибки"
-  "SMAPE (Symmetric mean absolute percentage error)": "Симметричная средняя абсолютная процентная ошибка"
-  "WAPE (Weighted absolute percentage error)": "Взвешенная абсолютная процентная ошибка"
+  "SQL (Scaled quantile loss)": "SQL"
+  "WQL (Weighted quantile loss)": "WQL"
+  "MAE (Mean absolute error)": "MAE"
+  "MAPE (Mean absolute percentage error)": "MAPE"
+  "MASE (Mean absolute scaled error)": "MASE"
+  "MSE (Mean squared error)": "MSE"
+  "RMSE (Root mean squared error)": "RMSE"
+  "RMSLE (Root mean squared logarithmic error)": "RMSLE"
+  "RMSSE (Root mean squared scaled error)": "RMSSE"
+  "SMAPE (Symmetric mean absolute percentage error)": "SMAPE"
+  "WAPE (Weighted absolute percentage error)": "WAPE"
 
 ag_models:
   "NaiveModel": "Базовая модель: прогноз = последнее наблюдение"
@@ -36,3 +36,4 @@ ag_models:
   "DirectTabularModel": "AutoGluon-Tabular (Direct)"
   "RecursiveTabularModel": "AutoGluon-Tabular (Recursive)"
   "ChronosModel": "Chronos pretrained"
+
