@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import logging
 import os
@@ -9,7 +8,7 @@ from app_ui import setup_ui
 from app_training import run_training
 from app_prediction import run_prediction
 from app_saving import save_results_to_excel, try_load_existing_model
-from src.utils.utils import setup_logger, read_logs
+from src.utils.utils import setup_logger, read_logs, LOG_FILE
 from src.help_page import show_help_page
 
 
@@ -17,20 +16,19 @@ def main():
     # Инициализация логгера
     setup_logger()
 
-    # Пример детального логирования: отмечаем запуск
+    # Расширенное логирование: отметим запуск
     logging.info("========== Приложение запущено ========== ")
     logging.info("=== Запуск приложения Streamlit (main) ===")
 
-    # Если нет модели в session_state, пытаемся загрузить старую
+    # Пытаемся автоматически загрузить ранее сохранённую модель (если есть)
     if "predictor" not in st.session_state or st.session_state["predictor"] is None:
         try_load_existing_model()
 
-    # Отрисовываем боковую панель и получаем выбранную страницу
+    # Рисуем боковое меню и получаем выбранную страницу
     page_choice = setup_ui()
-    logging.info(f"Выбрана страница: {page_choice}")
+    logging.info(f"Страница выбрана: {page_choice}")
 
-    # Сформируем сообщение о текущих параметрах из session_state
-    # (при этом проверяем, что ключи существуют, иначе 'Unknown')
+    # Сформируем сообщение о текущих настройках из session_state
     dt_col = st.session_state.get("dt_col_key", "<нет>")
     tgt_col = st.session_state.get("tgt_col_key", "<нет>")
     id_col  = st.session_state.get("id_col_key", "<нет>")
@@ -48,49 +46,113 @@ def main():
     time_limit_val = st.session_state.get("time_limit_key", 60)
     mean_only_val = st.session_state.get("mean_only_key", False)
 
-    # Пишем подробный лог
+    # Подробный лог с текущими параметрами
     logging.info(
-        f"Пользователь задал dt_col={dt_col}, tgt_col={tgt_col}, id_col={id_col}, "
-        f"static_feats={static_feats}, use_holidays={use_holidays}"
+        f"Текущие колонки: dt_col={dt_col}, tgt_col={tgt_col}, id_col={id_col}"
     )
     logging.info(
-        f"Метод заполнения пропусков: {fill_method_val}, group_cols_for_fill={group_cols_val}"
+        f"Статические признаки={static_feats}, праздники={use_holidays}, "
+        f"метод заполнения пропусков={fill_method_val}, group_cols={group_cols_val}"
     )
-    logging.info(f"Выбрана частота: {freq_val}")
     logging.info(
-        f"Метрика: {metric_val}, модели: {models_val}, presets: {presets_val}, "
-        f"prediction_length={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
+        f"Частота={freq_val}, Метрика={metric_val}, Модели={models_val}, Presets={presets_val}, "
+        f"pred_length={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
     )
 
+    # Блок очистки логов (через ввод “delete”)
+    st.sidebar.header("Очистка логов")
+    clear_logs_input = st.sidebar.text_input("Введите 'delete', чтобы очистить логи:")
+    if st.sidebar.button("Очистить логи"):
+        if clear_logs_input.strip().lower() == "delete":
+            # 1) Найдём все FileHandler, чтобы закрыть их (иначе файл не удалить на Windows)
+            logger = logging.getLogger()
+            for handler in logger.handlers[:]:
+                # Проверяем, ссылается ли handler на LOG_FILE
+                if hasattr(handler, 'baseFilename') and os.path.abspath(handler.baseFilename) == os.path.abspath(LOG_FILE):
+                    handler.close()
+                    logger.removeHandler(handler)
+
+            # 2) Теперь файл не используется, можно удалять
+            try:
+                if os.path.exists(LOG_FILE):
+                    os.remove(LOG_FILE)
+                    st.warning("Логи очищены!")
+                    logging.info("Пользователь очистил логи (файл удалён).")
+                else:
+                    st.info("Файл логов не найден, нечего очищать.")
+            except Exception as e:
+                st.error(f"Ошибка при удалении лог-файла: {e}")
+
+            # 3) (Опционально) Пересоздадим пустой лог-файл и добавим новый обработчик,
+            #    чтобы логи продолжали писаться дальше
+            try:
+                with open(LOG_FILE, 'w', encoding='utf-8') as f:
+                    f.write("")
+                # Добавляем новый FileHandler
+                new_file_handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
+                formatter = logging.Formatter(
+                    "%(asctime)s [%(levelname)s] %(module)s.%(funcName)s - %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S"
+                )
+                new_file_handler.setFormatter(formatter)
+                logger.addHandler(new_file_handler)
+                logger.info("Создан новый log-файл после очистки.")
+            except Exception as e:
+                st.error(f"Ошибка при создании нового лог-файла: {e}")
+
+        else:
+            st.warning("Неверное слово. Логи не очищены.")
+
+    # Если выбрана страница Help — открываем страницу справки
     if page_choice == "Help":
+        logging.info("Пользователь на странице Help.")
         show_help_page()
         return
 
-    # ====== Кнопки: "Обучить модель", "Сделать прогноз", "Сохранить результаты" ======
+    # ====== Обработка нажатия кнопок (подробные логи) ======
     if st.session_state.get("fit_model_btn"):
+        logging.info("Кнопка 'Обучить модель' нажата.")
         train_success = run_training()
-        if train_success and st.session_state.get("train_predict_save_checkbox"):
-            predict_success = run_prediction()
-            if predict_success:
-                save_path_val = st.session_state.get("save_path_key", "results.xlsx")
-                save_result = save_results_to_excel(save_path_val)
-                if save_result:
-                    st.info("Обучение, прогноз и сохранение результатов выполнены успешно!")
+        if train_success:
+            logging.info("Обучение завершено успешно.")
+            if st.session_state.get("train_predict_save_checkbox"):
+                logging.info("'Обучение, Прогноз и Сохранение' включено: запускаем прогноз.")
+                predict_success = run_prediction()
+                if predict_success:
+                    logging.info("Прогноз успешно выполнен, сохраняем результаты.")
+                    save_path_val = st.session_state.get("save_path_key", "results.xlsx")
+                    save_result = save_results_to_excel(save_path_val)
+                    if save_result:
+                        st.info("Обучение, прогноз и сохранение результатов выполнены успешно!")
+        else:
+            logging.warning("Обучение завершилось неудачно или было прервано.")
 
     if st.session_state.get("predict_btn"):
-        run_prediction()
+        logging.info("Кнопка 'Сделать прогноз' нажата.")
+        result = run_prediction()
+        if result:
+            logging.info("Прогнозирование успешно.")
+        else:
+            logging.warning("Ошибка при прогнозировании.")
 
     if st.session_state.get("save_btn"):
+        logging.info("Кнопка 'Сохранить результаты' нажата.")
         save_path_val = st.session_state.get("save_path_key", "results.xlsx")
         save_result = save_results_to_excel(save_path_val)
+        if save_result:
+            logging.info(f"Результаты успешно сохранены в {save_path_val}.")
+        else:
+            logging.warning("Ошибка при сохранении результатов.")
 
-    # ====== Кнопки логи приложения, скачать логи, скачать архив моделей ======
+    # ====== Блок логов приложения (показ и скачивание) ======
     if st.session_state.get("show_logs_btn"):
+        logging.info("Кнопка 'Показать логи' нажата.")
         logs_text = read_logs()
         st.subheader("Логи приложения")
         st.text_area("logs", logs_text, height=300)
 
     if st.session_state.get("download_logs_btn"):
+        logging.info("Кнопка 'Скачать логи' нажата.")
         logs_text = read_logs()
         st.download_button(
             label="Скачать лог-файл",
@@ -99,7 +161,9 @@ def main():
             mime="text/plain",
         )
 
+    # ====== Кнопка “Скачать архив (модели + логи)” ======
     if st.session_state.get("download_model_and_logs"):
+        logging.info("Кнопка 'Скачать архив (модели + логи)' нажата.")
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
             model_dir = "AutogluonModels"
@@ -110,7 +174,8 @@ def main():
                         rel_path = os.path.relpath(full_path, start=model_dir)
                         zf.write(full_path, arcname=os.path.join("AutogluonModels", rel_path))
 
-            log_file_path = "logs/app.log"
+            # Добавим логи
+            log_file_path = LOG_FILE
             if os.path.exists(log_file_path):
                 zf.write(log_file_path, arcname="logs/app.log")
 
