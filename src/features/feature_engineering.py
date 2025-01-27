@@ -1,7 +1,6 @@
 import pandas as pd
 import streamlit as st
 import holidays
-import logging
 
 def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None) -> pd.DataFrame:
     """
@@ -17,7 +16,7 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
         group_cols = []
 
     if len(group_cols) == 1:
-        group_cols = (group_cols[0],)  # убрать предупреждение pandas
+        group_cols = (group_cols[0],)
 
     if method == "None":
         return df
@@ -63,6 +62,7 @@ def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_
 
     df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
     return df
+
 
 
 

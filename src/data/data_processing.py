@@ -66,3 +66,4 @@ def show_dataset_stats(df: pd.DataFrame):
     st.write("**Количество пропусков (NaN) по столбцам:**")
     missing_info = df.isnull().sum()
     st.write(missing_info)
+
