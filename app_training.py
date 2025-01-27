@@ -112,14 +112,15 @@ def run_training():
         with st.expander("Fit Summary (RAW)"):
             st.write(summ)
 
-        if summ:
-            detailed_fit_summary_str = format_fit_summary(summ)
-            with st.expander("Fit Summary (Подробно)"):
-                st.markdown(detailed_fit_summary_str)
-        else:
-            st.warning("Fit Summary is empty. Check training logs for potential issues.")
-            with st.expander("Fit Summary (Подробно)"):
-                st.text("Fit Summary is not available.")
+        # Удаляем/закомментируем:
+# if summ:
+#     detailed_fit_summary_str = format_fit_summary(summ)
+#     with st.expander("Fit Summary (Подробно)"):
+#         st.markdown(detailed_fit_summary_str)
+# else:
+#     st.warning("Fit Summary is empty.")
+#     with st.expander("Fit Summary (Подробно)"):
+#         st.text("Fit Summary is not available.")
 
         st.session_state["predictor"] = predictor
         st.success("Модель успешно обучена!")

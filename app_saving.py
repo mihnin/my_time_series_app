@@ -176,30 +176,30 @@ def save_results_to_excel(save_path):
 
             # ============ Применяем формат даты на нужных листах ============
             workbook = writer.book
+            # Перебираем листы, ищем колонку с датой и ставим number_format = "YYYY-MM-DD"
             for sheet_name in writer.sheets:
                 sheet = writer.sheets[sheet_name]
-                # Получаем DF, которое туда писали (нужно заново прочитать, либо собрать mapping)
                 ws = workbook[sheet_name]
-                # Пробуем найти колонку "timestamp" или dt_col в заголовках
-                # Первый ряд – заголовки
+
+                # Смотрим в первую строку (заголовки)
                 max_col = ws.max_column
                 headers = {}
-                for col_idx in range(1, max_col+1):
+                for col_idx in range(1, max_col + 1):
                     val = ws.cell(row=1, column=col_idx).value
                     if val is not None:
                         headers[val] = col_idx
 
-                # Если в заголовках есть "timestamp" или dt_col, применим к нему формат
                 possible_date_cols = []
+                #  Допустим, "timestamp" и dt_col
                 if "timestamp" in headers:
                     possible_date_cols.append(headers["timestamp"])
                 if dt_col and dt_col in headers and dt_col != "timestamp":
                     possible_date_cols.append(headers[dt_col])
 
-                # Применяем формат YYYY-MM-DD
+                # Применяем формат
                 date_format = "YYYY-MM-DD"
                 for col_num in possible_date_cols:
-                    for row_idx in range(2, ws.max_row+1):
+                    for row_idx in range(2, ws.max_row + 1):
                         cell = ws.cell(row=row_idx, column=col_num)
                         cell.number_format = date_format
 
