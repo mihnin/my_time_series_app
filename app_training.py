@@ -137,14 +137,47 @@ def run_training():
             st.session_state["best_model_score"] = best_score
             st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
 
-        # Сохраняем настройки в JSON
-        save_model_metadata(
-            dt_col, tgt_col, id_col,
-            static_feats_val, freq_val,
-            fill_method_val, group_cols_val,
-            use_holidays_val, chosen_metric_val,
-            presets_val, chosen_models_val, mean_only_val
-        )
+            # Попробуем получить инфу об ансамбле (WeightedEnsemble), если он есть
+            
+
+            if "WeightedEnsemble" in lb["model"].values:
+                try:
+                    ensemble_info = predictor.get_model_info("WeightedEnsemble")
+                    if ensemble_info:
+                        with st.expander("Состав ансамбля (WeightedEnsemble)"):
+                            st.markdown("**Детали модели WeightedEnsemble**")
+
+                            # Время обучения и предсказания
+                            fit_time = ensemble_info.get("fit_time", None)
+                            pred_time = ensemble_info.get("predict_time", None)
+
+                            st.write(f"- **Время обучения**: {fit_time:.2f} секунд" if fit_time else "")
+                            st.write(f"- **Время предсказания**: {pred_time:.2f} секунд" if pred_time else "")
+
+                            child_names = ensemble_info.get("child_model_names", [])
+                            child_weights = ensemble_info.get("child_model_weights", [])
+                            
+                            # Выведем состав
+                            if child_names and child_weights:
+                                st.write("**Комбинация дочерних моделей**:")
+                                df_ensemble = pd.DataFrame({
+                                    "Child Model": child_names,
+                                    "Weight": child_weights
+                                })
+                                st.dataframe(df_ensemble)
+                            else:
+                                st.write("Нет детальных сведений о дочерних моделях.")
+                except Exception as e:
+                    st.warning(f"Не удалось получить информацию об ансамбле: {e}")
+
+            # Сохраняем настройки в JSON
+            save_model_metadata(
+                dt_col, tgt_col, id_col,
+                static_feats_val, freq_val,
+                fill_method_val, group_cols_val,
+                use_holidays_val, chosen_metric_val,
+                presets_val, chosen_models_val, mean_only_val
+            )
 
         return True
 
