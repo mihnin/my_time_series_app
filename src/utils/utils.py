@@ -1,4 +1,3 @@
-# utils.py
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -45,14 +44,13 @@ def read_logs() -> str:
         with open(LOG_FILE, "r", encoding='utf-8') as f:
             return f.read()
     except UnicodeDecodeError:
-        # Пробуем перекодировать в UTF-8
+        # Перекодируем в UTF-8, если не получается прочитать
         with open(LOG_FILE, 'rb') as old:
             data = old.read()
         converted_text = data.decode('cp1251', errors='replace')
         with open(LOG_FILE, 'w', encoding='utf-8') as new:
             new.write(converted_text)
 
-        # Повторная попытка чтения
         with open(LOG_FILE, "r", encoding='utf-8') as f:
             return f.read()
 

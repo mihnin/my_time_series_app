@@ -37,3 +37,4 @@ ag_models:
   "RecursiveTabularModel": "AutoGluon-Tabular (Recursive)"
   "ChronosModel": "Chronos pretrained"
 
+
