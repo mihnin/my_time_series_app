@@ -1,4 +1,5 @@
 # app.py
+# app.py
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -141,7 +142,7 @@ def run_training():
         st.error("Выберите корректно колонки: дата, target, ID!")
         return False
 
-    try:
+    try: # Outer try block starts here
         shutil.rmtree("AutogluonModels", ignore_errors=True)
 
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
@@ -202,14 +203,14 @@ def run_training():
         )
 
         st.info("Начинаем обучение...")
-        try:
+        try: # Inner try block - for predictor.fit()
             predictor.fit(
                 train_data=ts_df,
                 time_limit=t_limit,
                 presets=presets_val,
                 hyperparameters=hyperparams
             )
-        except ValueError as e:
+        except ValueError as e: # Inner except block - handling ValueError
             # Если не смог угадать freq
             if "cannot be inferred" in str(e):
                 st.error(
@@ -220,16 +221,9 @@ def run_training():
             else:
                 raise
 
-        st.session_state["predictor"] = predictor
-        st.success("Модель успешно обучена!")
-
-        lb = predictor.leaderboard(ts_df)
-        st.session_state["leaderboard"] = lb
-        st.subheader("Лидерборд (Leaderboard)")
-        st.dataframe(lb)
-
         summ = predictor.fit_summary()
         st.session_state["fit_summary"] = summ
+        logging.info(f"Fit Summary (raw): {summ}") # Log the raw fit summary
 
         if summ: # Check if summ is not None and not empty
             detailed_fit_summary_str = format_fit_summary(summ) # Форматируем Fit Summary
@@ -239,6 +233,15 @@ def run_training():
             st.warning("Fit Summary is empty. Check training logs for potential issues.") # Inform user if empty
             with st.expander("Fit Summary (Подробно)"): # Still show expander, but with message
                 st.text("Fit Summary is not available.")
+
+
+        st.session_state["predictor"] = predictor
+        st.success("Модель успешно обучена!")
+
+        lb = predictor.leaderboard(ts_df)
+        st.session_state["leaderboard"] = lb
+        st.subheader("Лидерборд (Leaderboard)")
+        st.dataframe(lb)
 
 
         if not lb.empty:
@@ -258,14 +261,15 @@ def run_training():
             use_holidays_val, chosen_metric_val,
             presets_val, chosen_models_val, mean_only_val
         )
-        return True # Training successful
+        return True # Training successful  <---- CORRECT LOCATION for return True - inside the OUTER try block
 
-    except Exception as ex:
+    except Exception as ex: # Outer except block - for catching any exception in the entire training process
         st.error(f"Ошибка обучения: {ex}")
+        logging.error(f"Training Exception: {ex}") # Log the full exception
         return False # Training failed
 
 def format_fit_summary(fit_summary): # Keep existing formatting function - for display
-    """Форматирует fit_summary для более удобочитаемого вывода в Streamlit."""
+    """Форматирует fit_summary для более удобочитаемого вывода."""
     if not fit_summary:
         return "Fit Summary отсутствует."
 
@@ -295,8 +299,8 @@ def format_fit_summary(fit_summary): # Keep existing formatting function - for d
 
 def format_fit_summary_to_df(fit_summary): # New function to format to DataFrame for Excel
     """Преобразует fit_summary в DataFrame для сохранения в Excel."""
-    if not fit_summary:
-        return pd.DataFrame({"Информация": ["Fit Summary отсутствует"]}) # Return DataFrame even if empty
+    if not fit_summary or not isinstance(fit_summary, dict) or not fit_summary.get('model_fit_summary'): # Robust empty check
+        return pd.DataFrame({"Информация": ["Fit Summary отсутствует или не содержит данных о моделях"]}) # More informative message
 
     data = []
     if 'total_fit_time' in fit_summary:
@@ -308,16 +312,18 @@ def format_fit_summary_to_df(fit_summary): # New function to format to DataFrame
 
     if 'model_fit_summary' in fit_summary and fit_summary['model_fit_summary']:
         for model_name, model_info in fit_summary['model_fit_summary'].items():
-            data.append({"Метрика": f"Model: {model_name}", "Значение": "---"}) # Separator
-            if 'fit_time' in model_info:
-                data.append({"Метрика": f"  Fit Time ({model_name})", "Значение": f"{model_info['fit_time']:.2f} seconds"})
-            if 'score' in model_info:
-                data.append({"Метрика": f"  Score ({model_name})", "Значение": f"{model_info['score']:.4f}"})
-            if 'eval_metric' in model_info:
-                data.append({"Метрика": f"  Eval Metric ({model_name})", "Значение": model_info['eval_metric']})
-            if 'pred_count' in model_info:
-                data.append({"Метрика": f"  Predictions Count ({model_name})", "Значение": model_info['pred_count']})
-            # Добавьте другие детали из model_info, которые важны
+            if isinstance(model_info, dict): # Check if model_info is a dictionary before accessing keys
+                data.append({"Метрика": f"Model: {model_name}", "Значение": "---"}) # Separator
+                if 'fit_time' in model_info:
+                    data.append({"Метрика": f"  Fit Time ({model_name})", "Значение": f"{model_info['fit_time']:.2f} seconds"})
+                if 'score' in model_info:
+                    data.append({"Метрика": f"  Score ({model_name})", "Значение": f"{model_info['score']:.4f}"})
+                if 'eval_metric' in model_info:
+                    data.append({"Метрика": f"  Eval Metric ({model_name})", "Значение": model_info['eval_metric']})
+                if 'pred_count' in model_info:
+                    data.append({"Метрика": f"  Predictions Count ({model_name})", "Значение": model_info['pred_count']})
+            else:
+                logging.warning(f"Model fit summary for {model_name} is not a dictionary: {model_info}") # Log if model_info is unexpected type
 
     return pd.DataFrame(data)
 
@@ -423,6 +429,9 @@ def save_results_to_excel(save_path):
         stt_train = st.session_state.get("static_df_train")
         stt_fore  = st.session_state.get("static_df_fore")
         fit_summary_data = st.session_state.get("fit_summary")
+        dt_col = st.session_state.get("dt_col_key")
+        id_col = st.session_state.get("id_col_key")
+        static_feats_val = st.session_state.get("static_feats_key", [])
 
 
         import openpyxl
@@ -430,7 +439,10 @@ def save_results_to_excel(save_path):
 
         with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
             if preds is not None: # If predictions exist, save them as "Predictions"
-                preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False) # Renamed sheet to "Predictions"
+                pred_df_to_save = preds.reset_index()
+                if static_feats_val and stt_train is not None: # Include static features in Predictions sheet if available
+                    pred_df_to_save = pd.merge(pred_df_to_save, stt_train, on='item_id', how='left')
+                pred_df_to_save.to_excel(writer, sheet_name="Predictions", index=False) # Save as "Predictions"
             elif df_train is not None: # If no predictions but train data, save train data
                 df_train.to_excel(writer, sheet_name="TrainData", index=False) # Save train data if no predictions
 
@@ -443,6 +455,10 @@ def save_results_to_excel(save_path):
                 stt_train.to_excel(writer, sheet_name="StaticTrainFeatures")
             if stt_fore is not None and not stt_fore.empty:
                 stt_fore.to_excel(writer, sheet_name="StaticForeFeatures")
+            if st.session_state.get("use_holidays_key", False) and df_train is not None and 'russian_holiday' in df_train.columns: # Save holiday feature if used
+                holiday_df = df_train[[dt_col, id_col, 'russian_holiday']].copy()
+                holiday_df.to_excel(writer, sheet_name="RussianHolidays", index=False)
+
 
             # Подсветим лучшую модель
             if lb is not None and not lb.empty:

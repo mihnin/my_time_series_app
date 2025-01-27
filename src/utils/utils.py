@@ -1,3 +1,4 @@
+# utils.py
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -56,10 +57,3 @@ def read_logs() -> str:
         # Повторная попытка чтения файла
         with open(LOG_FILE, "r", encoding='utf-8') as f:
             return f.read()
-
-
-
-
-
-
-
