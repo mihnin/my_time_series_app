@@ -266,16 +266,33 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
 
 
 def try_load_existing_model():
-    """Если модель уже сохранена, загружаем её и восстанавливаем настройки."""
+    """
+    Если есть ранее обученная модель (TimeSeriesPredictor.load(MODEL_DIR)),
+    то загружаем её и восстанавливаем параметры в st.session_state.
+    """
+    import os
+    from autogluon.timeseries import TimeSeriesPredictor
+
     if not os.path.exists(MODEL_DIR):
+        # Папка AutogluonModels/TimeSeriesModel не существует, значит модель ещё не обучалась
+        st.info("Папка с моделью не найдена — модель не загружена.")
         return
+
+    predictor_path = os.path.join(MODEL_DIR, "predictor.pkl")
+    if not os.path.exists(predictor_path):
+        # Файл predictor.pkl не найден
+        st.info("Файл predictor.pkl не найден — модель ещё не обучалась.")
+        return
+
     try:
         loaded_predictor = TimeSeriesPredictor.load(MODEL_DIR)
         st.session_state["predictor"] = loaded_predictor
         st.info(f"Загружена ранее обученная модель из {MODEL_DIR}")
 
+        # Загрузим метаданные из model_info.json
         meta = load_model_metadata()
         if meta:
+            # Переписываем st.session_state ключами из meta
             st.session_state["dt_col_key"] = meta.get("dt_col", "<нет>")
             st.session_state["tgt_col_key"] = meta.get("tgt_col", "<нет>")
             st.session_state["id_col_key"]  = meta.get("id_col", "<нет>")
@@ -289,6 +306,6 @@ def try_load_existing_model():
             st.session_state["models_key"] = meta.get("chosen_models", ["* (все)"])
             st.session_state["mean_only_key"] = meta.get("mean_only", False)
 
-            st.info("Настройки (колонки, freq, метрика и т.д.) восстановлены из model_info.json")
+            st.info("Настройки колонки, метрики, праздников и т.д. восстановлены из model_info.json.")
     except Exception as e:
-        st.warning(f"Не удалось автоматически загрузить модель из {MODEL_DIR}. Ошибка: {e}")
+        st.warning(f"Ошибка при загрузке старой модели: {e}")
