@@ -9,7 +9,8 @@ from autogluon.timeseries import TimeSeriesPredictor
 from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe
-from app_saving import MODEL_DIR, save_model_metadata, format_fit_summary, format_fit_summary_to_df
+from app_saving import MODEL_DIR, save_model_metadata, format_fit_summary
+
 
 def run_training():
     """Функция для запуска обучения модели."""
@@ -27,6 +28,7 @@ def run_training():
         return False
 
     try:
+        # Очищаем предыдущие модели
         shutil.rmtree("AutogluonModels", ignore_errors=True)
 
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
@@ -66,6 +68,7 @@ def run_training():
             ts_df = ts_df.fill_missing_values(method="ffill")
             actual_freq = freq_short
 
+        # Готовим hyperparams
         hyperparams = None
         all_models_opt = "* (все)"
         if (len(chosen_models_val) == 1 and chosen_models_val[0] == all_models_opt) or len(chosen_models_val) == 0:
@@ -96,17 +99,19 @@ def run_training():
             )
         except ValueError as e:
             if "cannot be inferred" in str(e):
-                st.error(
-                    "Для параметра (freq) - укажите конкретное значение. "
-                    "Система не смог определить частоту автоматически."
-                )
+                st.error("Для параметра (freq) - укажите конкретное значение. Система не смог определить частоту автоматически.")
                 return False
             else:
                 raise
 
         summ = predictor.fit_summary()
         st.session_state["fit_summary"] = summ
+
         logging.info(f"Fit Summary (raw): {summ}")
+
+        # Для отладки можно вывести RAW fit summary
+        with st.expander("Fit Summary (RAW)"):
+            st.write(summ)
 
         if summ:
             detailed_fit_summary_str = format_fit_summary(summ)
@@ -132,7 +137,7 @@ def run_training():
             st.session_state["best_model_score"] = best_score
             st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
 
-        # Сохраняем настройки
+        # Сохраняем настройки в JSON (model_info.json)
         save_model_metadata(
             dt_col, tgt_col, id_col,
             static_feats_val, freq_val,
@@ -142,7 +147,9 @@ def run_training():
         )
 
         return True
+
     except Exception as ex:
         st.error(f"Ошибка обучения: {ex}")
         logging.error(f"Training Exception: {ex}")
         return False
+

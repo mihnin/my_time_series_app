@@ -54,6 +54,7 @@ def convert_to_timeseries(
     df_local.reset_index(drop=True, inplace=True)
     return df_local
 
+
 def show_dataset_stats(df: pd.DataFrame):
     """
     Выводит в Streamlit простую статистику:

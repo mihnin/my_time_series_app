@@ -14,6 +14,7 @@ def make_timeseries_dataframe(df, static_df=None):
     )
     return ts_df
 
+
 def forecast(predictor: TimeSeriesPredictor, ts_df, known_covariates=None):
     """
     Вызывает predictor.predict() и возвращает получившийся DataFrame
@@ -23,6 +24,7 @@ def forecast(predictor: TimeSeriesPredictor, ts_df, known_covariates=None):
     preds = predictor.predict(ts_df, known_covariates=known_covariates)
     logging.info("Прогнозирование завершено.")
     return preds
+
 
 
 

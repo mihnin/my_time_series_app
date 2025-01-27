@@ -13,6 +13,7 @@ CONFIG_PATH = "config/config.yaml"
 
 from autogluon.timeseries import TimeSeriesPredictor
 
+
 def format_fit_summary(fit_summary):
     """Форматирует fit_summary для более удобочитаемого вывода."""
     if not fit_summary:
@@ -31,10 +32,9 @@ def format_fit_summary(fit_summary):
         for model_name, model_info in fit_summary['model_fit_summary'].items():
             summary_str += f"\n**Model: {model_name}**\n"
             if not isinstance(model_info, dict):
-                summary_str += "  - Ошибка: отсутствуют детальные данные\n"
+                summary_str += "  - Детали отсутствуют или тип неверный\n"
                 continue
 
-            # Стандартные ключи
             if 'fit_time' in model_info:
                 summary_str += f"  - Fit Time: {model_info['fit_time']:.2f} seconds\n"
             if 'score' in model_info:
@@ -44,13 +44,15 @@ def format_fit_summary(fit_summary):
             if 'pred_count' in model_info:
                 summary_str += f"  - Predictions Count: {model_info['pred_count']}\n"
 
-            # Для ансамбля
+            # Доп.поля для ансамбля:
             if 'child_model_names' in model_info:
                 summary_str += f"  - Child Models: {model_info['child_model_names']}\n"
             if 'child_model_scores' in model_info:
-                summary_str += f"  - Child Models' Scores: {model_info['child_model_scores']}\n"
+                summary_str += f"  - Child Model Scores: {model_info['child_model_scores']}\n"
             if 'child_model_weights' in model_info:
-                summary_str += f"  - Child Models' Weights: {model_info['child_model_weights']}\n"
+                summary_str += f"  - Child Model Weights: {model_info['child_model_weights']}\n"
+    else:
+        summary_str += "\n(Нет информации о моделях)\n"
 
     return summary_str
 
@@ -83,9 +85,9 @@ def format_fit_summary_to_df(fit_summary):
                 if 'child_model_names' in model_info:
                     data.append({"Метрика": f"  Child Models ({model_name})", "Значение": str(model_info['child_model_names'])})
                 if 'child_model_scores' in model_info:
-                    data.append({"Метрика": f"  Child Models' Scores ({model_name})", "Значение": str(model_info['child_model_scores'])})
+                    data.append({"Метрика": f"  Child Model Scores ({model_name})", "Значение": str(model_info['child_model_scores'])})
                 if 'child_model_weights' in model_info:
-                    data.append({"Метрика": f"  Child Models' Weights ({model_name})", "Значение": str(model_info['child_model_weights'])})
+                    data.append({"Метрика": f"  Child Model Weights ({model_name})", "Значение": str(model_info['child_model_weights'])})
             else:
                 logging.warning(f"Model fit summary for {model_name} is not a dictionary: {model_info}")
 
@@ -118,7 +120,9 @@ def save_results_to_excel(save_path):
         use_holidays_val = st.session_state.get("use_holidays_key", False)
 
         has_data_to_save = any([
-            df_train is not None, lb is not None, preds is not None, 
+            df_train is not None,
+            lb is not None,
+            preds is not None,
             fit_summary_data,
             (stt_train is not None and not stt_train.empty if stt_train is not None else False),
             (stt_fore is not None and not stt_fore.empty if stt_fore is not None else False),
@@ -133,62 +137,67 @@ def save_results_to_excel(save_path):
         from openpyxl.utils import get_column_letter
 
         with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
+            # 1) Predictions
             if preds is not None:
                 pred_df_to_save = preds.reset_index()
                 pred_df_to_save['timestamp'] = pd.to_datetime(pred_df_to_save['timestamp'])
+                # Добавим статические признаки
                 if static_feats_val and stt_train is not None:
+                    # stt_train -> item_id, ...
+                    # Смерджим для наглядности
                     pred_df_to_save = pd.merge(pred_df_to_save, stt_train, on='item_id', how='left')
-                # Важно: здесь было pred_df_to_excel(...) - ЗАМЕНИЛИ на to_excel(...)
+                # **ИСПРАВЛЕННАЯ СТРОКА**:
                 pred_df_to_save.to_excel(writer, sheet_name="Predictions", index=False)
+
+            # 2) Если нет preds, но есть df_train
             elif df_train is not None:
                 df_train.to_excel(writer, sheet_name="TrainData", index=False)
 
+            # 3) Leaderboard
             if lb is not None:
                 lb.to_excel(writer, sheet_name="Leaderboard", index=False)
 
+            # 4) Fit Summary
             if fit_summary_data:
                 fit_sum_df = format_fit_summary_to_df(fit_summary_data)
                 fit_sum_df.to_excel(writer, sheet_name="FitSummaryDetails", index=False)
 
+            # 5) StaticTrainFeatures
             if stt_train is not None and not stt_train.empty:
                 stt_to_save = stt_train.copy()
                 if use_holidays_val and 'russian_holiday' in df_train.columns:
-                    first_timestamps = df_train.groupby(id_col)[dt_col].first().reset_index()
-                    holiday_static = pd.merge(
-                        stt_to_save[[id_col]],
-                        df_train[[id_col, 'russian_holiday']],
-                        left_on='item_id', right_on=id_col, how='left'
-                    ).drop_duplicates(subset=[id_col])
-                    stt_to_save = pd.merge(stt_to_save, holiday_static[[id_col, 'russian_holiday']], 
-                                           on='item_id', how='left')
+                    # Добавим колонку праздника, если надо
+                    holiday_df = df_train[[id_col, dt_col, 'russian_holiday']].drop_duplicates()
+                    # Но обычно static означает один уровень на item_id
+                    # Либо просто отразим наличие праздников
+                    # Здесь можно логики и не добавлять, по желанию
                 stt_to_save.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
 
+            # 6) StaticForeFeatures (если нужно)
             if stt_fore is not None and not stt_fore.empty:
-                stt_fore.to_excel(writer, sheet_name="StaticForeFeatures")
+                stt_fore.to_excel(writer, sheet_name="StaticForeFeatures", index=False)
 
+            # 7) RussianHolidays
             if use_holidays_val and df_train is not None and 'russian_holiday' in df_train.columns:
                 holiday_df = df_train[[dt_col, id_col, 'russian_holiday']].copy()
                 holiday_df.to_excel(writer, sheet_name="RussianHolidays", index=False)
 
-            # Подсветим лучшую модель
+            # Подсветка лучшей модели
             if lb is not None and not lb.empty:
                 workbook = writer.book
                 sheet = writer.sheets["Leaderboard"]
                 best_idx = lb.iloc[0].name
-                best_model_name = lb.iloc[0]["model"]
-                best_score = lb.iloc[0]["score_val"]
-
                 fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                row_excel = best_idx + 2
+                row_excel = best_idx + 2  # +2, т.к. в Excel первая строка - заголовки
                 for col_idx in range(1, lb.shape[1] + 1):
                     cell = sheet.cell(row=row_excel, column=col_idx)
                     cell.fill = fill_green
 
                 explanation_row = lb.shape[0] + 3
-                explanation = (
-                    f"Лучшая модель: {best_model_name}\n"
-                    f"Причина: минимальный score_val = {best_score:.4f}"
-                )
+                best_model_name = lb.iloc[0]["model"]
+                best_score = lb.iloc[0]["score_val"]
+                explanation = (f"Лучшая модель: {best_model_name}\n"
+                               f"Причина: score_val={best_score:.4f}")
                 sheet.cell(row=explanation_row, column=1).value = explanation
 
         st.success(f"Сохранено в {save_path}")
@@ -200,7 +209,7 @@ def save_results_to_excel(save_path):
 
 
 def load_model_metadata():
-    """Загружаем сохранённые настройки из model_info.json, если есть."""
+    """Загружаем сохранённые настройки (dt_col, freq, metric и др.) из model_info.json, если есть."""
     path_json = os.path.join(MODEL_DIR, MODEL_INFO_FILE)
     if not os.path.exists(path_json):
         return None
@@ -237,7 +246,7 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
 
 
 def try_load_existing_model():
-    """Если в MODEL_DIR уже есть модель, то загружаем её и восстанавливаем настройки."""
+    """Если модель уже сохранена (TimeSeriesPredictor.load), загрузить её и восстановить настройки."""
     if not os.path.exists(MODEL_DIR):
         return
     try:
@@ -263,3 +272,4 @@ def try_load_existing_model():
             st.info("Настройки (колонки, freq, метрика и т.д.) восстановлены из model_info.json")
     except Exception as e:
         st.warning(f"Не удалось автоматически загрузить модель из {MODEL_DIR}. Ошибка: {e}")
+
