@@ -24,7 +24,6 @@ def run_prediction():
         return False
 
     df_train = st.session_state.get("df")
-
     if df_train is None:
         st.error("Нет train данных!")
         return False
@@ -40,8 +39,8 @@ def run_prediction():
 
         df_pred = fill_missing_values(
             df_pred,
-            st.session_state.get("fill_method_key","None"),
-            st.session_state.get("group_cols_for_fill_key",[])
+            st.session_state.get("fill_method_key", "None"),
+            st.session_state.get("group_cols_for_fill_key", [])
         )
 
         st.session_state["df"] = df_pred
@@ -71,7 +70,7 @@ def run_prediction():
         st.subheader("Предсказанные значения (первые строки)")
         st.dataframe(preds.reset_index().head())
 
-        # Выводим инфо о лучшей модели
+        # Повторно выводим лучшую модель (с обучения)
         best_name = st.session_state.get("best_model_name", None)
         best_score = st.session_state.get("best_model_score", None)
         if best_name is not None:
@@ -81,7 +80,7 @@ def run_prediction():
         if "0.5" in preds.columns:
             preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
             unique_ids = preds_df["item_id"].unique()
-            st.subheader("Графики прогноза (0.5) (первые)")
+            st.subheader("Графики прогноза (0.5) (первые 3)")
             max_graphs = 3
             for i, uid in enumerate(unique_ids[:max_graphs]):
                 subset = preds_df[preds_df["item_id"] == uid]
@@ -92,7 +91,7 @@ def run_prediction():
                 )
                 st.plotly_chart(fig_, use_container_width=True)
         else:
-            st.info("Нет колонки '0.5' — возможно mean_only=False или квантильные предикторы отключены.")
+            st.info("Нет колонки '0.5' — возможно mean_only=False или отключены квантили.")
 
         return True
 

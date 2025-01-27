@@ -3,6 +3,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 import sys
+import chardet
 
 LOG_FILE = "logs/app.log"
 
@@ -20,7 +21,7 @@ def setup_logger():
 
     file_handler = RotatingFileHandler(
         LOG_FILE,
-        maxBytes=10000000,
+        maxBytes=10_000_000,
         backupCount=5,
         encoding='utf-8'
     )
@@ -35,17 +36,23 @@ def setup_logger():
 
     logging.info("========== Приложение запущено ==========")
 
+
 def read_logs() -> str:
     if not os.path.exists(LOG_FILE):
         return "Лог-файл не найден."
+
     try:
         with open(LOG_FILE, "r", encoding='utf-8') as f:
             return f.read()
     except UnicodeDecodeError:
-        # Перекодировка при ошибке
+        # Пробуем перекодировать в UTF-8
         with open(LOG_FILE, 'rb') as old:
             data = old.read()
-        with open(LOG_FILE, 'wb') as new:
-            new.write(data.decode('cp1251', errors='replace').encode('utf-8'))
+        converted_text = data.decode('cp1251', errors='replace')
+        with open(LOG_FILE, 'w', encoding='utf-8') as new:
+            new.write(converted_text)
+
+        # Повторная попытка чтения
         with open(LOG_FILE, "r", encoding='utf-8') as f:
             return f.read()
+
