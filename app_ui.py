@@ -9,7 +9,6 @@ from src.data.data_processing import load_data, show_dataset_stats
 
 CONFIG_PATH = "config/config.yaml"
 
-
 def load_config(path: str):
     """Загружает конфиг YAML (METRICS_DICT, AG_MODELS)."""
     if not os.path.exists(path):
@@ -52,7 +51,7 @@ def setup_ui():
             else:
                 st.session_state[key] = None
 
-    # Удаляем df_forecast и static_df_fore (не используется в данной версии)
+    # Удаляем df_forecast и static_df_fore (если не используется):
     if "df_forecast" in st.session_state:
         del st.session_state["df_forecast"]
     if "static_df_fore" in st.session_state:
@@ -95,6 +94,7 @@ def setup_ui():
     tgt_stored = st.session_state["tgt_col_key"]
     id_stored  = st.session_state["id_col_key"]
 
+    # Если ранее сохранённые имена колонок вдруг не существуют — сбрасываем их
     if dt_stored not in ["<нет>"] + all_cols:
         st.session_state["dt_col_key"] = "<нет>"
     if tgt_stored not in ["<нет>"] + all_cols:
@@ -107,13 +107,15 @@ def setup_ui():
     id_col  = st.sidebar.selectbox("Колонка ID (категориальный)", ["<нет>"] + all_cols, key="id_col_key")
 
     st.sidebar.header("Статические признаки (до 3)")
+    # Убираем default=..., работаем только через key="static_feats_key"
     if "static_feats_key" not in st.session_state:
         st.session_state["static_feats_key"] = []
-    static_feats_stored = st.session_state["static_feats_key"]
     possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
-    static_feats = st.sidebar.multiselect("Статические колонки:", possible_static,
-                                          default=static_feats_stored,
-                                          key="static_feats_key")
+    static_feats = st.sidebar.multiselect(
+        "Статические колонки:",
+        possible_static,
+        key="static_feats_key"
+    )
 
     if "use_holidays_key" not in st.session_state:
         st.session_state["use_holidays_key"] = False
@@ -143,17 +145,21 @@ def setup_ui():
 
     # ========== (5) Метрика и модели ==========
     st.sidebar.header("5. Метрика и модели")
-    st.sidebar.selectbox("Метрика", metrics_list,
-                         index=metrics_list.index(st.session_state["metric_key"]),
-                         key="metric_key")
+    st.sidebar.selectbox(
+        "Метрика",
+        metrics_list,
+        index=metrics_list.index(st.session_state["metric_key"]),
+        key="metric_key"
+    )
+    # Также убираем default=..., используем только key="models_key"
+    st.sidebar.multiselect("Модели AutoGluon", model_choices, key="models_key")
 
-    st.sidebar.multiselect("Модели AutoGluon", model_choices,
-                           default=st.session_state["models_key"],
-                           key="models_key")
-
-    st.sidebar.selectbox("Presets", presets_list,
-                         index=presets_list.index(st.session_state["presets_key"]),
-                         key="presets_key")
+    st.sidebar.selectbox(
+        "Presets",
+        presets_list,
+        index=presets_list.index(st.session_state["presets_key"]),
+        key="presets_key"
+    )
 
     st.sidebar.number_input("prediction_length", 1, 365, 10, key="prediction_length_key")
     st.sidebar.number_input("time_limit (sec)", 10, 36000, 60, key="time_limit_key")
@@ -161,18 +167,29 @@ def setup_ui():
                         value=st.session_state.get("mean_only_key", False),
                         key="mean_only_key")
 
-    # Предварительный график
+    # Предварительный график (с парсингом даты после выбора dt_col)
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
             df_plot = df_current.copy()
-            df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce")
+            # Парсим выбранную колонку как дату (errors="coerce", dayfirst=True — если надо)
+            df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
             df_plot = df_plot.dropna(subset=[dt_col])
+
             if id_col != "<нет>":
-                fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, color=id_col,
-                                     title="График Target по ID")
+                fig_target = px.line(
+                    df_plot.sort_values(dt_col),
+                    x=dt_col,
+                    y=tgt_col,
+                    color=id_col,
+                    title="График Target по ID"
+                )
             else:
-                fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col,
-                                     title="График Target (без ID)")
+                fig_target = px.line(
+                    df_plot.sort_values(dt_col),
+                    x=dt_col,
+                    y=tgt_col,
+                    title="График Target (без ID)"
+                )
             st.subheader("Предварительный анализ Target")
             st.plotly_chart(fig_target, use_container_width=True)
         except Exception as e:
@@ -189,7 +206,7 @@ def setup_ui():
 
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
-    st.sidebar.text_input("Excel-файл", "results.xlsx", key="save_path_key")
+    st.sidebar.text_input("Файл для сохранения результатов (CSV/XLSX)", "results.xlsx", key="save_path_key")
     st.sidebar.button("Сохранить результаты", key="save_btn")
 
     # ========== (9) Логи приложения ==========
@@ -202,4 +219,3 @@ def setup_ui():
     st.sidebar.button("Скачать все содержимое AutogluonModels", key="download_model_and_logs")
 
     return page_choice
-
