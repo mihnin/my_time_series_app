@@ -9,7 +9,7 @@
 1. Установите Miniconda или Anaconda.
 2. Создайте окружение:
    ```bash
-   conda create -n my_time_series_app python=3.9
+   conda create -n my_time_series_app python=3.10
    conda activate my_time_series_app
    ```
 3. Установите зависимости:
