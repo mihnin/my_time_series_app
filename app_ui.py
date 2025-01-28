@@ -1,6 +1,4 @@
 # app_ui.py
-# app_ui.py
-
 import streamlit as st
 import yaml
 import os
@@ -31,10 +29,14 @@ model_choices = [all_models_opt] + model_keys
 
 
 def setup_ui():
+    # Пишем версию в «верхнем левом углу» (просто выводим перед заголовком):
+    st.markdown("### Версия 1.0")
+
+    # Меняем название
+    st.title("Бизнес-приложение для прогнозирования временных рядов")
+
     pages = ["Главная", "Help"]
     page_choice = st.sidebar.selectbox("Навигация", pages, key="page_choice")
-
-    st.title("AutoGluon Приложение: Прогнозирование временных рядов")
 
     # Инициализация session_state ключей:
     session_keys = [
@@ -75,8 +77,6 @@ def setup_ui():
 
                 st.subheader("Статистика Train")
                 show_dataset_stats(df_train)
-
-                st.info("Forecast-файл в этой версии не используется.")
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
 
@@ -120,7 +120,7 @@ def setup_ui():
     if len(filtered_feats) != len(existing_static_feats):
         st.session_state["static_feats_key"] = filtered_feats
 
-    # Теперь вызываем multiselect
+    # multiselect для статических признаков
     static_feats = st.sidebar.multiselect(
         "Статические колонки:",
         possible_static,
@@ -229,4 +229,3 @@ def setup_ui():
     st.sidebar.button("Скачать все содержимое AutogluonModels", key="download_model_and_logs")
 
     return page_choice
-
