@@ -1,4 +1,6 @@
 # app_ui.py
+# app_ui.py
+
 import streamlit as st
 import yaml
 import os
@@ -107,10 +109,18 @@ def setup_ui():
     id_col  = st.sidebar.selectbox("Колонка ID (категориальный)", ["<нет>"] + all_cols, key="id_col_key")
 
     st.sidebar.header("Статические признаки (до 3)")
-    # Убираем default=..., работаем только через key="static_feats_key"
     if "static_feats_key" not in st.session_state:
         st.session_state["static_feats_key"] = []
+
+    # Фильтрация: убираем из session_state["static_feats_key"] те признаки,
+    # которых больше нет в текущем датасете:
+    existing_static_feats = st.session_state["static_feats_key"]
     possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
+    filtered_feats = [feat for feat in existing_static_feats if feat in possible_static]
+    if len(filtered_feats) != len(existing_static_feats):
+        st.session_state["static_feats_key"] = filtered_feats
+
+    # Теперь вызываем multiselect
     static_feats = st.sidebar.multiselect(
         "Статические колонки:",
         possible_static,
@@ -151,7 +161,7 @@ def setup_ui():
         index=metrics_list.index(st.session_state["metric_key"]),
         key="metric_key"
     )
-    # Также убираем default=..., используем только key="models_key"
+
     st.sidebar.multiselect("Модели AutoGluon", model_choices, key="models_key")
 
     st.sidebar.selectbox(
@@ -171,7 +181,7 @@ def setup_ui():
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
             df_plot = df_current.copy()
-            # Парсим выбранную колонку как дату (errors="coerce", dayfirst=True — если надо)
+            # Преобразуем выбранную колонку в datetime (dayfirst=True, если нужно)
             df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
             df_plot = df_plot.dropna(subset=[dt_col])
 
@@ -219,3 +229,4 @@ def setup_ui():
     st.sidebar.button("Скачать все содержимое AutogluonModels", key="download_model_and_logs")
 
     return page_choice
+
