@@ -1,7 +1,4 @@
 # app_training.py
-# app_training.py
-
-# app_training.py
 import streamlit as st
 import pandas as pd
 import shutil
@@ -12,8 +9,7 @@ from autogluon.timeseries import TimeSeriesPredictor
 from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe
-# Убираем import format_fit_summary
-from app_saving import save_model_metadata  # <-- только то, что нужно
+from app_saving import save_model_metadata
 
 def run_training():
     """Функция для запуска обучения модели."""
@@ -31,10 +27,10 @@ def run_training():
         return False
 
     try:
-        # Удаляем старую папку моделей (если она есть)
+        # Удаляем старую папку моделей (если есть)
         shutil.rmtree("AutogluonModels", ignore_errors=True)
 
-        # Параметры из session_state
+        # Берём настройки из session_state
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
         fill_method_val = st.session_state.get("fill_method_key", "None")
         group_cols_val = st.session_state.get("group_cols_for_fill_key", [])
@@ -46,11 +42,11 @@ def run_training():
         p_length = st.session_state.get("prediction_length_key", 10)
         t_limit = st.session_state.get("time_limit_key", 60)
 
-        # Преобразуем дату
+        # Приведение колонки с датой
         df2 = df_train.copy()
         df2[dt_col] = pd.to_datetime(df2[dt_col], errors="coerce")
 
-        # Если включено - добавляем признак праздников
+        # Если нужно – добавляем праздники
         if use_holidays_val:
             st.info("Признак `russian_holiday` добавлен.")
             df2 = add_russian_holiday_feature(df2, date_col=dt_col, holiday_col="russian_holiday")
@@ -59,7 +55,7 @@ def run_training():
         df2 = fill_missing_values(df2, fill_method_val, group_cols_val)
         st.session_state["df"] = df2
 
-        # Формируем DataFrame со статическими признаками (если выбраны)
+        # Формируем DataFrame со статическими признаками (если они выбраны)
         static_feats_val = st.session_state.get("static_feats_key", [])
         static_df = None
         if static_feats_val:
@@ -71,7 +67,7 @@ def run_training():
         df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
         ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
 
-        # Если freq_val != auto — зададим частоту
+        # Принудительная частота (если не 'auto')
         actual_freq = None
         if freq_val != "auto (угадать)":
             freq_short = freq_val.split(" ")[0]
@@ -79,7 +75,7 @@ def run_training():
             ts_df = ts_df.fill_missing_values(method="ffill")
             actual_freq = freq_short
 
-        # Определяем hyperparams
+        # Какие hyperparams (модели) обучать
         all_models_opt = "* (все)"
         if not chosen_models_val or (len(chosen_models_val) == 1 and chosen_models_val[0] == all_models_opt):
             hyperparams = None
@@ -87,7 +83,7 @@ def run_training():
             no_star = [m for m in chosen_models_val if m != all_models_opt]
             hyperparams = {m: {} for m in no_star}
 
-        # Определяем метрику и квантили
+        # Метрика и квантили
         eval_key = chosen_metric_val.split(" ")[0]
         q_levels = [0.5] if mean_only_val else None
 
@@ -102,6 +98,7 @@ def run_training():
         )
         st.info("Начинаем обучение...")
 
+        # Обучаем
         try:
             predictor.fit(
                 train_data=ts_df,
@@ -121,15 +118,11 @@ def run_training():
         st.session_state["fit_summary"] = summ
         logging.info(f"Fit Summary (raw): {summ}")
 
-        # Покажем Fit Summary (RAW) в экспандере
+        # Показываем fit_summary как есть в Expander
         with st.expander("Fit Summary (RAW)"):
             st.write(summ)
 
-        # Сохраняем сам predictor в session_state
-        st.session_state["predictor"] = predictor
-        st.success("Модель успешно обучена!")
-
-        # Лидерборд
+        # Лидерборд: смотрим, кто сверху
         lb = predictor.leaderboard(ts_df)
         st.session_state["leaderboard"] = lb
         st.subheader("Лидерборд (Leaderboard)")
@@ -142,15 +135,39 @@ def run_training():
             st.session_state["best_model_score"] = best_score
             st.info(f"Лучшая модель: {best_model}, score_val={best_score:.4f}")
 
-        # (Сохраняем метаданные, если вам нужно)
+            # Если победил WeightedEnsemble — выводим его состав
+            if best_model == "WeightedEnsemble":
+                # Достаём info() и смотрим блок "WeightedEnsemble"
+                info_dict = predictor.info()
+                ensemble_block = info_dict.get("model_info", {}).get("WeightedEnsemble", {})
+                model_weights = ensemble_block.get("model_weights", {})
+
+                # Выводим на экран
+                st.write("### Состав лучшей модели (WeightedEnsemble):")
+                if not model_weights:
+                    st.write("*(Не найдены model_weights — возможно ансамбль пуст или 1 модель)*")
+                else:
+                    for m, w in model_weights.items():
+                        st.write(f"- **{m}**: вес = {w:.4f}")
+                # Логируем
+                logging.info(f"[WeightedEnsemble] Состав и веса: {model_weights}")
+
+                # Запомним в fit_summary → Excel
+                if isinstance(summ, dict):
+                    summ["WeightedEnsemble_info"] = ensemble_block
+                    st.session_state["fit_summary"] = summ
+
+        # Сохраняем модельные метаданные
+        dt, tg, id_ = dt_col, tgt_col, id_col
         save_model_metadata(
-            dt_col, tgt_col, id_col,
+            dt, tg, id_,
             static_feats_val, freq_val,
             fill_method_val, group_cols_val,
             use_holidays_val, chosen_metric_val,
             presets_val, chosen_models_val, mean_only_val
         )
 
+        st.success("Обучение завершено!")
         return True
 
     except Exception as ex:

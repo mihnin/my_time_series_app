@@ -7,7 +7,6 @@ from src.features.feature_engineering import add_russian_holiday_feature, fill_m
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe, forecast
 
-
 def run_prediction():
     """Функция для запуска прогнозирования."""
     predictor = st.session_state.get("predictor")
@@ -31,13 +30,13 @@ def run_prediction():
     try:
         st.subheader("Прогноз на TRAIN")
         df_pred = df_train.copy()
-
         df_pred[dt_col] = pd.to_datetime(df_pred[dt_col], errors="coerce")
 
         if st.session_state.get("use_holidays_key", False):
             st.info("Признак `russian_holiday` включён при прогнозировании.")
             df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
 
+        # Заполняем пропуски
         df_pred = fill_missing_values(
             df_pred,
             st.session_state.get("fill_method_key", "None"),
@@ -46,6 +45,7 @@ def run_prediction():
 
         st.session_state["df"] = df_pred
 
+        # Статические признаки
         static_feats_val = st.session_state.get("static_feats_key", [])
         static_df = None
         if static_feats_val:
@@ -53,31 +53,34 @@ def run_prediction():
             tmp.rename(columns={id_col:"item_id"}, inplace=True)
             static_df = tmp
 
+        # Гарантия наличия target
         if tgt_col not in df_pred.columns:
             df_pred[tgt_col] = None
 
         df_prepared = convert_to_timeseries(df_pred, id_col, dt_col, tgt_col)
         ts_df = make_timeseries_dataframe(df_prepared, static_df=static_df)
 
+        # Частота
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
         if freq_val != "auto (угадать)":
             freq_short = freq_val.split(" ")[0]
             ts_df = ts_df.convert_frequency(freq_short)
             ts_df = ts_df.fill_missing_values(method="ffill")
 
+        # Запускаем прогноз
         preds = forecast(predictor, ts_df)
         st.session_state["predictions"] = preds
 
         st.subheader("Предсказанные значения (первые строки)")
         st.dataframe(preds.reset_index().head())
 
-        # Повторно выводим лучшую модель
+        # Лучшая модель (если сохранена в session_state)
         best_name = st.session_state.get("best_model_name", None)
         best_score = st.session_state.get("best_model_score", None)
         if best_name is not None:
             st.info(f"Лучшая модель при обучении: {best_name}, score_val={best_score:.4f}")
 
-        # Графики
+        # Пример Plotly-графиков (если есть квантиль 0.5)
         if "0.5" in preds.columns:
             preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
             unique_ids = preds_df["item_id"].unique()
@@ -87,15 +90,17 @@ def run_prediction():
                 subset = preds_df[preds_df["item_id"] == uid]
                 fig_ = px.line(
                     subset, x="timestamp", y="prediction",
-                    title=f"Прогноз для item_id={uid} (0.5)",
+                    title=f"Прогноз для item_id={uid} (квантиль 0.5)",
                     markers=True
                 )
                 st.plotly_chart(fig_, use_container_width=True)
         else:
-            st.info("Колонка '0.5' не найдена — возможно mean_only=False или квантильные прогнозы отключены.")
+            st.info("Колонка '0.5' не найдена — возможно mean_only=True или квантильные настройки отключены.")
 
         return True
 
     except Exception as ex:
         st.error(f"Ошибка прогноза: {ex}")
         return False
+
+
