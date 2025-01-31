@@ -1,0 +1,1462 @@
+﻿Date,Country,City,Shop,Target
+2020-01-01,Canada,Toronto,Shop F,456
+2020-01-02,Canada,Vancouver,Shop H,476
+2020-01-03,UK,Manchester,Shop L,162
+2020-01-04,Canada,Vancouver,Shop H,307
+2020-01-05,Canada,Montreal,Shop I,262
+2020-01-06,USA,New York,Shop A,240
+2020-01-07,USA,Chicago,Shop E,321
+2020-01-08,Canada,Toronto,Shop G,302
+2020-01-09,UK,Manchester,Shop L,90
+2020-01-10,UK,Manchester,Shop L,124
+2020-01-11,USA,New York,Shop A,125
+2020-01-12,UK,London,Shop K,209
+2020-01-13,USA,New York,Shop A,267
+2020-01-14,Canada,Toronto,Shop F,17
+2020-01-15,USA,Los Angeles,Shop D,148
+2020-01-16,UK,Edinburgh,Shop M,164
+2020-01-17,USA,Chicago,Shop E,447
+2020-01-18,USA,Chicago,Shop E,467
+2020-01-19,USA,New York,Shop B,172
+2020-01-20,UK,London,Shop K,128
+2020-01-21,UK,Edinburgh,Shop M,153
+2020-01-22,Canada,Toronto,Shop G,277
+2020-01-23,Canada,Vancouver,Shop H,417
+2020-01-24,USA,Los Angeles,Shop D,420
+2020-01-25,UK,Manchester,Shop L,98
+2020-01-26,Canada,Vancouver,Shop H,47
+2020-01-27,Canada,Vancouver,Shop H,93
+2020-01-28,UK,Edinburgh,Shop M,472
+2020-01-29,USA,New York,Shop B,243
+2020-01-30,Canada,Toronto,Shop G,98
+2020-01-31,USA,Chicago,Shop E,365
+2020-02-01,UK,London,Shop K,332
+2020-02-02,Canada,Vancouver,Shop H,469
+2020-02-03,UK,London,Shop J,422
+2020-02-04,USA,Los Angeles,Shop D,22
+2020-02-05,UK,Manchester,Shop L,174
+2020-02-06,Canada,Vancouver,Shop H,354
+2020-02-07,USA,Chicago,Shop E,304
+2020-02-08,Canada,Montreal,Shop I,459
+2020-02-09,USA,New York,Shop B,482
+2020-02-10,Canada,Toronto,Shop G,302
+2020-02-11,USA,Chicago,Shop E,95
+2020-02-12,USA,New York,Shop B,29
+2020-02-13,USA,Chicago,Shop E,11
+2020-02-14,Canada,Montreal,Shop I,286
+2020-02-15,USA,Los Angeles,Shop D,53
+2020-02-16,USA,Los Angeles,Shop D,122
+2020-02-17,Canada,Toronto,Shop F,443
+2020-02-18,UK,Manchester,Shop L,310
+2020-02-19,USA,Chicago,Shop E,160
+2020-02-20,USA,Chicago,Shop E,115
+2020-02-21,USA,Chicago,Shop E,298
+2020-02-22,Canada,Montreal,Shop I,327
+2020-02-23,Canada,Vancouver,Shop H,352
+2020-02-24,UK,London,Shop K,298
+2020-02-25,USA,Los Angeles,Shop D,311
+2020-02-26,Canada,Vancouver,Shop H,467
+2020-02-27,Canada,Toronto,Shop G,480
+2020-02-28,UK,Edinburgh,Shop M,234
+2020-02-29,Canada,Vancouver,Shop H,364
+2020-03-01,USA,New York,Shop B,456
+2020-03-02,Canada,Vancouver,Shop H,360
+2020-03-03,USA,Chicago,Shop E,485
+2020-03-04,Canada,Toronto,Shop F,455
+2020-03-05,UK,Edinburgh,Shop M,100
+2020-03-06,USA,Los Angeles,Shop C,330
+2020-03-07,Canada,Toronto,Shop G,305
+2020-03-08,USA,New York,Shop B,459
+2020-03-09,USA,New York,Shop B,479
+2020-03-10,USA,Chicago,Shop E,362
+2020-03-11,USA,Chicago,Shop E,441
+2020-03-12,USA,New York,Shop B,373
+2020-03-13,Canada,Toronto,Shop G,21
+2020-03-14,Canada,Montreal,Shop I,330
+2020-03-15,Canada,Vancouver,Shop H,175
+2020-03-16,USA,Chicago,Shop E,474
+2020-03-17,UK,Manchester,Shop L,108
+2020-03-18,UK,London,Shop J,178
+2020-03-19,USA,Chicago,Shop E,364
+2020-03-20,UK,London,Shop J,498
+2020-03-21,USA,New York,Shop B,349
+2020-03-22,Canada,Toronto,Shop G,330
+2020-03-23,Canada,Montreal,Shop I,171
+2020-03-24,USA,Los Angeles,Shop D,333
+2020-03-25,USA,New York,Shop A,94
+2020-03-26,Canada,Montreal,Shop I,209
+2020-03-27,Canada,Montreal,Shop I,72
+2020-03-28,Canada,Montreal,Shop I,29
+2020-03-29,UK,London,Shop K,46
+2020-03-30,UK,London,Shop J,338
+2020-03-31,Canada,Vancouver,Shop H,446
+2020-04-01,USA,New York,Shop B,157
+2020-04-02,Canada,Toronto,Shop G,387
+2020-04-03,Canada,Montreal,Shop I,139
+2020-04-04,UK,Edinburgh,Shop M,157
+2020-04-05,UK,Manchester,Shop L,311
+2020-04-06,Canada,Montreal,Shop I,191
+2020-04-07,Canada,Montreal,Shop I,470
+2020-04-08,USA,Chicago,Shop E,365
+2020-04-09,Canada,Montreal,Shop I,477
+2020-04-10,USA,Los Angeles,Shop C,136
+2020-04-11,UK,London,Shop K,379
+2020-04-12,UK,Edinburgh,Shop M,204
+2020-04-13,USA,New York,Shop A,19
+2020-04-14,USA,New York,Shop B,303
+2020-04-15,USA,Chicago,Shop E,290
+2020-04-16,Canada,Toronto,Shop F,424
+2020-04-17,Canada,Toronto,Shop G,25
+2020-04-18,USA,Los Angeles,Shop D,412
+2020-04-19,UK,Manchester,Shop L,20
+2020-04-20,Canada,Montreal,Shop I,422
+2020-04-21,UK,London,Shop J,162
+2020-04-22,USA,New York,Shop A,321
+2020-04-23,Canada,Vancouver,Shop H,12
+2020-04-24,UK,Manchester,Shop L,305
+2020-04-25,USA,New York,Shop B,245
+2020-04-26,USA,New York,Shop B,115
+2020-04-27,Canada,Toronto,Shop F,134
+2020-04-28,USA,New York,Shop A,152
+2020-04-29,Canada,Toronto,Shop G,180
+2020-04-30,Canada,Toronto,Shop F,44
+2020-05-01,UK,London,Shop J,26
+2020-05-02,USA,Los Angeles,Shop D,331
+2020-05-03,USA,Los Angeles,Shop C,90
+2020-05-04,UK,London,Shop J,402
+2020-05-05,UK,Edinburgh,Shop M,453
+2020-05-06,Canada,Vancouver,Shop H,481
+2020-05-07,UK,London,Shop K,145
+2020-05-08,UK,Edinburgh,Shop M,174
+2020-05-09,UK,London,Shop K,208
+2020-05-10,USA,Chicago,Shop E,110
+2020-05-11,Canada,Toronto,Shop G,324
+2020-05-12,UK,Edinburgh,Shop M,452
+2020-05-13,UK,Manchester,Shop L,90
+2020-05-14,Canada,Montreal,Shop I,92
+2020-05-15,USA,Los Angeles,Shop C,441
+2020-05-16,UK,London,Shop J,329
+2020-05-17,Canada,Toronto,Shop G,377
+2020-05-18,USA,Chicago,Shop E,122
+2020-05-19,USA,Los Angeles,Shop C,346
+2020-05-20,Canada,Toronto,Shop F,309
+2020-05-21,UK,Manchester,Shop L,370
+2020-05-22,USA,Chicago,Shop E,186
+2020-05-23,UK,Manchester,Shop L,449
+2020-05-24,USA,Chicago,Shop E,166
+2020-05-25,USA,New York,Shop A,293
+2020-05-26,UK,Edinburgh,Shop M,224
+2020-05-27,Canada,Toronto,Shop G,395
+2020-05-28,UK,London,Shop K,156
+2020-05-29,Canada,Toronto,Shop F,118
+2020-05-30,USA,Los Angeles,Shop C,12
+2020-05-31,USA,New York,Shop A,171
+2020-06-01,Canada,Vancouver,Shop H,376
+2020-06-02,USA,New York,Shop B,31
+2020-06-03,USA,New York,Shop B,423
+2020-06-04,USA,New York,Shop A,75
+2020-06-05,Canada,Vancouver,Shop H,240
+2020-06-06,UK,London,Shop K,224
+2020-06-07,Canada,Toronto,Shop F,123
+2020-06-08,USA,Los Angeles,Shop D,374
+2020-06-09,Canada,Vancouver,Shop H,223
+2020-06-10,USA,New York,Shop A,98
+2020-06-11,UK,Manchester,Shop L,473
+2020-06-12,Canada,Toronto,Shop F,408
+2020-06-13,Canada,Toronto,Shop F,206
+2020-06-14,UK,London,Shop K,429
+2020-06-15,UK,London,Shop K,254
+2020-06-16,USA,Los Angeles,Shop D,259
+2020-06-17,Canada,Toronto,Shop G,262
+2020-06-18,USA,Chicago,Shop E,74
+2020-06-19,UK,Edinburgh,Shop M,145
+2020-06-20,Canada,Vancouver,Shop H,110
+2020-06-21,Canada,Vancouver,Shop H,442
+2020-06-22,Canada,Montreal,Shop I,121
+2020-06-23,USA,Chicago,Shop E,48
+2020-06-24,Canada,Toronto,Shop F,155
+2020-06-25,Canada,Montreal,Shop I,456
+2020-06-26,USA,New York,Shop B,96
+2020-06-27,Canada,Montreal,Shop I,351
+2020-06-28,Canada,Montreal,Shop I,278
+2020-06-29,USA,Los Angeles,Shop D,189
+2020-06-30,Canada,Toronto,Shop G,403
+2020-07-01,Canada,Montreal,Shop I,59
+2020-07-02,Canada,Montreal,Shop I,467
+2020-07-03,Canada,Montreal,Shop I,450
+2020-07-04,Canada,Toronto,Shop G,270
+2020-07-05,USA,Los Angeles,Shop D,443
+2020-07-06,USA,Los Angeles,Shop D,48
+2020-07-07,USA,New York,Shop B,349
+2020-07-08,USA,Chicago,Shop E,361
+2020-07-09,USA,Chicago,Shop E,480
+2020-07-10,Canada,Toronto,Shop F,191
+2020-07-11,UK,London,Shop K,316
+2020-07-12,Canada,Toronto,Shop F,371
+2020-07-13,USA,Chicago,Shop E,109
+2020-07-14,USA,Chicago,Shop E,462
+2020-07-15,USA,Chicago,Shop E,29
+2020-07-16,UK,Edinburgh,Shop M,50
+2020-07-17,Canada,Toronto,Shop G,362
+2020-07-18,USA,New York,Shop A,196
+2020-07-19,USA,New York,Shop A,219
+2020-07-20,UK,Manchester,Shop L,69
+2020-07-21,UK,London,Shop K,325
+2020-07-22,UK,Manchester,Shop L,262
+2020-07-23,USA,Los Angeles,Shop C,178
+2020-07-24,Canada,Vancouver,Shop H,433
+2020-07-25,USA,New York,Shop B,133
+2020-07-26,Canada,Vancouver,Shop H,448
+2020-07-27,UK,Manchester,Shop L,76
+2020-07-28,USA,Chicago,Shop E,269
+2020-07-29,UK,London,Shop K,209
+2020-07-30,UK,London,Shop J,349
+2020-07-31,USA,Chicago,Shop E,173
+2020-08-01,Canada,Montreal,Shop I,481
+2020-08-02,UK,Manchester,Shop L,74
+2020-08-03,USA,Chicago,Shop E,57
+2020-08-04,USA,New York,Shop B,244
+2020-08-05,USA,New York,Shop B,348
+2020-08-06,Canada,Toronto,Shop F,27
+2020-08-07,USA,Chicago,Shop E,323
+2020-08-08,USA,Chicago,Shop E,460
+2020-08-09,USA,Chicago,Shop E,293
+2020-08-10,Canada,Montreal,Shop I,442
+2020-08-11,Canada,Vancouver,Shop H,280
+2020-08-12,UK,Manchester,Shop L,165
+2020-08-13,Canada,Toronto,Shop F,287
+2020-08-14,USA,New York,Shop B,258
+2020-08-15,USA,New York,Shop A,311
+2020-08-16,Canada,Montreal,Shop I,220
+2020-08-17,USA,Los Angeles,Shop C,375
+2020-08-18,UK,London,Shop K,158
+2020-08-19,Canada,Vancouver,Shop H,499
+2020-08-20,UK,London,Shop J,495
+2020-08-21,USA,New York,Shop B,19
+2020-08-22,UK,London,Shop J,83
+2020-08-23,Canada,Vancouver,Shop H,125
+2020-08-24,Canada,Montreal,Shop I,406
+2020-08-25,USA,New York,Shop B,408
+2020-08-26,USA,Chicago,Shop E,157
+2020-08-27,Canada,Toronto,Shop G,292
+2020-08-28,USA,Chicago,Shop E,354
+2020-08-29,USA,Los Angeles,Shop D,383
+2020-08-30,Canada,Montreal,Shop I,405
+2020-08-31,USA,New York,Shop B,285
+2020-09-01,USA,Los Angeles,Shop C,252
+2020-09-02,USA,New York,Shop B,262
+2020-09-03,UK,Edinburgh,Shop M,302
+2020-09-04,USA,Los Angeles,Shop C,473
+2020-09-05,UK,Manchester,Shop L,307
+2020-09-06,UK,Edinburgh,Shop M,299
+2020-09-07,USA,Chicago,Shop E,11
+2020-09-08,USA,New York,Shop B,186
+2020-09-09,USA,Los Angeles,Shop D,398
+2020-09-10,Canada,Montreal,Shop I,390
+2020-09-11,USA,New York,Shop A,192
+2020-09-12,USA,Los Angeles,Shop D,313
+2020-09-13,Canada,Toronto,Shop G,412
+2020-09-14,USA,Chicago,Shop E,110
+2020-09-15,USA,Los Angeles,Shop C,488
+2020-09-16,Canada,Toronto,Shop F,105
+2020-09-17,USA,Chicago,Shop E,413
+2020-09-18,Canada,Vancouver,Shop H,378
+2020-09-19,UK,Manchester,Shop L,71
+2020-09-20,Canada,Montreal,Shop I,34
+2020-09-21,USA,Chicago,Shop E,155
+2020-09-22,Canada,Montreal,Shop I,96
+2020-09-23,Canada,Toronto,Shop G,357
+2020-09-24,UK,Edinburgh,Shop M,50
+2020-09-25,UK,London,Shop J,32
+2020-09-26,Canada,Montreal,Shop I,51
+2020-09-27,Canada,Vancouver,Shop H,325
+2020-09-28,USA,New York,Shop B,454
+2020-09-29,Canada,Vancouver,Shop H,443
+2020-09-30,Canada,Vancouver,Shop H,192
+2020-10-01,UK,Manchester,Shop L,452
+2020-10-02,USA,New York,Shop A,449
+2020-10-03,UK,London,Shop K,464
+2020-10-04,USA,New York,Shop B,42
+2020-10-05,USA,Chicago,Shop E,106
+2020-10-06,USA,New York,Shop A,287
+2020-10-07,Canada,Vancouver,Shop H,372
+2020-10-08,UK,Edinburgh,Shop M,441
+2020-10-09,UK,Manchester,Shop L,94
+2020-10-10,Canada,Vancouver,Shop H,238
+2020-10-11,Canada,Toronto,Shop F,167
+2020-10-12,USA,Los Angeles,Shop D,447
+2020-10-13,USA,Chicago,Shop E,27
+2020-10-14,USA,New York,Shop A,100
+2020-10-15,Canada,Montreal,Shop I,131
+2020-10-16,UK,Edinburgh,Shop M,354
+2020-10-17,UK,London,Shop J,421
+2020-10-18,USA,Chicago,Shop E,358
+2020-10-19,UK,Manchester,Shop L,317
+2020-10-20,Canada,Montreal,Shop I,427
+2020-10-21,Canada,Vancouver,Shop H,394
+2020-10-22,USA,New York,Shop A,450
+2020-10-23,UK,Edinburgh,Shop M,89
+2020-10-24,Canada,Montreal,Shop I,426
+2020-10-25,USA,New York,Shop A,498
+2020-10-26,USA,Los Angeles,Shop C,124
+2020-10-27,UK,Manchester,Shop L,328
+2020-10-28,Canada,Montreal,Shop I,295
+2020-10-29,USA,Chicago,Shop E,184
+2020-10-30,USA,Chicago,Shop E,183
+2020-10-31,USA,Chicago,Shop E,109
+2020-11-01,UK,Edinburgh,Shop M,222
+2020-11-02,USA,Los Angeles,Shop C,392
+2020-11-03,UK,Edinburgh,Shop M,317
+2020-11-04,Canada,Montreal,Shop I,142
+2020-11-05,UK,Manchester,Shop L,188
+2020-11-06,USA,Los Angeles,Shop D,385
+2020-11-07,USA,Los Angeles,Shop C,263
+2020-11-08,UK,Edinburgh,Shop M,246
+2020-11-09,Canada,Montreal,Shop I,323
+2020-11-10,USA,New York,Shop B,123
+2020-11-11,Canada,Montreal,Shop I,18
+2020-11-12,UK,Manchester,Shop L,212
+2020-11-13,UK,Manchester,Shop L,241
+2020-11-14,UK,Manchester,Shop L,259
+2020-11-15,Canada,Vancouver,Shop H,463
+2020-11-16,UK,Manchester,Shop L,457
+2020-11-17,UK,London,Shop J,293
+2020-11-18,USA,Chicago,Shop E,453
+2020-11-19,UK,London,Shop K,171
+2020-11-20,UK,Edinburgh,Shop M,210
+2020-11-21,USA,Los Angeles,Shop C,329
+2020-11-22,Canada,Montreal,Shop I,410
+2020-11-23,UK,London,Shop K,368
+2020-11-24,USA,Chicago,Shop E,355
+2020-11-25,UK,London,Shop K,53
+2020-11-26,UK,London,Shop J,111
+2020-11-27,Canada,Toronto,Shop F,80
+2020-11-28,USA,Chicago,Shop E,441
+2020-11-29,USA,New York,Shop B,190
+2020-11-30,UK,London,Shop K,212
+2020-12-01,UK,Manchester,Shop L,430
+2020-12-02,UK,Edinburgh,Shop M,469
+2020-12-03,USA,New York,Shop B,277
+2020-12-04,USA,New York,Shop A,177
+2020-12-05,USA,Los Angeles,Shop D,177
+2020-12-06,UK,Edinburgh,Shop M,361
+2020-12-07,USA,Chicago,Shop E,438
+2020-12-08,USA,Chicago,Shop E,165
+2020-12-09,USA,Los Angeles,Shop D,318
+2020-12-10,Canada,Toronto,Shop F,194
+2020-12-11,Canada,Montreal,Shop I,275
+2020-12-12,UK,London,Shop J,315
+2020-12-13,UK,London,Shop K,454
+2020-12-14,USA,Los Angeles,Shop D,340
+2020-12-15,USA,New York,Shop B,11
+2020-12-16,Canada,Montreal,Shop I,231
+2020-12-17,USA,Chicago,Shop E,116
+2020-12-18,UK,London,Shop K,157
+2020-12-19,USA,Chicago,Shop E,119
+2020-12-20,Canada,Toronto,Shop F,391
+2020-12-21,USA,Los Angeles,Shop C,375
+2020-12-22,USA,Los Angeles,Shop D,120
+2020-12-23,USA,Chicago,Shop E,171
+2020-12-24,UK,Edinburgh,Shop M,211
+2020-12-25,Canada,Vancouver,Shop H,138
+2020-12-26,Canada,Toronto,Shop F,448
+2020-12-27,UK,London,Shop J,412
+2020-12-28,UK,Manchester,Shop L,370
+2020-12-29,UK,London,Shop K,322
+2020-12-30,USA,New York,Shop A,442
+2020-12-31,Canada,Montreal,Shop I,206
+2021-01-01,UK,London,Shop J,256
+2021-01-02,UK,Edinburgh,Shop M,212
+2021-01-03,Canada,Vancouver,Shop H,474
+2021-01-04,Canada,Montreal,Shop I,239
+2021-01-05,USA,Chicago,Shop E,295
+2021-01-06,UK,London,Shop K,411
+2021-01-07,USA,Chicago,Shop E,353
+2021-01-08,UK,Manchester,Shop L,499
+2021-01-09,UK,Edinburgh,Shop M,327
+2021-01-10,Canada,Vancouver,Shop H,439
+2021-01-11,UK,Edinburgh,Shop M,497
+2021-01-12,USA,New York,Shop A,92
+2021-01-13,USA,Los Angeles,Shop C,304
+2021-01-14,USA,Chicago,Shop E,290
+2021-01-15,Canada,Toronto,Shop F,150
+2021-01-16,USA,Chicago,Shop E,304
+2021-01-17,UK,Edinburgh,Shop M,378
+2021-01-18,UK,London,Shop J,14
+2021-01-19,UK,Manchester,Shop L,371
+2021-01-20,Canada,Toronto,Shop G,272
+2021-01-21,Canada,Montreal,Shop I,263
+2021-01-22,UK,Manchester,Shop L,459
+2021-01-23,UK,Manchester,Shop L,258
+2021-01-24,Canada,Vancouver,Shop H,239
+2021-01-25,Canada,Vancouver,Shop H,174
+2021-01-26,USA,Chicago,Shop E,311
+2021-01-27,Canada,Toronto,Shop F,255
+2021-01-28,UK,Edinburgh,Shop M,104
+2021-01-29,Canada,Montreal,Shop I,108
+2021-01-30,UK,Manchester,Shop L,92
+2021-01-31,UK,Manchester,Shop L,107
+2021-02-01,USA,Chicago,Shop E,14
+2021-02-02,Canada,Montreal,Shop I,141
+2021-02-03,USA,Chicago,Shop E,428
+2021-02-04,Canada,Montreal,Shop I,335
+2021-02-05,Canada,Toronto,Shop F,154
+2021-02-06,Canada,Toronto,Shop F,340
+2021-02-07,USA,Los Angeles,Shop D,480
+2021-02-08,Canada,Montreal,Shop I,135
+2021-02-09,UK,Manchester,Shop L,439
+2021-02-10,USA,Los Angeles,Shop D,420
+2021-02-11,UK,London,Shop K,139
+2021-02-12,USA,Los Angeles,Shop D,113
+2021-02-13,USA,New York,Shop A,273
+2021-02-14,Canada,Montreal,Shop I,65
+2021-02-15,Canada,Toronto,Shop G,129
+2021-02-16,UK,Edinburgh,Shop M,67
+2021-02-17,UK,Manchester,Shop L,77
+2021-02-18,UK,Edinburgh,Shop M,251
+2021-02-19,UK,Manchester,Shop L,19
+2021-02-20,USA,Los Angeles,Shop C,88
+2021-02-21,UK,Manchester,Shop L,382
+2021-02-22,USA,New York,Shop B,330
+2021-02-23,USA,Chicago,Shop E,448
+2021-02-24,USA,Chicago,Shop E,406
+2021-02-25,Canada,Toronto,Shop F,357
+2021-02-26,USA,Los Angeles,Shop C,83
+2021-02-27,UK,Edinburgh,Shop M,291
+2021-02-28,UK,Edinburgh,Shop M,172
+2021-03-01,USA,Los Angeles,Shop C,67
+2021-03-02,Canada,Vancouver,Shop H,171
+2021-03-03,Canada,Vancouver,Shop H,396
+2021-03-04,USA,Chicago,Shop E,469
+2021-03-05,Canada,Toronto,Shop F,473
+2021-03-06,UK,London,Shop K,45
+2021-03-07,UK,London,Shop K,196
+2021-03-08,UK,London,Shop K,436
+2021-03-09,UK,London,Shop J,109
+2021-03-10,USA,Los Angeles,Shop D,157
+2021-03-11,Canada,Montreal,Shop I,327
+2021-03-12,UK,Edinburgh,Shop M,60
+2021-03-13,Canada,Toronto,Shop G,279
+2021-03-14,USA,Chicago,Shop E,481
+2021-03-15,USA,Chicago,Shop E,215
+2021-03-16,Canada,Toronto,Shop F,164
+2021-03-17,USA,Chicago,Shop E,87
+2021-03-18,UK,Edinburgh,Shop M,241
+2021-03-19,USA,Chicago,Shop E,440
+2021-03-20,USA,Chicago,Shop E,322
+2021-03-21,Canada,Montreal,Shop I,406
+2021-03-22,USA,Chicago,Shop E,209
+2021-03-23,UK,Edinburgh,Shop M,345
+2021-03-24,Canada,Montreal,Shop I,63
+2021-03-25,Canada,Toronto,Shop F,336
+2021-03-26,Canada,Vancouver,Shop H,402
+2021-03-27,USA,New York,Shop B,156
+2021-03-28,UK,Manchester,Shop L,86
+2021-03-29,USA,New York,Shop A,323
+2021-03-30,UK,London,Shop J,299
+2021-03-31,Canada,Montreal,Shop I,114
+2021-04-01,USA,New York,Shop A,387
+2021-04-02,USA,Chicago,Shop E,135
+2021-04-03,Canada,Vancouver,Shop H,327
+2021-04-04,USA,New York,Shop B,232
+2021-04-05,USA,Los Angeles,Shop C,489
+2021-04-06,UK,Edinburgh,Shop M,153
+2021-04-07,UK,Manchester,Shop L,368
+2021-04-08,Canada,Montreal,Shop I,66
+2021-04-09,Canada,Vancouver,Shop H,70
+2021-04-10,UK,Manchester,Shop L,123
+2021-04-11,Canada,Montreal,Shop I,337
+2021-04-12,UK,Manchester,Shop L,143
+2021-04-13,Canada,Montreal,Shop I,23
+2021-04-14,USA,New York,Shop B,242
+2021-04-15,UK,London,Shop K,69
+2021-04-16,USA,Chicago,Shop E,21
+2021-04-17,Canada,Toronto,Shop F,179
+2021-04-18,USA,New York,Shop B,357
+2021-04-19,USA,Los Angeles,Shop D,53
+2021-04-20,Canada,Vancouver,Shop H,463
+2021-04-21,Canada,Vancouver,Shop H,442
+2021-04-22,UK,Edinburgh,Shop M,280
+2021-04-23,USA,New York,Shop B,300
+2021-04-24,UK,Manchester,Shop L,161
+2021-04-25,USA,Los Angeles,Shop D,477
+2021-04-26,UK,London,Shop K,352
+2021-04-27,UK,Manchester,Shop L,256
+2021-04-28,Canada,Toronto,Shop G,112
+2021-04-29,Canada,Montreal,Shop I,106
+2021-04-30,UK,London,Shop K,215
+2021-05-01,USA,New York,Shop B,383
+2021-05-02,Canada,Toronto,Shop F,251
+2021-05-03,Canada,Toronto,Shop F,231
+2021-05-04,USA,New York,Shop A,209
+2021-05-05,Canada,Vancouver,Shop H,187
+2021-05-06,Canada,Vancouver,Shop H,472
+2021-05-07,USA,Chicago,Shop E,317
+2021-05-08,Canada,Montreal,Shop I,323
+2021-05-09,Canada,Vancouver,Shop H,174
+2021-05-10,USA,Los Angeles,Shop C,280
+2021-05-11,UK,London,Shop J,370
+2021-05-12,UK,Manchester,Shop L,415
+2021-05-13,USA,Los Angeles,Shop C,312
+2021-05-14,UK,Edinburgh,Shop M,283
+2021-05-15,Canada,Vancouver,Shop H,409
+2021-05-16,UK,London,Shop J,487
+2021-05-17,Canada,Montreal,Shop I,39
+2021-05-18,UK,Edinburgh,Shop M,193
+2021-05-19,Canada,Toronto,Shop F,489
+2021-05-20,USA,Los Angeles,Shop D,61
+2021-05-21,UK,London,Shop K,90
+2021-05-22,UK,London,Shop J,488
+2021-05-23,UK,Edinburgh,Shop M,368
+2021-05-24,USA,Los Angeles,Shop C,106
+2021-05-25,USA,Chicago,Shop E,65
+2021-05-26,UK,London,Shop J,220
+2021-05-27,UK,London,Shop J,419
+2021-05-28,Canada,Montreal,Shop I,459
+2021-05-29,UK,Edinburgh,Shop M,152
+2021-05-30,Canada,Toronto,Shop F,224
+2021-05-31,UK,Manchester,Shop L,351
+2021-06-01,USA,Los Angeles,Shop D,171
+2021-06-02,UK,Manchester,Shop L,186
+2021-06-03,UK,Edinburgh,Shop M,309
+2021-06-04,USA,Los Angeles,Shop C,327
+2021-06-05,UK,London,Shop J,18
+2021-06-06,Canada,Vancouver,Shop H,20
+2021-06-07,UK,London,Shop K,11
+2021-06-08,USA,Los Angeles,Shop C,320
+2021-06-09,Canada,Vancouver,Shop H,24
+2021-06-10,USA,New York,Shop A,437
+2021-06-11,Canada,Toronto,Shop G,471
+2021-06-12,USA,Los Angeles,Shop C,87
+2021-06-13,Canada,Vancouver,Shop H,262
+2021-06-14,UK,Manchester,Shop L,13
+2021-06-15,UK,London,Shop K,74
+2021-06-16,UK,Edinburgh,Shop M,157
+2021-06-17,USA,New York,Shop B,278
+2021-06-18,UK,London,Shop J,128
+2021-06-19,UK,Edinburgh,Shop M,141
+2021-06-20,UK,Manchester,Shop L,106
+2021-06-21,UK,Manchester,Shop L,70
+2021-06-22,USA,Los Angeles,Shop C,425
+2021-06-23,UK,Manchester,Shop L,499
+2021-06-24,USA,Chicago,Shop E,410
+2021-06-25,USA,New York,Shop A,100
+2021-06-26,Canada,Vancouver,Shop H,266
+2021-06-27,Canada,Montreal,Shop I,391
+2021-06-28,UK,Manchester,Shop L,85
+2021-06-29,Canada,Vancouver,Shop H,278
+2021-06-30,USA,New York,Shop B,361
+2021-07-01,Canada,Vancouver,Shop H,201
+2021-07-02,USA,New York,Shop A,441
+2021-07-03,USA,Chicago,Shop E,60
+2021-07-04,USA,Los Angeles,Shop C,252
+2021-07-05,UK,London,Shop K,189
+2021-07-06,USA,New York,Shop A,391
+2021-07-07,Canada,Toronto,Shop F,19
+2021-07-08,USA,New York,Shop B,419
+2021-07-09,UK,Edinburgh,Shop M,321
+2021-07-10,Canada,Montreal,Shop I,369
+2021-07-11,UK,Manchester,Shop L,161
+2021-07-12,UK,London,Shop K,323
+2021-07-13,Canada,Vancouver,Shop H,283
+2021-07-14,UK,Edinburgh,Shop M,77
+2021-07-15,USA,Los Angeles,Shop C,236
+2021-07-16,Canada,Toronto,Shop F,239
+2021-07-17,UK,Manchester,Shop L,458
+2021-07-18,Canada,Montreal,Shop I,242
+2021-07-19,USA,New York,Shop A,146
+2021-07-20,USA,Chicago,Shop E,44
+2021-07-21,Canada,Montreal,Shop I,359
+2021-07-22,Canada,Montreal,Shop I,257
+2021-07-23,USA,Chicago,Shop E,233
+2021-07-24,Canada,Montreal,Shop I,68
+2021-07-25,USA,Chicago,Shop E,93
+2021-07-26,Canada,Montreal,Shop I,172
+2021-07-27,USA,Chicago,Shop E,322
+2021-07-28,UK,Edinburgh,Shop M,437
+2021-07-29,USA,New York,Shop B,408
+2021-07-30,Canada,Montreal,Shop I,23
+2021-07-31,Canada,Montreal,Shop I,196
+2021-08-01,UK,London,Shop J,170
+2021-08-02,USA,Los Angeles,Shop D,127
+2021-08-03,UK,Edinburgh,Shop M,48
+2021-08-04,USA,New York,Shop A,132
+2021-08-05,Canada,Vancouver,Shop H,311
+2021-08-06,UK,Manchester,Shop L,253
+2021-08-07,USA,Chicago,Shop E,247
+2021-08-08,UK,Manchester,Shop L,372
+2021-08-09,Canada,Toronto,Shop G,52
+2021-08-10,Canada,Vancouver,Shop H,431
+2021-08-11,Canada,Vancouver,Shop H,76
+2021-08-12,UK,London,Shop K,389
+2021-08-13,USA,Los Angeles,Shop D,176
+2021-08-14,Canada,Montreal,Shop I,172
+2021-08-15,Canada,Montreal,Shop I,348
+2021-08-16,Canada,Vancouver,Shop H,182
+2021-08-17,USA,Los Angeles,Shop C,268
+2021-08-18,Canada,Montreal,Shop I,279
+2021-08-19,USA,Los Angeles,Shop D,161
+2021-08-20,Canada,Toronto,Shop F,463
+2021-08-21,USA,Chicago,Shop E,315
+2021-08-22,UK,London,Shop J,413
+2021-08-23,Canada,Vancouver,Shop H,226
+2021-08-24,UK,Edinburgh,Shop M,58
+2021-08-25,Canada,Toronto,Shop G,44
+2021-08-26,UK,Edinburgh,Shop M,460
+2021-08-27,Canada,Montreal,Shop I,179
+2021-08-28,USA,Los Angeles,Shop D,14
+2021-08-29,USA,New York,Shop B,410
+2021-08-30,USA,New York,Shop A,269
+2021-08-31,USA,Los Angeles,Shop D,143
+2021-09-01,UK,London,Shop K,87
+2021-09-02,UK,Edinburgh,Shop M,292
+2021-09-03,UK,Edinburgh,Shop M,195
+2021-09-04,USA,New York,Shop A,455
+2021-09-05,UK,Edinburgh,Shop M,82
+2021-09-06,UK,Manchester,Shop L,319
+2021-09-07,UK,Manchester,Shop L,17
+2021-09-08,Canada,Toronto,Shop F,438
+2021-09-09,USA,Chicago,Shop E,425
+2021-09-10,UK,London,Shop K,133
+2021-09-11,USA,New York,Shop A,10
+2021-09-12,UK,Manchester,Shop L,215
+2021-09-13,Canada,Montreal,Shop I,448
+2021-09-14,UK,Manchester,Shop L,453
+2021-09-15,Canada,Vancouver,Shop H,222
+2021-09-16,Canada,Toronto,Shop F,485
+2021-09-17,USA,Los Angeles,Shop C,360
+2021-09-18,USA,Chicago,Shop E,367
+2021-09-19,Canada,Toronto,Shop G,14
+2021-09-20,UK,London,Shop J,275
+2021-09-21,Canada,Montreal,Shop I,135
+2021-09-22,Canada,Toronto,Shop G,57
+2021-09-23,USA,Chicago,Shop E,323
+2021-09-24,Canada,Vancouver,Shop H,34
+2021-09-25,UK,Manchester,Shop L,247
+2021-09-26,UK,Edinburgh,Shop M,126
+2021-09-27,USA,New York,Shop B,173
+2021-09-28,USA,Chicago,Shop E,269
+2021-09-29,USA,Los Angeles,Shop C,113
+2021-09-30,Canada,Vancouver,Shop H,182
+2021-10-01,Canada,Vancouver,Shop H,297
+2021-10-02,UK,Manchester,Shop L,463
+2021-10-03,UK,Manchester,Shop L,220
+2021-10-04,USA,Chicago,Shop E,97
+2021-10-05,USA,Chicago,Shop E,213
+2021-10-06,USA,New York,Shop A,398
+2021-10-07,Canada,Toronto,Shop G,438
+2021-10-08,USA,Chicago,Shop E,67
+2021-10-09,Canada,Montreal,Shop I,465
+2021-10-10,Canada,Toronto,Shop F,476
+2021-10-11,Canada,Toronto,Shop F,439
+2021-10-12,UK,Edinburgh,Shop M,138
+2021-10-13,Canada,Vancouver,Shop H,163
+2021-10-14,USA,New York,Shop B,13
+2021-10-15,Canada,Vancouver,Shop H,350
+2021-10-16,UK,Manchester,Shop L,221
+2021-10-17,USA,New York,Shop B,77
+2021-10-18,UK,Edinburgh,Shop M,264
+2021-10-19,Canada,Montreal,Shop I,17
+2021-10-20,UK,London,Shop K,398
+2021-10-21,USA,Los Angeles,Shop D,33
+2021-10-22,Canada,Vancouver,Shop H,339
+2021-10-23,USA,Los Angeles,Shop C,243
+2021-10-24,UK,Manchester,Shop L,480
+2021-10-25,UK,London,Shop J,161
+2021-10-26,Canada,Toronto,Shop G,115
+2021-10-27,UK,London,Shop J,411
+2021-10-28,Canada,Toronto,Shop G,446
+2021-10-29,USA,Chicago,Shop E,140
+2021-10-30,UK,Edinburgh,Shop M,493
+2021-10-31,Canada,Toronto,Shop F,402
+2021-11-01,USA,Los Angeles,Shop D,190
+2021-11-02,Canada,Toronto,Shop F,31
+2021-11-03,USA,Chicago,Shop E,296
+2021-11-04,UK,Edinburgh,Shop M,438
+2021-11-05,Canada,Montreal,Shop I,268
+2021-11-06,USA,New York,Shop A,253
+2021-11-07,UK,Manchester,Shop L,360
+2021-11-08,UK,Edinburgh,Shop M,402
+2021-11-09,USA,Chicago,Shop E,208
+2021-11-10,UK,London,Shop K,92
+2021-11-11,UK,Edinburgh,Shop M,117
+2021-11-12,Canada,Vancouver,Shop H,10
+2021-11-13,Canada,Montreal,Shop I,235
+2021-11-14,UK,Edinburgh,Shop M,144
+2021-11-15,Canada,Toronto,Shop G,295
+2021-11-16,UK,Edinburgh,Shop M,70
+2021-11-17,USA,New York,Shop B,140
+2021-11-18,USA,Los Angeles,Shop D,267
+2021-11-19,Canada,Toronto,Shop F,235
+2021-11-20,Canada,Toronto,Shop F,429
+2021-11-21,UK,London,Shop J,441
+2021-11-22,UK,London,Shop K,378
+2021-11-23,UK,Edinburgh,Shop M,280
+2021-11-24,Canada,Vancouver,Shop H,457
+2021-11-25,UK,London,Shop K,216
+2021-11-26,Canada,Toronto,Shop G,174
+2021-11-27,UK,London,Shop J,142
+2021-11-28,USA,Los Angeles,Shop C,398
+2021-11-29,USA,New York,Shop A,67
+2021-11-30,UK,Manchester,Shop L,90
+2021-12-01,USA,Los Angeles,Shop C,464
+2021-12-02,Canada,Toronto,Shop F,230
+2021-12-03,Canada,Toronto,Shop F,155
+2021-12-04,Canada,Toronto,Shop F,191
+2021-12-05,USA,Los Angeles,Shop C,106
+2021-12-06,UK,Manchester,Shop L,364
+2021-12-07,UK,Manchester,Shop L,65
+2021-12-08,Canada,Montreal,Shop I,315
+2021-12-09,UK,London,Shop J,212
+2021-12-10,USA,New York,Shop B,447
+2021-12-11,UK,Manchester,Shop L,173
+2021-12-12,Canada,Toronto,Shop G,280
+2021-12-13,Canada,Vancouver,Shop H,161
+2021-12-14,Canada,Montreal,Shop I,18
+2021-12-15,UK,Manchester,Shop L,217
+2021-12-16,Canada,Montreal,Shop I,22
+2021-12-17,Canada,Toronto,Shop F,188
+2021-12-18,Canada,Vancouver,Shop H,317
+2021-12-19,USA,Chicago,Shop E,142
+2021-12-20,Canada,Montreal,Shop I,70
+2021-12-21,UK,London,Shop J,63
+2021-12-22,Canada,Montreal,Shop I,259
+2021-12-23,USA,Chicago,Shop E,87
+2021-12-24,UK,Edinburgh,Shop M,372
+2021-12-25,Canada,Toronto,Shop F,469
+2021-12-26,Canada,Toronto,Shop F,280
+2021-12-27,Canada,Vancouver,Shop H,235
+2021-12-28,UK,Edinburgh,Shop M,42
+2021-12-29,USA,Chicago,Shop E,170
+2021-12-30,Canada,Vancouver,Shop H,301
+2021-12-31,Canada,Montreal,Shop I,136
+2022-01-01,UK,London,Shop K,159
+2022-01-02,Canada,Vancouver,Shop H,226
+2022-01-03,Canada,Toronto,Shop F,341
+2022-01-04,UK,Manchester,Shop L,295
+2022-01-05,Canada,Vancouver,Shop H,162
+2022-01-06,UK,London,Shop J,136
+2022-01-07,Canada,Montreal,Shop I,44
+2022-01-08,UK,Edinburgh,Shop M,159
+2022-01-09,UK,Edinburgh,Shop M,453
+2022-01-10,USA,New York,Shop A,304
+2022-01-11,Canada,Montreal,Shop I,252
+2022-01-12,USA,Chicago,Shop E,169
+2022-01-13,Canada,Montreal,Shop I,275
+2022-01-14,USA,Los Angeles,Shop C,23
+2022-01-15,Canada,Vancouver,Shop H,89
+2022-01-16,Canada,Montreal,Shop I,207
+2022-01-17,Canada,Toronto,Shop G,201
+2022-01-18,UK,Manchester,Shop L,156
+2022-01-19,Canada,Toronto,Shop F,178
+2022-01-20,Canada,Vancouver,Shop H,234
+2022-01-21,USA,Chicago,Shop E,449
+2022-01-22,Canada,Toronto,Shop F,211
+2022-01-23,UK,Manchester,Shop L,414
+2022-01-24,Canada,Toronto,Shop G,389
+2022-01-25,USA,Chicago,Shop E,370
+2022-01-26,Canada,Vancouver,Shop H,71
+2022-01-27,USA,New York,Shop A,234
+2022-01-28,USA,Chicago,Shop E,421
+2022-01-29,Canada,Montreal,Shop I,320
+2022-01-30,Canada,Toronto,Shop G,441
+2022-01-31,UK,Edinburgh,Shop M,59
+2022-02-01,UK,Edinburgh,Shop M,218
+2022-02-02,Canada,Vancouver,Shop H,402
+2022-02-03,UK,Manchester,Shop L,418
+2022-02-04,UK,Edinburgh,Shop M,65
+2022-02-05,UK,London,Shop K,180
+2022-02-06,USA,Chicago,Shop E,226
+2022-02-07,UK,Edinburgh,Shop M,109
+2022-02-08,UK,Manchester,Shop L,311
+2022-02-09,Canada,Vancouver,Shop H,278
+2022-02-10,UK,Manchester,Shop L,144
+2022-02-11,USA,Los Angeles,Shop D,35
+2022-02-12,USA,Los Angeles,Shop C,180
+2022-02-13,UK,Manchester,Shop L,204
+2022-02-14,USA,Chicago,Shop E,86
+2022-02-15,USA,Los Angeles,Shop C,487
+2022-02-16,UK,London,Shop J,22
+2022-02-17,UK,Edinburgh,Shop M,242
+2022-02-18,UK,London,Shop J,312
+2022-02-19,Canada,Montreal,Shop I,282
+2022-02-20,Canada,Vancouver,Shop H,479
+2022-02-21,Canada,Montreal,Shop I,480
+2022-02-22,UK,Manchester,Shop L,175
+2022-02-23,UK,Edinburgh,Shop M,481
+2022-02-24,USA,New York,Shop A,221
+2022-02-25,Canada,Toronto,Shop G,339
+2022-02-26,UK,Edinburgh,Shop M,278
+2022-02-27,UK,London,Shop K,396
+2022-02-28,UK,London,Shop K,209
+2022-03-01,USA,Los Angeles,Shop D,325
+2022-03-02,UK,London,Shop J,140
+2022-03-03,Canada,Vancouver,Shop H,366
+2022-03-04,UK,London,Shop J,77
+2022-03-05,USA,Los Angeles,Shop C,249
+2022-03-06,Canada,Montreal,Shop I,267
+2022-03-07,Canada,Toronto,Shop G,422
+2022-03-08,Canada,Montreal,Shop I,149
+2022-03-09,UK,Manchester,Shop L,408
+2022-03-10,UK,Manchester,Shop L,485
+2022-03-11,USA,Chicago,Shop E,302
+2022-03-12,UK,London,Shop J,127
+2022-03-13,USA,Chicago,Shop E,61
+2022-03-14,USA,Los Angeles,Shop D,315
+2022-03-15,UK,London,Shop J,76
+2022-03-16,Canada,Montreal,Shop I,449
+2022-03-17,Canada,Toronto,Shop F,356
+2022-03-18,Canada,Vancouver,Shop H,114
+2022-03-19,UK,Edinburgh,Shop M,218
+2022-03-20,UK,London,Shop K,319
+2022-03-21,UK,London,Shop K,132
+2022-03-22,USA,New York,Shop B,168
+2022-03-23,Canada,Toronto,Shop F,243
+2022-03-24,UK,London,Shop J,390
+2022-03-25,USA,Los Angeles,Shop C,466
+2022-03-26,USA,Los Angeles,Shop C,34
+2022-03-27,Canada,Toronto,Shop G,41
+2022-03-28,UK,Manchester,Shop L,432
+2022-03-29,UK,Edinburgh,Shop M,226
+2022-03-30,USA,New York,Shop B,376
+2022-03-31,USA,Chicago,Shop E,344
+2022-04-01,UK,Edinburgh,Shop M,124
+2022-04-02,Canada,Vancouver,Shop H,495
+2022-04-03,Canada,Vancouver,Shop H,191
+2022-04-04,USA,New York,Shop A,350
+2022-04-05,USA,New York,Shop A,298
+2022-04-06,Canada,Vancouver,Shop H,255
+2022-04-07,USA,Chicago,Shop E,438
+2022-04-08,USA,Los Angeles,Shop D,28
+2022-04-09,UK,London,Shop J,135
+2022-04-10,UK,Edinburgh,Shop M,271
+2022-04-11,USA,New York,Shop A,245
+2022-04-12,Canada,Toronto,Shop F,97
+2022-04-13,USA,New York,Shop B,359
+2022-04-14,UK,London,Shop J,398
+2022-04-15,USA,Los Angeles,Shop D,234
+2022-04-16,USA,New York,Shop B,441
+2022-04-17,UK,Edinburgh,Shop M,354
+2022-04-18,Canada,Vancouver,Shop H,280
+2022-04-19,Canada,Toronto,Shop F,337
+2022-04-20,USA,Chicago,Shop E,338
+2022-04-21,UK,Manchester,Shop L,54
+2022-04-22,Canada,Montreal,Shop I,70
+2022-04-23,USA,Chicago,Shop E,35
+2022-04-24,USA,Chicago,Shop E,41
+2022-04-25,USA,Chicago,Shop E,472
+2022-04-26,Canada,Toronto,Shop F,351
+2022-04-27,UK,Manchester,Shop L,262
+2022-04-28,UK,Manchester,Shop L,480
+2022-04-29,UK,London,Shop K,183
+2022-04-30,UK,Manchester,Shop L,265
+2022-05-01,UK,Edinburgh,Shop M,292
+2022-05-02,USA,New York,Shop A,224
+2022-05-03,Canada,Vancouver,Shop H,174
+2022-05-04,UK,Edinburgh,Shop M,402
+2022-05-05,UK,London,Shop K,362
+2022-05-06,USA,Los Angeles,Shop C,324
+2022-05-07,Canada,Toronto,Shop G,53
+2022-05-08,Canada,Toronto,Shop F,403
+2022-05-09,USA,New York,Shop A,326
+2022-05-10,UK,London,Shop K,324
+2022-05-11,Canada,Montreal,Shop I,138
+2022-05-12,UK,London,Shop J,372
+2022-05-13,USA,Chicago,Shop E,411
+2022-05-14,Canada,Vancouver,Shop H,324
+2022-05-15,USA,Los Angeles,Shop C,130
+2022-05-16,UK,Manchester,Shop L,430
+2022-05-17,UK,London,Shop K,275
+2022-05-18,Canada,Montreal,Shop I,23
+2022-05-19,USA,Los Angeles,Shop C,369
+2022-05-20,UK,Manchester,Shop L,75
+2022-05-21,USA,Los Angeles,Shop C,278
+2022-05-22,UK,Edinburgh,Shop M,365
+2022-05-23,USA,New York,Shop B,31
+2022-05-24,Canada,Toronto,Shop F,15
+2022-05-25,Canada,Vancouver,Shop H,494
+2022-05-26,USA,Los Angeles,Shop C,45
+2022-05-27,Canada,Vancouver,Shop H,149
+2022-05-28,UK,Manchester,Shop L,399
+2022-05-29,USA,Chicago,Shop E,171
+2022-05-30,USA,New York,Shop A,460
+2022-05-31,UK,Manchester,Shop L,330
+2022-06-01,USA,Chicago,Shop E,98
+2022-06-02,UK,London,Shop J,311
+2022-06-03,Canada,Vancouver,Shop H,44
+2022-06-04,UK,Edinburgh,Shop M,195
+2022-06-05,UK,Edinburgh,Shop M,88
+2022-06-06,Canada,Vancouver,Shop H,112
+2022-06-07,USA,Chicago,Shop E,336
+2022-06-08,Canada,Montreal,Shop I,435
+2022-06-09,USA,New York,Shop A,220
+2022-06-10,UK,Manchester,Shop L,489
+2022-06-11,USA,New York,Shop A,266
+2022-06-12,USA,Los Angeles,Shop D,157
+2022-06-13,Canada,Montreal,Shop I,335
+2022-06-14,USA,Chicago,Shop E,54
+2022-06-15,UK,Edinburgh,Shop M,47
+2022-06-16,USA,Chicago,Shop E,369
+2022-06-17,USA,New York,Shop A,444
+2022-06-18,USA,Los Angeles,Shop D,173
+2022-06-19,Canada,Vancouver,Shop H,200
+2022-06-20,USA,Los Angeles,Shop D,44
+2022-06-21,UK,London,Shop K,318
+2022-06-22,USA,New York,Shop A,231
+2022-06-23,USA,Chicago,Shop E,113
+2022-06-24,UK,Manchester,Shop L,469
+2022-06-25,USA,New York,Shop B,324
+2022-06-26,UK,Edinburgh,Shop M,276
+2022-06-27,UK,Edinburgh,Shop M,332
+2022-06-28,Canada,Toronto,Shop F,134
+2022-06-29,USA,Chicago,Shop E,134
+2022-06-30,UK,Manchester,Shop L,392
+2022-07-01,USA,Los Angeles,Shop C,300
+2022-07-02,USA,Chicago,Shop E,151
+2022-07-03,USA,Los Angeles,Shop C,117
+2022-07-04,USA,Los Angeles,Shop C,461
+2022-07-05,Canada,Toronto,Shop F,443
+2022-07-06,Canada,Vancouver,Shop H,458
+2022-07-07,UK,Edinburgh,Shop M,160
+2022-07-08,UK,Manchester,Shop L,441
+2022-07-09,UK,Edinburgh,Shop M,250
+2022-07-10,USA,Los Angeles,Shop C,235
+2022-07-11,UK,Manchester,Shop L,183
+2022-07-12,UK,Edinburgh,Shop M,114
+2022-07-13,USA,Chicago,Shop E,331
+2022-07-14,Canada,Montreal,Shop I,208
+2022-07-15,UK,Edinburgh,Shop M,21
+2022-07-16,UK,Edinburgh,Shop M,55
+2022-07-17,USA,Los Angeles,Shop C,143
+2022-07-18,USA,Chicago,Shop E,241
+2022-07-19,UK,Edinburgh,Shop M,217
+2022-07-20,USA,Chicago,Shop E,416
+2022-07-21,Canada,Toronto,Shop F,197
+2022-07-22,USA,Chicago,Shop E,158
+2022-07-23,Canada,Vancouver,Shop H,498
+2022-07-24,Canada,Toronto,Shop F,120
+2022-07-25,Canada,Toronto,Shop G,153
+2022-07-26,USA,New York,Shop A,354
+2022-07-27,Canada,Toronto,Shop F,129
+2022-07-28,UK,London,Shop J,156
+2022-07-29,USA,New York,Shop B,39
+2022-07-30,USA,Los Angeles,Shop C,218
+2022-07-31,USA,New York,Shop B,311
+2022-08-01,USA,Chicago,Shop E,437
+2022-08-02,USA,Chicago,Shop E,361
+2022-08-03,Canada,Vancouver,Shop H,356
+2022-08-04,USA,New York,Shop B,208
+2022-08-05,Canada,Toronto,Shop F,24
+2022-08-06,USA,Chicago,Shop E,258
+2022-08-07,Canada,Montreal,Shop I,447
+2022-08-08,Canada,Montreal,Shop I,498
+2022-08-09,UK,Manchester,Shop L,115
+2022-08-10,UK,London,Shop K,490
+2022-08-11,USA,Chicago,Shop E,237
+2022-08-12,UK,London,Shop J,202
+2022-08-13,USA,Chicago,Shop E,391
+2022-08-14,USA,New York,Shop B,211
+2022-08-15,Canada,Montreal,Shop I,387
+2022-08-16,Canada,Toronto,Shop G,170
+2022-08-17,UK,London,Shop K,178
+2022-08-18,USA,Chicago,Shop E,42
+2022-08-19,UK,London,Shop J,426
+2022-08-20,Canada,Toronto,Shop F,65
+2022-08-21,UK,London,Shop K,495
+2022-08-22,UK,Manchester,Shop L,22
+2022-08-23,UK,London,Shop K,179
+2022-08-24,UK,Manchester,Shop L,127
+2022-08-25,USA,Chicago,Shop E,281
+2022-08-26,UK,Manchester,Shop L,220
+2022-08-27,Canada,Toronto,Shop F,475
+2022-08-28,Canada,Toronto,Shop F,275
+2022-08-29,UK,Edinburgh,Shop M,325
+2022-08-30,Canada,Toronto,Shop F,233
+2022-08-31,USA,Los Angeles,Shop C,20
+2022-09-01,Canada,Toronto,Shop G,170
+2022-09-02,USA,Chicago,Shop E,66
+2022-09-03,UK,Edinburgh,Shop M,353
+2022-09-04,UK,London,Shop J,147
+2022-09-05,USA,New York,Shop B,374
+2022-09-06,USA,Chicago,Shop E,62
+2022-09-07,Canada,Vancouver,Shop H,476
+2022-09-08,UK,Edinburgh,Shop M,234
+2022-09-09,USA,Los Angeles,Shop D,333
+2022-09-10,UK,London,Shop J,401
+2022-09-11,USA,New York,Shop B,177
+2022-09-12,UK,Edinburgh,Shop M,116
+2022-09-13,USA,New York,Shop B,74
+2022-09-14,USA,New York,Shop A,247
+2022-09-15,USA,New York,Shop B,140
+2022-09-16,USA,Chicago,Shop E,44
+2022-09-17,UK,London,Shop K,305
+2022-09-18,Canada,Vancouver,Shop H,177
+2022-09-19,Canada,Vancouver,Shop H,384
+2022-09-20,USA,New York,Shop B,338
+2022-09-21,Canada,Montreal,Shop I,42
+2022-09-22,Canada,Montreal,Shop I,498
+2022-09-23,Canada,Vancouver,Shop H,62
+2022-09-24,USA,Los Angeles,Shop C,361
+2022-09-25,UK,Edinburgh,Shop M,28
+2022-09-26,USA,New York,Shop A,293
+2022-09-27,USA,Chicago,Shop E,289
+2022-09-28,USA,New York,Shop B,274
+2022-09-29,UK,Edinburgh,Shop M,312
+2022-09-30,USA,New York,Shop B,441
+2022-10-01,USA,New York,Shop B,100
+2022-10-02,UK,Edinburgh,Shop M,394
+2022-10-03,Canada,Montreal,Shop I,185
+2022-10-04,Canada,Toronto,Shop F,306
+2022-10-05,USA,Chicago,Shop E,55
+2022-10-06,Canada,Toronto,Shop F,128
+2022-10-07,UK,Edinburgh,Shop M,183
+2022-10-08,USA,Los Angeles,Shop C,371
+2022-10-09,USA,Chicago,Shop E,116
+2022-10-10,USA,Chicago,Shop E,156
+2022-10-11,Canada,Toronto,Shop G,331
+2022-10-12,Canada,Vancouver,Shop H,325
+2022-10-13,USA,Chicago,Shop E,21
+2022-10-14,UK,London,Shop J,235
+2022-10-15,Canada,Toronto,Shop G,319
+2022-10-16,UK,London,Shop K,170
+2022-10-17,UK,Manchester,Shop L,293
+2022-10-18,Canada,Montreal,Shop I,178
+2022-10-19,UK,London,Shop J,89
+2022-10-20,Canada,Montreal,Shop I,326
+2022-10-21,UK,London,Shop J,222
+2022-10-22,UK,Edinburgh,Shop M,252
+2022-10-23,UK,London,Shop K,29
+2022-10-24,USA,Los Angeles,Shop D,417
+2022-10-25,Canada,Montreal,Shop I,326
+2022-10-26,USA,Chicago,Shop E,30
+2022-10-27,Canada,Vancouver,Shop H,487
+2022-10-28,Canada,Toronto,Shop F,277
+2022-10-29,Canada,Vancouver,Shop H,448
+2022-10-30,UK,London,Shop K,11
+2022-10-31,UK,Manchester,Shop L,234
+2022-11-01,UK,Edinburgh,Shop M,141
+2022-11-02,Canada,Toronto,Shop F,326
+2022-11-03,UK,Manchester,Shop L,348
+2022-11-04,USA,New York,Shop B,41
+2022-11-05,Canada,Vancouver,Shop H,43
+2022-11-06,Canada,Vancouver,Shop H,112
+2022-11-07,USA,New York,Shop A,252
+2022-11-08,USA,Chicago,Shop E,181
+2022-11-09,USA,Los Angeles,Shop D,490
+2022-11-10,UK,Manchester,Shop L,131
+2022-11-11,UK,London,Shop J,218
+2022-11-12,USA,New York,Shop B,489
+2022-11-13,UK,Manchester,Shop L,73
+2022-11-14,UK,London,Shop J,199
+2022-11-15,USA,New York,Shop A,173
+2022-11-16,Canada,Vancouver,Shop H,253
+2022-11-17,Canada,Toronto,Shop F,263
+2022-11-18,UK,Manchester,Shop L,349
+2022-11-19,UK,Edinburgh,Shop M,21
+2022-11-20,Canada,Vancouver,Shop H,52
+2022-11-21,Canada,Vancouver,Shop H,99
+2022-11-22,UK,Manchester,Shop L,407
+2022-11-23,Canada,Vancouver,Shop H,29
+2022-11-24,USA,Chicago,Shop E,186
+2022-11-25,Canada,Vancouver,Shop H,280
+2022-11-26,Canada,Montreal,Shop I,307
+2022-11-27,UK,Manchester,Shop L,267
+2022-11-28,USA,Los Angeles,Shop C,79
+2022-11-29,USA,New York,Shop A,175
+2022-11-30,UK,London,Shop J,389
+2022-12-01,USA,New York,Shop B,283
+2022-12-02,UK,Edinburgh,Shop M,420
+2022-12-03,USA,New York,Shop B,383
+2022-12-04,USA,Los Angeles,Shop C,103
+2022-12-05,Canada,Toronto,Shop G,138
+2022-12-06,UK,Edinburgh,Shop M,218
+2022-12-07,USA,New York,Shop A,460
+2022-12-08,USA,Chicago,Shop E,500
+2022-12-09,USA,New York,Shop B,183
+2022-12-10,UK,Manchester,Shop L,343
+2022-12-11,UK,Manchester,Shop L,494
+2022-12-12,USA,New York,Shop A,377
+2022-12-13,UK,Edinburgh,Shop M,455
+2022-12-14,USA,Chicago,Shop E,119
+2022-12-15,Canada,Toronto,Shop G,327
+2022-12-16,Canada,Vancouver,Shop H,336
+2022-12-17,Canada,Toronto,Shop G,386
+2022-12-18,Canada,Toronto,Shop F,360
+2022-12-19,USA,New York,Shop A,339
+2022-12-20,USA,New York,Shop A,473
+2022-12-21,UK,Manchester,Shop L,124
+2022-12-22,UK,Edinburgh,Shop M,109
+2022-12-23,Canada,Montreal,Shop I,194
+2022-12-24,UK,Manchester,Shop L,194
+2022-12-25,UK,Edinburgh,Shop M,62
+2022-12-26,UK,London,Shop K,323
+2022-12-27,USA,Los Angeles,Shop D,160
+2022-12-28,Canada,Vancouver,Shop H,126
+2022-12-29,UK,Edinburgh,Shop M,427
+2022-12-30,Canada,Toronto,Shop F,378
+2022-12-31,USA,New York,Shop B,480
+2023-01-01,USA,Los Angeles,Shop D,31
+2023-01-02,UK,Edinburgh,Shop M,317
+2023-01-03,USA,Chicago,Shop E,154
+2023-01-04,UK,London,Shop K,394
+2023-01-05,USA,Los Angeles,Shop C,13
+2023-01-06,UK,London,Shop K,256
+2023-01-07,USA,New York,Shop A,269
+2023-01-08,UK,Edinburgh,Shop M,218
+2023-01-09,USA,New York,Shop A,416
+2023-01-10,UK,London,Shop K,184
+2023-01-11,Canada,Montreal,Shop I,155
+2023-01-12,Canada,Montreal,Shop I,47
+2023-01-13,USA,Chicago,Shop E,254
+2023-01-14,UK,Manchester,Shop L,262
+2023-01-15,USA,Chicago,Shop E,74
+2023-01-16,USA,Chicago,Shop E,279
+2023-01-17,Canada,Vancouver,Shop H,130
+2023-01-18,Canada,Vancouver,Shop H,268
+2023-01-19,UK,Edinburgh,Shop M,404
+2023-01-20,USA,New York,Shop B,429
+2023-01-21,Canada,Toronto,Shop G,390
+2023-01-22,Canada,Vancouver,Shop H,120
+2023-01-23,UK,Manchester,Shop L,403
+2023-01-24,Canada,Vancouver,Shop H,86
+2023-01-25,UK,Manchester,Shop L,266
+2023-01-26,Canada,Vancouver,Shop H,127
+2023-01-27,Canada,Montreal,Shop I,252
+2023-01-28,UK,Edinburgh,Shop M,197
+2023-01-29,UK,Edinburgh,Shop M,180
+2023-01-30,UK,Manchester,Shop L,290
+2023-01-31,UK,Edinburgh,Shop M,327
+2023-02-01,Canada,Montreal,Shop I,353
+2023-02-02,Canada,Vancouver,Shop H,182
+2023-02-03,Canada,Toronto,Shop F,163
+2023-02-04,UK,Edinburgh,Shop M,105
+2023-02-05,UK,Edinburgh,Shop M,423
+2023-02-06,UK,Manchester,Shop L,322
+2023-02-07,USA,Chicago,Shop E,339
+2023-02-08,Canada,Vancouver,Shop H,22
+2023-02-09,Canada,Montreal,Shop I,260
+2023-02-10,Canada,Toronto,Shop G,486
+2023-02-11,UK,Manchester,Shop L,54
+2023-02-12,USA,Los Angeles,Shop C,195
+2023-02-13,UK,Manchester,Shop L,149
+2023-02-14,USA,Los Angeles,Shop D,58
+2023-02-15,USA,Chicago,Shop E,174
+2023-02-16,USA,Chicago,Shop E,156
+2023-02-17,UK,London,Shop J,250
+2023-02-18,USA,New York,Shop B,353
+2023-02-19,USA,Chicago,Shop E,167
+2023-02-20,UK,Edinburgh,Shop M,145
+2023-02-21,UK,London,Shop J,70
+2023-02-22,Canada,Toronto,Shop F,254
+2023-02-23,UK,Edinburgh,Shop M,168
+2023-02-24,UK,Manchester,Shop L,271
+2023-02-25,UK,London,Shop K,324
+2023-02-26,USA,New York,Shop A,385
+2023-02-27,USA,Chicago,Shop E,376
+2023-02-28,Canada,Toronto,Shop G,108
+2023-03-01,UK,Edinburgh,Shop M,127
+2023-03-02,UK,Edinburgh,Shop M,362
+2023-03-03,Canada,Toronto,Shop G,454
+2023-03-04,UK,Edinburgh,Shop M,409
+2023-03-05,USA,Chicago,Shop E,451
+2023-03-06,Canada,Toronto,Shop F,11
+2023-03-07,USA,Chicago,Shop E,173
+2023-03-08,Canada,Montreal,Shop I,321
+2023-03-09,UK,Manchester,Shop L,244
+2023-03-10,Canada,Vancouver,Shop H,391
+2023-03-11,Canada,Vancouver,Shop H,435
+2023-03-12,USA,New York,Shop A,156
+2023-03-13,USA,New York,Shop B,459
+2023-03-14,Canada,Toronto,Shop G,89
+2023-03-15,Canada,Montreal,Shop I,100
+2023-03-16,Canada,Vancouver,Shop H,95
+2023-03-17,UK,Manchester,Shop L,26
+2023-03-18,USA,Chicago,Shop E,294
+2023-03-19,Canada,Toronto,Shop G,15
+2023-03-20,USA,New York,Shop A,336
+2023-03-21,UK,London,Shop J,43
+2023-03-22,UK,Edinburgh,Shop M,456
+2023-03-23,USA,New York,Shop B,333
+2023-03-24,UK,London,Shop K,330
+2023-03-25,UK,London,Shop K,49
+2023-03-26,UK,Manchester,Shop L,316
+2023-03-27,USA,Chicago,Shop E,131
+2023-03-28,UK,Edinburgh,Shop M,318
+2023-03-29,Canada,Vancouver,Shop H,304
+2023-03-30,USA,Los Angeles,Shop D,173
+2023-03-31,USA,Los Angeles,Shop D,494
+2023-04-01,UK,Manchester,Shop L,253
+2023-04-02,Canada,Toronto,Shop G,155
+2023-04-03,UK,Manchester,Shop L,386
+2023-04-04,USA,Chicago,Shop E,249
+2023-04-05,USA,New York,Shop B,101
+2023-04-06,UK,London,Shop J,237
+2023-04-07,Canada,Vancouver,Shop H,126
+2023-04-08,Canada,Montreal,Shop I,473
+2023-04-09,Canada,Toronto,Shop F,425
+2023-04-10,Canada,Vancouver,Shop H,53
+2023-04-11,UK,London,Shop J,411
+2023-04-12,UK,London,Shop K,296
+2023-04-13,UK,London,Shop J,65
+2023-04-14,Canada,Montreal,Shop I,333
+2023-04-15,UK,Edinburgh,Shop M,356
+2023-04-16,Canada,Montreal,Shop I,302
+2023-04-17,Canada,Toronto,Shop F,224
+2023-04-18,Canada,Toronto,Shop F,347
+2023-04-19,UK,Edinburgh,Shop M,286
+2023-04-20,Canada,Toronto,Shop G,155
+2023-04-21,UK,Edinburgh,Shop M,319
+2023-04-22,UK,Manchester,Shop L,332
+2023-04-23,USA,New York,Shop B,443
+2023-04-24,USA,Los Angeles,Shop D,289
+2023-04-25,Canada,Montreal,Shop I,245
+2023-04-26,Canada,Montreal,Shop I,291
+2023-04-27,UK,London,Shop J,186
+2023-04-28,UK,London,Shop J,355
+2023-04-29,Canada,Toronto,Shop F,480
+2023-04-30,UK,Manchester,Shop L,469
+2023-05-01,UK,Manchester,Shop L,263
+2023-05-02,UK,Edinburgh,Shop M,63
+2023-05-03,UK,Manchester,Shop L,239
+2023-05-04,USA,Chicago,Shop E,499
+2023-05-05,USA,Los Angeles,Shop C,63
+2023-05-06,USA,Chicago,Shop E,349
+2023-05-07,USA,Los Angeles,Shop C,255
+2023-05-08,Canada,Toronto,Shop G,41
+2023-05-09,UK,Edinburgh,Shop M,269
+2023-05-10,USA,Chicago,Shop E,23
+2023-05-11,USA,Los Angeles,Shop C,488
+2023-05-12,Canada,Vancouver,Shop H,170
+2023-05-13,UK,Manchester,Shop L,477
+2023-05-14,UK,London,Shop J,466
+2023-05-15,Canada,Toronto,Shop G,396
+2023-05-16,Canada,Vancouver,Shop H,490
+2023-05-17,USA,Chicago,Shop E,59
+2023-05-18,UK,London,Shop K,86
+2023-05-19,UK,London,Shop K,125
+2023-05-20,Canada,Toronto,Shop F,33
+2023-05-21,Canada,Vancouver,Shop H,29
+2023-05-22,Canada,Toronto,Shop G,234
+2023-05-23,UK,London,Shop J,194
+2023-05-24,USA,Los Angeles,Shop D,249
+2023-05-25,UK,Edinburgh,Shop M,119
+2023-05-26,UK,London,Shop J,472
+2023-05-27,USA,New York,Shop B,70
+2023-05-28,UK,Edinburgh,Shop M,487
+2023-05-29,Canada,Vancouver,Shop H,174
+2023-05-30,USA,New York,Shop B,459
+2023-05-31,Canada,Vancouver,Shop H,147
+2023-06-01,USA,New York,Shop B,356
+2023-06-02,UK,Manchester,Shop L,497
+2023-06-03,Canada,Vancouver,Shop H,52
+2023-06-04,USA,New York,Shop A,268
+2023-06-05,UK,Edinburgh,Shop M,208
+2023-06-06,UK,Manchester,Shop L,435
+2023-06-07,USA,New York,Shop B,219
+2023-06-08,Canada,Toronto,Shop G,312
+2023-06-09,UK,Edinburgh,Shop M,174
+2023-06-10,UK,Edinburgh,Shop M,490
+2023-06-11,UK,Manchester,Shop L,159
+2023-06-12,UK,London,Shop J,432
+2023-06-13,Canada,Vancouver,Shop H,330
+2023-06-14,UK,London,Shop J,101
+2023-06-15,UK,Manchester,Shop L,232
+2023-06-16,USA,Los Angeles,Shop C,84
+2023-06-17,UK,Edinburgh,Shop M,356
+2023-06-18,Canada,Vancouver,Shop H,454
+2023-06-19,USA,New York,Shop A,198
+2023-06-20,UK,Edinburgh,Shop M,99
+2023-06-21,UK,Manchester,Shop L,394
+2023-06-22,Canada,Vancouver,Shop H,173
+2023-06-23,USA,New York,Shop B,349
+2023-06-24,USA,Los Angeles,Shop D,467
+2023-06-25,USA,New York,Shop B,456
+2023-06-26,USA,Chicago,Shop E,429
+2023-06-27,Canada,Vancouver,Shop H,359
+2023-06-28,USA,Los Angeles,Shop C,366
+2023-06-29,Canada,Vancouver,Shop H,350
+2023-06-30,USA,New York,Shop B,299
+2023-07-01,Canada,Toronto,Shop F,465
+2023-07-02,Canada,Toronto,Shop F,84
+2023-07-03,USA,Chicago,Shop E,50
+2023-07-04,Canada,Montreal,Shop I,30
+2023-07-05,USA,New York,Shop A,351
+2023-07-06,Canada,Montreal,Shop I,52
+2023-07-07,Canada,Toronto,Shop F,189
+2023-07-08,UK,Manchester,Shop L,367
+2023-07-09,UK,Manchester,Shop L,216
+2023-07-10,UK,Manchester,Shop L,168
+2023-07-11,USA,Los Angeles,Shop C,17
+2023-07-12,UK,Edinburgh,Shop M,356
+2023-07-13,Canada,Montreal,Shop I,158
+2023-07-14,Canada,Vancouver,Shop H,315
+2023-07-15,UK,Manchester,Shop L,229
+2023-07-16,USA,New York,Shop B,49
+2023-07-17,Canada,Vancouver,Shop H,68
+2023-07-18,UK,Manchester,Shop L,165
+2023-07-19,UK,Manchester,Shop L,144
+2023-07-20,USA,Los Angeles,Shop D,209
+2023-07-21,USA,Chicago,Shop E,324
+2023-07-22,Canada,Vancouver,Shop H,77
+2023-07-23,USA,Los Angeles,Shop C,297
+2023-07-24,UK,London,Shop J,363
+2023-07-25,USA,Chicago,Shop E,282
+2023-07-26,USA,Los Angeles,Shop D,470
+2023-07-27,UK,Edinburgh,Shop M,296
+2023-07-28,UK,Manchester,Shop L,122
+2023-07-29,UK,Manchester,Shop L,391
+2023-07-30,Canada,Toronto,Shop F,297
+2023-07-31,Canada,Vancouver,Shop H,409
+2023-08-01,USA,Chicago,Shop E,152
+2023-08-02,UK,Edinburgh,Shop M,315
+2023-08-03,USA,New York,Shop A,440
+2023-08-04,Canada,Montreal,Shop I,412
+2023-08-05,USA,New York,Shop B,337
+2023-08-06,USA,New York,Shop A,324
+2023-08-07,Canada,Toronto,Shop F,264
+2023-08-08,Canada,Vancouver,Shop H,71
+2023-08-09,UK,Edinburgh,Shop M,176
+2023-08-10,Canada,Vancouver,Shop H,375
+2023-08-11,UK,Manchester,Shop L,50
+2023-08-12,Canada,Vancouver,Shop H,59
+2023-08-13,UK,London,Shop K,344
+2023-08-14,UK,Edinburgh,Shop M,256
+2023-08-15,USA,New York,Shop A,388
+2023-08-16,Canada,Toronto,Shop F,176
+2023-08-17,Canada,Montreal,Shop I,209
+2023-08-18,UK,Manchester,Shop L,38
+2023-08-19,USA,Los Angeles,Shop D,486
+2023-08-20,Canada,Montreal,Shop I,140
+2023-08-21,Canada,Vancouver,Shop H,118
+2023-08-22,UK,London,Shop J,213
+2023-08-23,Canada,Vancouver,Shop H,161
+2023-08-24,UK,London,Shop J,78
+2023-08-25,Canada,Toronto,Shop F,371
+2023-08-26,UK,Edinburgh,Shop M,306
+2023-08-27,USA,Los Angeles,Shop D,318
+2023-08-28,Canada,Vancouver,Shop H,377
+2023-08-29,UK,London,Shop K,340
+2023-08-30,UK,London,Shop K,339
+2023-08-31,Canada,Toronto,Shop G,209
+2023-09-01,USA,New York,Shop A,235
+2023-09-02,USA,New York,Shop A,200
+2023-09-03,USA,New York,Shop B,440
+2023-09-04,Canada,Vancouver,Shop H,164
+2023-09-05,Canada,Toronto,Shop G,240
+2023-09-06,Canada,Toronto,Shop F,207
+2023-09-07,Canada,Vancouver,Shop H,54
+2023-09-08,USA,New York,Shop B,479
+2023-09-09,UK,Edinburgh,Shop M,444
+2023-09-10,Canada,Toronto,Shop G,118
+2023-09-11,UK,London,Shop K,375
+2023-09-12,Canada,Montreal,Shop I,351
+2023-09-13,UK,Manchester,Shop L,266
+2023-09-14,USA,Chicago,Shop E,280
+2023-09-15,UK,Manchester,Shop L,211
+2023-09-16,UK,London,Shop J,487
+2023-09-17,USA,New York,Shop A,27
+2023-09-18,Canada,Toronto,Shop F,453
+2023-09-19,Canada,Toronto,Shop F,46
+2023-09-20,Canada,Montreal,Shop I,243
+2023-09-21,Canada,Toronto,Shop G,184
+2023-09-22,UK,Edinburgh,Shop M,298
+2023-09-23,Canada,Montreal,Shop I,294
+2023-09-24,Canada,Toronto,Shop G,419
+2023-09-25,USA,Chicago,Shop E,105
+2023-09-26,USA,Los Angeles,Shop D,301
+2023-09-27,Canada,Toronto,Shop F,327
+2023-09-28,UK,Manchester,Shop L,234
+2023-09-29,Canada,Vancouver,Shop H,152
+2023-09-30,Canada,Vancouver,Shop H,470
+2023-10-01,Canada,Montreal,Shop I,170
+2023-10-02,Canada,Vancouver,Shop H,428
+2023-10-03,UK,Manchester,Shop L,40
+2023-10-04,Canada,Montreal,Shop I,208
+2023-10-05,Canada,Montreal,Shop I,77
+2023-10-06,Canada,Toronto,Shop F,152
+2023-10-07,USA,Los Angeles,Shop C,42
+2023-10-08,USA,New York,Shop A,439
+2023-10-09,Canada,Vancouver,Shop H,469
+2023-10-10,Canada,Vancouver,Shop H,284
+2023-10-11,Canada,Montreal,Shop I,250
+2023-10-12,UK,London,Shop J,91
+2023-10-13,USA,Chicago,Shop E,221
+2023-10-14,UK,London,Shop K,62
+2023-10-15,Canada,Toronto,Shop G,185
+2023-10-16,UK,Edinburgh,Shop M,422
+2023-10-17,Canada,Vancouver,Shop H,221
+2023-10-18,Canada,Montreal,Shop I,78
+2023-10-19,Canada,Vancouver,Shop H,218
+2023-10-20,Canada,Toronto,Shop F,68
+2023-10-21,UK,London,Shop J,125
+2023-10-22,UK,London,Shop K,42
+2023-10-23,Canada,Vancouver,Shop H,332
+2023-10-24,UK,Edinburgh,Shop M,415
+2023-10-25,USA,Chicago,Shop E,162
+2023-10-26,Canada,Montreal,Shop I,108
+2023-10-27,Canada,Montreal,Shop I,286
+2023-10-28,USA,Los Angeles,Shop D,184
+2023-10-29,Canada,Vancouver,Shop H,451
+2023-10-30,USA,Chicago,Shop E,68
+2023-10-31,UK,London,Shop J,66
+2023-11-01,UK,London,Shop K,355
+2023-11-02,Canada,Toronto,Shop F,467
+2023-11-03,UK,Edinburgh,Shop M,151
+2023-11-04,UK,Manchester,Shop L,314
+2023-11-05,UK,Manchester,Shop L,86
+2023-11-06,USA,Los Angeles,Shop D,285
+2023-11-07,Canada,Vancouver,Shop H,243
+2023-11-08,Canada,Montreal,Shop I,114
+2023-11-09,UK,Edinburgh,Shop M,410
+2023-11-10,USA,Los Angeles,Shop D,185
+2023-11-11,UK,Manchester,Shop L,286
+2023-11-12,UK,Edinburgh,Shop M,157
+2023-11-13,Canada,Vancouver,Shop H,403
+2023-11-14,USA,Chicago,Shop E,233
+2023-11-15,Canada,Vancouver,Shop H,116
+2023-11-16,Canada,Toronto,Shop F,429
+2023-11-17,Canada,Vancouver,Shop H,436
+2023-11-18,UK,London,Shop K,284
+2023-11-19,USA,New York,Shop A,485
+2023-11-20,UK,London,Shop J,445
+2023-11-21,USA,Chicago,Shop E,120
+2023-11-22,UK,Manchester,Shop L,20
+2023-11-23,USA,Chicago,Shop E,366
+2023-11-24,UK,Edinburgh,Shop M,469
+2023-11-25,USA,Los Angeles,Shop D,456
+2023-11-26,USA,Los Angeles,Shop C,349
+2023-11-27,Canada,Vancouver,Shop H,425
+2023-11-28,USA,Los Angeles,Shop C,466
+2023-11-29,Canada,Vancouver,Shop H,290
+2023-11-30,UK,Manchester,Shop L,267
+2023-12-01,UK,London,Shop K,399
+2023-12-02,USA,Chicago,Shop E,477
+2023-12-03,USA,Chicago,Shop E,268
+2023-12-04,Canada,Toronto,Shop F,388
+2023-12-05,USA,New York,Shop A,407
+2023-12-06,USA,Los Angeles,Shop C,252
+2023-12-07,Canada,Montreal,Shop I,498
+2023-12-08,USA,Los Angeles,Shop C,240
+2023-12-09,Canada,Vancouver,Shop H,22
+2023-12-10,Canada,Montreal,Shop I,349
+2023-12-11,UK,London,Shop K,459
+2023-12-12,UK,Manchester,Shop L,266
+2023-12-13,USA,Los Angeles,Shop D,39
+2023-12-14,UK,London,Shop J,364
+2023-12-15,USA,New York,Shop A,358
+2023-12-16,UK,Edinburgh,Shop M,212
+2023-12-17,USA,Chicago,Shop E,437
+2023-12-18,Canada,Vancouver,Shop H,373
+2023-12-19,USA,New York,Shop A,291
+2023-12-20,USA,New York,Shop A,249
+2023-12-21,Canada,Montreal,Shop I,456
+2023-12-22,UK,London,Shop K,474
+2023-12-23,UK,Manchester,Shop L,85
+2023-12-24,USA,Los Angeles,Shop C,365
+2023-12-25,UK,London,Shop J,234
+2023-12-26,USA,Los Angeles,Shop C,146
+2023-12-27,Canada,Montreal,Shop I,73
+2023-12-28,Canada,Toronto,Shop G,172
+2023-12-29,Canada,Montreal,Shop I,176
+2023-12-30,UK,London,Shop J,258
+2023-12-31,UK,Manchester,Shop L,425
