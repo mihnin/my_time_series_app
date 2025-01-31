@@ -29,10 +29,10 @@ model_choices = [all_models_opt] + model_keys
 
 
 def setup_ui():
-    # Пишем версию в «верхнем левом углу» (просто выводим перед заголовком):
+    # Пишем версию
     st.markdown("### Версия 1.0")
 
-    # Меняем название
+    # Заголовок
     st.title("Бизнес-приложение для прогнозирования временных рядов")
 
     pages = ["Главная", "Help"]
@@ -96,7 +96,7 @@ def setup_ui():
     tgt_stored = st.session_state["tgt_col_key"]
     id_stored  = st.session_state["id_col_key"]
 
-    # Если ранее сохранённые имена колонок вдруг не существуют — сбрасываем их
+    # Если сохранённые имена колонок вдруг не существуют — сбрасываем
     if dt_stored not in ["<нет>"] + all_cols:
         st.session_state["dt_col_key"] = "<нет>"
     if tgt_stored not in ["<нет>"] + all_cols:
@@ -112,15 +112,12 @@ def setup_ui():
     if "static_feats_key" not in st.session_state:
         st.session_state["static_feats_key"] = []
 
-    # Фильтрация: убираем из session_state["static_feats_key"] те признаки,
-    # которых больше нет в текущем датасете:
     existing_static_feats = st.session_state["static_feats_key"]
     possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
     filtered_feats = [feat for feat in existing_static_feats if feat in possible_static]
     if len(filtered_feats) != len(existing_static_feats):
         st.session_state["static_feats_key"] = filtered_feats
 
-    # multiselect для статических признаков
     static_feats = st.sidebar.multiselect(
         "Статические колонки:",
         possible_static,
@@ -177,11 +174,10 @@ def setup_ui():
                         value=st.session_state.get("mean_only_key", False),
                         key="mean_only_key")
 
-    # Предварительный график (с парсингом даты после выбора dt_col)
+    # Предварительный график
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
             df_plot = df_current.copy()
-            # Преобразуем выбранную колонку в datetime (dayfirst=True, если нужно)
             df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
             df_plot = df_plot.dropna(subset=[dt_col])
 
@@ -214,10 +210,10 @@ def setup_ui():
     st.sidebar.header("7. Прогноз")
     st.sidebar.button("Сделать прогноз", key="predict_btn")
 
-    # ========== (8) Сохранение результатов ==========
+    # ========== (8) Сохранение результатов (НОВЫЙ блок!) ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
-    st.sidebar.text_input("Файл для сохранения результатов (CSV/XLSX)", "results.xlsx", key="save_path_key")
-    st.sidebar.button("Сохранить результаты", key="save_btn")
+    st.sidebar.button("Сохранить результаты в CSV", key="save_csv_btn")
+    st.sidebar.button("Сохранить результаты в Excel", key="save_excel_btn")
 
     # ========== (9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
@@ -226,6 +222,7 @@ def setup_ui():
 
     # ========== (10) Выгрузка моделей и логов ==========
     st.sidebar.header("10. Выгрузка моделей и логов")
-    st.sidebar.button("Скачать все содержимое AutogluonModels", key="download_model_and_logs")
+    st.sidebar.button("Скачать архив (модели + логи)", key="download_model_and_logs")
 
     return page_choice
+
