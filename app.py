@@ -15,6 +15,7 @@ from src.help_page import show_help_page
 import pandas as pd
 from openpyxl.styles import PatternFill
 
+
 def main():
     # Инициализируем логгер
     setup_logger()
@@ -32,7 +33,7 @@ def main():
     # Логируем текущие настройки
     dt_col = st.session_state.get("dt_col_key", "<нет>")
     tgt_col = st.session_state.get("tgt_col_key", "<нет>")
-    id_col  = st.session_state.get("id_col_key", "<нет>")
+    id_col = st.session_state.get("id_col_key", "<нет>")
 
     static_feats = st.session_state.get("static_feats_key", [])
     use_holidays = st.session_state.get("use_holidays_key", False)
@@ -133,21 +134,22 @@ def main():
                     lb = st.session_state.get("leaderboard")
                     preds = st.session_state.get("predictions")
                     stt_train = st.session_state.get("static_df_train")
-                    fit_summary_data = st.session_state.get("fit_summary")
+                    ensemble_info_df = st.session_state.get("weighted_ensemble_info")  # инфа об ансамбле
 
                     # Проверяем, есть ли данные
                     has_data_to_save = any([
                         df_train is not None,
                         lb is not None,
                         preds is not None,
-                        fit_summary_data,
                         (stt_train is not None and not stt_train.empty if stt_train is not None else False),
+                        (ensemble_info_df is not None),
                     ])
                     if has_data_to_save:
                         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
                             # Predictions
                             if preds is not None:
                                 preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False)
+
                             # Leaderboard
                             if lb is not None:
                                 lb.to_excel(writer, sheet_name="Leaderboard", index=False)
@@ -160,14 +162,13 @@ def main():
                                     cell = sheet_lb.cell(row=row_excel, column=col_idx)
                                     cell.fill = fill_green
 
-                            # FitSummaryRaw
-                            if fit_summary_data:
-                                fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
-                                fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
-
                             # static_df_train
                             if stt_train is not None and not stt_train.empty:
                                 stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
+
+                            # Создаём вкладку WeightedEnsembleInfo (если есть данные)
+                            if ensemble_info_df is not None and not ensemble_info_df.empty:
+                                ensemble_info_df.to_excel(writer, sheet_name="WeightedEnsembleInfo", index=False)
 
                         # Выводим кнопку скачивания
                         st.download_button(
@@ -213,14 +214,14 @@ def main():
         lb = st.session_state.get("leaderboard")
         preds = st.session_state.get("predictions")
         stt_train = st.session_state.get("static_df_train")
-        fit_summary_data = st.session_state.get("fit_summary")
+        ensemble_info_df = st.session_state.get("weighted_ensemble_info")  # инфа об ансамбле
 
         has_data_to_save = any([
             df_train is not None,
             lb is not None,
             preds is not None,
-            fit_summary_data,
             (stt_train is not None and not stt_train.empty if stt_train is not None else False),
+            (ensemble_info_df is not None),
         ])
         if not has_data_to_save:
             st.warning("Нет данных для сохранения в Excel.")
@@ -230,6 +231,7 @@ def main():
                 # Predictions
                 if preds is not None:
                     preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False)
+
                 # Leaderboard
                 if lb is not None:
                     lb.to_excel(writer, sheet_name="Leaderboard", index=False)
@@ -242,14 +244,13 @@ def main():
                         cell = sheet_lb.cell(row=row_excel, column=col_idx)
                         cell.fill = fill_green
 
-                # FitSummaryRaw
-                if fit_summary_data:
-                    fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
-                    fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
-
                 # static_df_train
                 if stt_train is not None and not stt_train.empty:
                     stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
+
+                # Создаём вкладку WeightedEnsembleInfo (если есть данные)
+                if ensemble_info_df is not None and not ensemble_info_df.empty:
+                    ensemble_info_df.to_excel(writer, sheet_name="WeightedEnsembleInfo", index=False)
 
             st.download_button(
                 label="Скачать Excel файл",

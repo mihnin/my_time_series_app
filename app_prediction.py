@@ -1,4 +1,5 @@
 # app_prediction.py
+# app_prediction.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -53,34 +54,28 @@ def run_prediction():
             tmp.rename(columns={id_col:"item_id"}, inplace=True)
             static_df = tmp
 
-        # Гарантия наличия target
+        # Если target нет — создаём пустой
         if tgt_col not in df_pred.columns:
             df_pred[tgt_col] = None
 
         df_prepared = convert_to_timeseries(df_pred, id_col, dt_col, tgt_col)
         ts_df = make_timeseries_dataframe(df_prepared, static_df=static_df)
 
-        # Частота
         freq_val = st.session_state.get("freq_key", "auto (угадать)")
         if freq_val != "auto (угадать)":
             freq_short = freq_val.split(" ")[0]
             ts_df = ts_df.convert_frequency(freq_short)
             ts_df = ts_df.fill_missing_values(method="ffill")
 
-        # Запускаем прогноз
         preds = forecast(predictor, ts_df)
         st.session_state["predictions"] = preds
 
         st.subheader("Предсказанные значения (первые строки)")
         st.dataframe(preds.reset_index().head())
 
-        # Лучшая модель (если сохранена в session_state)
-        best_name = st.session_state.get("best_model_name", None)
-        best_score = st.session_state.get("best_model_score", None)
-        if best_name is not None:
-            st.info(f"Лучшая модель при обучении: {best_name}, score_val={best_score:.4f}")
+        # Убрали повторный вывод "Лучшая модель при обучении" — как просили
 
-        # Пример Plotly-графиков (если есть квантиль 0.5)
+        # Если хотим — графики по квантилю 0.5
         if "0.5" in preds.columns:
             preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
             unique_ids = preds_df["item_id"].unique()
@@ -102,5 +97,6 @@ def run_prediction():
     except Exception as ex:
         st.error(f"Ошибка прогноза: {ex}")
         return False
+
 
 
