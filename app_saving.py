@@ -1,57 +1,21 @@
+# app_saving.py
+# app_saving.py
 import streamlit as st
-import pandas as pd
+import logging
 import os
 import json
-import logging
-from openpyxl.styles import PatternFill
-from pathlib import Path
 from autogluon.timeseries import TimeSeriesPredictor
 
-# Константы для путей
+# Папка с моделью
 MODEL_DIR = "AutogluonModels/TimeSeriesModel"
 MODEL_INFO_FILE = "model_info.json"
-
-
-def format_fit_summary(fit_summary) -> str:
-    """
-    Преобразует словарь fit_summary в человекочитаемый текст.
-    Если fit_summary пуст, возвращаем соответствующее сообщение.
-    """
-    if not fit_summary:
-        return "Fit Summary отсутствует."
-
-    summary_str = "### Fit Summary:\n\n"
-    if 'total_fit_time' in fit_summary:
-        summary_str += f"- **Total Fit Time**: {fit_summary['total_fit_time']:.2f} seconds\n"
-    if 'best_model' in fit_summary:
-        summary_str += f"- **Best Model**: {fit_summary['best_model']}\n"
-    if 'best_model_score' in fit_summary:
-        summary_str += f"- **Best Model Score**: {fit_summary['best_model_score']:.4f}\n"
-
-    # Детали по каждой модели (если есть)
-    model_fit = fit_summary.get('model_fit_summary', {})
-    if model_fit:
-        summary_str += "\n**Model Fit Details:**\n"
-        for model_name, model_info in model_fit.items():
-            summary_str += f"\n**Model: {model_name}**\n"
-            if isinstance(model_info, dict):
-                if 'fit_time' in model_info:
-                    summary_str += f"  - Fit Time: {model_info['fit_time']:.2f} s\n"
-                if 'score' in model_info:
-                    summary_str += f"  - Score: {model_info['score']:.4f}\n"
-                if 'eval_metric' in model_info:
-                    summary_str += f"  - Eval Metric: {model_info['eval_metric']}\n"
-            else:
-                summary_str += "  - (no details)\n"
-
-    return summary_str
 
 
 def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
                        fill_method_val, group_cols_fill_val, use_holidays_val,
                        metric, presets, chosen_models, mean_only):
     """
-    Сохраняет метаданные (колонки, признаки, настройки) в JSON-файл,
+    Сохраняет метаданные (колонки, настройки) в JSON-файл (model_info.json),
     чтобы при следующем запуске можно было восстановить session_state.
     """
     os.makedirs(MODEL_DIR, exist_ok=True)
@@ -79,7 +43,7 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
 
 def load_model_metadata():
     """
-    Загружаем настройки из model_info.json (dt_col, tgt_col и т.д.).
+    Загружаем метаданные (dt_col, tgt_col и т.д.) из model_info.json.
     Возвращаем словарь или None, если файла нет.
     """
     path_json = os.path.join(MODEL_DIR, MODEL_INFO_FILE)
@@ -94,100 +58,10 @@ def load_model_metadata():
         return None
 
 
-def save_results_to_excel(save_path: str) -> bool:
-    """
-    Сохраняет результаты (predictions, leaderboard, fit_summary и т.д.) в файл.
-    - При .csv: сохраняем предсказания (или df_train).
-    - При .xlsx/.xls: создаём несколько листов (без листа TrainData, по желанию).
-    """
-    try:
-        df_train = st.session_state.get("df")
-        lb = st.session_state.get("leaderboard")
-        preds = st.session_state.get("predictions")
-        stt_train = st.session_state.get("static_df_train")
-        fit_summary_data = st.session_state.get("fit_summary")
-
-        # Проверяем, есть ли данные для сохранения
-        has_data_to_save = any([
-            df_train is not None,
-            lb is not None,
-            preds is not None,
-            fit_summary_data,
-            (stt_train is not None and not stt_train.empty if stt_train is not None else False),
-        ])
-        if not has_data_to_save:
-            st.warning("Нет данных для сохранения. Сначала загрузите данные и обучите модель.")
-            return False
-
-        ext = Path(save_path).suffix.lower()
-        if ext == ".csv":
-            # Сохраняем в CSV (одна «таблица»)
-            if preds is not None:
-                preds_df_to_save = preds.reset_index()
-                preds_df_to_save.to_csv(save_path, index=False, encoding="utf-8")
-                st.success(f"Предсказания сохранены в CSV: {save_path}")
-            else:
-                if df_train is not None:
-                    df_train.to_csv(save_path, index=False, encoding="utf-8")
-                    st.success(f"Train-данные сохранены в CSV: {save_path}")
-                else:
-                    st.error("Нечего сохранять в CSV: нет preds и нет df_train.")
-                    return False
-
-        elif ext in (".xlsx", ".xls"):
-            import openpyxl
-            with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
-                # Лист 1: Predictions
-                if preds is not None:
-                    pred_df_to_save = preds.reset_index()
-                    pred_df_to_save.to_excel(writer, sheet_name="Predictions", index=False)
-
-                # Лист 2: Leaderboard
-                if lb is not None:
-                    lb.to_excel(writer, sheet_name="Leaderboard", index=False)
-
-                # Лист 3: FitSummary (RAW)
-                if fit_summary_data:
-                    fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
-                    fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
-
-                # Лист 4: static_df_train (при желании)
-                if stt_train is not None and not stt_train.empty:
-                    stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
-
-                # (TrainData не сохраняем, чтобы не раздувать файл)
-
-                # Подсветка лучшей модели в Leaderboard
-                if lb is not None and not lb.empty and "Leaderboard" in writer.sheets:
-                    sheet_lb = writer.sheets["Leaderboard"]
-                    best_idx = lb.iloc[0].name
-                    fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                    row_excel = best_idx + 2
-                    for col_idx in range(1, lb.shape[1] + 1):
-                        cell = sheet_lb.cell(row=row_excel, column=col_idx)
-                        cell.fill = fill_green
-
-            st.success(f"Сохранено в Excel: {save_path}")
-
-        else:
-            st.error(f"Неизвестное расширение файла: {ext}. Используйте .csv или .xlsx")
-            return False
-
-        return True
-
-    except PermissionError:
-        # Если файл был открыт в Excel, вылетит permission denied
-        st.error("Вам необходимо закрыть файл (например, results.xlsx) и повторить сохранение.")
-        return False
-    except Exception as ex:
-        st.error(f"Ошибка сохранения: {ex}")
-        return False
-
-
 def try_load_existing_model():
     """
     Если в папке MODEL_DIR есть ранее обученная модель (predictor.pkl),
-    то загружаем её и восстанавливаем параметры в st.session_state.
+    загружаем её и восстанавливаем метаданные в session_state.
     """
     if not os.path.exists(MODEL_DIR):
         st.info("Папка с моделью не найдена — модель не загружена.")
@@ -203,7 +77,7 @@ def try_load_existing_model():
         st.session_state["predictor"] = loaded_predictor
         st.info(f"Загружена ранее обученная модель из {MODEL_DIR}")
 
-        # Загрузим метаданные
+        # Загружаем настройки (model_info.json) и восстанавливаем session_state
         meta = load_model_metadata()
         if meta:
             st.session_state["dt_col_key"] = meta.get("dt_col", "<нет>")
@@ -218,7 +92,6 @@ def try_load_existing_model():
             st.session_state["presets_key"] = meta.get("presets", "medium_quality")
             st.session_state["models_key"] = meta.get("chosen_models", ["* (все)"])
             st.session_state["mean_only_key"] = meta.get("mean_only", False)
-
-            st.info("Настройки из model_info.json успешно восстановлены.")
+            st.info("Настройки из model_info.json восстановлены.")
     except Exception as e:
-        st.warning(f"Ошибка при загрузке ранее обученной модели: {e}")
+        st.warning(f"Ошибка при загрузке модели: {e}")

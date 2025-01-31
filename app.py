@@ -8,16 +8,16 @@ import io
 from app_ui import setup_ui
 from app_training import run_training
 from app_prediction import run_prediction
-from app_saving import save_results_to_excel, try_load_existing_model
+from app_saving import try_load_existing_model, save_model_metadata, load_model_metadata
 from src.utils.utils import setup_logger, read_logs, LOG_FILE
 from src.help_page import show_help_page
 
+import pandas as pd
+from openpyxl.styles import PatternFill
 
 def main():
-    # Инициализация логгера
+    # Инициализируем логгер
     setup_logger()
-
-    # Расширенное логирование: отметим запуск
     logging.info("========== Приложение запущено ========== ")
     logging.info("=== Запуск приложения Streamlit (main) ===")
 
@@ -25,11 +25,11 @@ def main():
     if "predictor" not in st.session_state or st.session_state["predictor"] is None:
         try_load_existing_model()
 
-    # Рисуем боковое меню и получаем выбранную страницу
+    # Рисуем боковое меню/страницы
     page_choice = setup_ui()
     logging.info(f"Страница выбрана: {page_choice}")
 
-    # Сформируем сообщение о текущих настройках из session_state
+    # Логируем текущие настройки
     dt_col = st.session_state.get("dt_col_key", "<нет>")
     tgt_col = st.session_state.get("tgt_col_key", "<нет>")
     id_col  = st.session_state.get("id_col_key", "<нет>")
@@ -47,32 +47,29 @@ def main():
     time_limit_val = st.session_state.get("time_limit_key", 60)
     mean_only_val = st.session_state.get("mean_only_key", False)
 
-    # Подробный лог с текущими параметрами
     logging.info(
         f"Текущие колонки: dt_col={dt_col}, tgt_col={tgt_col}, id_col={id_col}"
     )
     logging.info(
         f"Статические признаки={static_feats}, праздники={use_holidays}, "
-        f"метод заполнения пропусков={fill_method_val}, group_cols={group_cols_val}"
+        f"метод заполнения={fill_method_val}, group_cols={group_cols_val}"
     )
     logging.info(
-        f"Частота={freq_val}, Метрика={metric_val}, Модели={models_val}, Presets={presets_val}, "
-        f"pred_length={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
+        f"freq={freq_val}, metric={metric_val}, models={models_val}, presets={presets_val}, "
+        f"pred_len={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
     )
 
-    # Блок очистки логов (через ввод “delete”)
+    # ------------------- Очистка логов -------------------
     st.sidebar.header("Очистка логов")
     clear_logs_input = st.sidebar.text_input("Введите 'delete', чтобы очистить логи:")
     if st.sidebar.button("Очистить логи"):
         if clear_logs_input.strip().lower() == "delete":
-            # 1) Найдём все FileHandler, чтобы закрыть их (иначе файл не удалить на Windows)
             logger = logging.getLogger()
             for handler in logger.handlers[:]:
                 if hasattr(handler, 'baseFilename') and os.path.abspath(handler.baseFilename) == os.path.abspath(LOG_FILE):
                     handler.close()
                     logger.removeHandler(handler)
 
-            # 2) Удалим лог-файл
             try:
                 if os.path.exists(LOG_FILE):
                     os.remove(LOG_FILE)
@@ -83,13 +80,12 @@ def main():
             except Exception as e:
                 st.error(f"Ошибка при удалении лог-файла: {e}")
 
-            # 3) Пересоздадим пустой лог-файл
+            # Пересоздаём пустой лог-файл
             try:
                 with open(LOG_FILE, 'w', encoding='utf-8') as f:
                     f.write("")
-                new_file_handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
-                import datetime
                 from logging import Formatter
+                new_file_handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
                 formatter = Formatter(
                     "%(asctime)s [%(levelname)s] %(module)s.%(funcName)s - %(message)s",
                     datefmt="%Y-%m-%d %H:%M:%S"
@@ -102,77 +98,123 @@ def main():
         else:
             st.warning("Неверное слово. Логи не очищены.")
 
-    # Если выбрана страница Help — открываем страницу справки
+    # Если выбрана страница Help
     if page_choice == "Help":
         logging.info("Пользователь на странице Help.")
         show_help_page()
         return
 
-    # ====== Кнопка "Обучить модель" ======
+    # -------------- Кнопка «Обучить модель» --------------
     if st.session_state.get("fit_model_btn"):
         logging.info("Кнопка 'Обучить модель' нажата.")
         train_success = run_training()
         if train_success:
             logging.info("Обучение завершено успешно.")
+            # Сохраним метаданные в model_info.json (если нужно)
+            save_model_metadata(
+                dt_col, tgt_col, id_col,
+                static_feats, freq_val,
+                fill_method_val, group_cols_val,
+                use_holidays, metric_val,
+                presets_val, models_val, mean_only_val
+            )
+
+            # Если установлен чекбокс «Обучение, Прогноз и Сохранение»
             if st.session_state.get("train_predict_save_checkbox"):
-                logging.info("'Обучение, Прогноз и Сохранение' включено: запускаем прогноз.")
+                logging.info("'Обучение, Прогноз и Сохранение' включено.")
                 predict_success = run_prediction()
                 if predict_success:
-                    logging.info("Прогноз успешно выполнен, сохраняем результаты.")
-                    # старый вызов save_results_to_excel можно удалить или оставить — но у нас теперь отдельные кнопки
-                    save_path_val = "results.xlsx"  # можно убрать, если не нужно автосохранение
-                    _ = save_results_to_excel(save_path_val)
-                    st.info("Обучение, прогноз и (авто)сохранение в results.xlsx выполнены успешно!")
-        else:
-            logging.warning("Обучение завершилось неудачно или было прервано.")
+                    logging.info("Прогноз успешно выполнен.")
+                    st.info("Обучение и прогноз завершены, теперь формируем Excel для скачивания...")
 
-    # ====== Кнопка "Сделать прогноз" ======
+                    # Автоматически формируем Excel в памяти
+                    excel_buffer = io.BytesIO()
+                    df_train = st.session_state.get("df")
+                    lb = st.session_state.get("leaderboard")
+                    preds = st.session_state.get("predictions")
+                    stt_train = st.session_state.get("static_df_train")
+                    fit_summary_data = st.session_state.get("fit_summary")
+
+                    # Проверяем, есть ли данные
+                    has_data_to_save = any([
+                        df_train is not None,
+                        lb is not None,
+                        preds is not None,
+                        fit_summary_data,
+                        (stt_train is not None and not stt_train.empty if stt_train is not None else False),
+                    ])
+                    if has_data_to_save:
+                        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                            # Predictions
+                            if preds is not None:
+                                preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False)
+                            # Leaderboard
+                            if lb is not None:
+                                lb.to_excel(writer, sheet_name="Leaderboard", index=False)
+                                # Подсветим лучшую модель (зелёный фон)
+                                sheet_lb = writer.sheets["Leaderboard"]
+                                best_idx = lb.iloc[0].name
+                                fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                                row_excel = best_idx + 2
+                                for col_idx in range(1, lb.shape[1] + 1):
+                                    cell = sheet_lb.cell(row=row_excel, column=col_idx)
+                                    cell.fill = fill_green
+
+                            # FitSummaryRaw
+                            if fit_summary_data:
+                                fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
+                                fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
+
+                            # static_df_train
+                            if stt_train is not None and not stt_train.empty:
+                                stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
+
+                        # Выводим кнопку скачивания
+                        st.download_button(
+                            label="Скачать Excel (авто)",
+                            data=excel_buffer.getvalue(),
+                            file_name="results.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        st.success("Файл Excel готов к скачиванию!")
+                    else:
+                        st.warning("Нет данных для сохранения (после обучения/прогноза).")
+                else:
+                    logging.warning("Ошибка при прогнозировании.")
+
+    # -------------- Кнопка «Сделать прогноз» --------------
     if st.session_state.get("predict_btn"):
         logging.info("Кнопка 'Сделать прогноз' нажата.")
         result = run_prediction()
         if result:
-            logging.info("Прогнозирование успешно.")
+            logging.info("Прогноз успешно.")
         else:
             logging.warning("Ошибка при прогнозировании.")
 
-    # =========================== ВАЖНО: новый блок для CSV/Excel ===========================
-    #
-    # Вместо старого if st.session_state.get("save_btn"):
-    # теперь два условия – для CSV и для Excel
-    # ======================================================================================
+    # -------- Новые кнопки «Сохранить в CSV/Excel» (В ПАМЯТИ) --------
     if st.session_state.get("save_csv_btn"):
         logging.info("Кнопка 'Сохранить результаты в CSV' нажата.")
-        # Попробуем выгрузить именно предсказания (predictions).
         preds = st.session_state.get("predictions")
         if preds is None:
             st.warning("Нет данных для сохранения (predictions отсутствуют).")
         else:
-            # Конвертируем в CSV в память
             csv_data = preds.reset_index().to_csv(index=False, encoding="utf-8")
-            # Предлагаем скачать
             st.download_button(
                 label="Скачать CSV файл",
                 data=csv_data,
                 file_name="results.csv",
                 mime="text/csv"
             )
-            logging.info("Файл CSV готов к скачиванию.")
+            logging.info("Файл CSV с предиктом сформирован и готов к скачиванию.")
 
     if st.session_state.get("save_excel_btn"):
         logging.info("Кнопка 'Сохранить результаты в Excel' нажата.")
-        # Для Excel сделаем логику, схожую с save_results_to_excel, но в память (BytesIO)
-        import openpyxl
-        import pandas as pd
-        from openpyxl.styles import PatternFill
-        import io
-
         df_train = st.session_state.get("df")
         lb = st.session_state.get("leaderboard")
         preds = st.session_state.get("predictions")
         stt_train = st.session_state.get("static_df_train")
         fit_summary_data = st.session_state.get("fit_summary")
 
-        # Проверим, есть ли вообще что сохранять
         has_data_to_save = any([
             df_train is not None,
             lb is not None,
@@ -188,22 +230,10 @@ def main():
                 # Predictions
                 if preds is not None:
                     preds.reset_index().to_excel(writer, sheet_name="Predictions", index=False)
-
                 # Leaderboard
                 if lb is not None:
                     lb.to_excel(writer, sheet_name="Leaderboard", index=False)
-
-                # FitSummaryRaw
-                if fit_summary_data:
-                    fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
-                    fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
-
-                # static_df_train (при желании)
-                if stt_train is not None and not stt_train.empty:
-                    stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
-
-                # Подсветка лучшей модели в Leaderboard
-                if lb is not None and not lb.empty and "Leaderboard" in writer.sheets:
+                    # Подсветим лучшую модель
                     sheet_lb = writer.sheets["Leaderboard"]
                     best_idx = lb.iloc[0].name
                     fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
@@ -212,16 +242,24 @@ def main():
                         cell = sheet_lb.cell(row=row_excel, column=col_idx)
                         cell.fill = fill_green
 
-            # Теперь отдаём Excel-файл на скачивание
+                # FitSummaryRaw
+                if fit_summary_data:
+                    fs_sheet = pd.DataFrame([{"Fit_Summary": str(fit_summary_data)}])
+                    fs_sheet.to_excel(writer, sheet_name="FitSummaryRaw", index=False)
+
+                # static_df_train
+                if stt_train is not None and not stt_train.empty:
+                    stt_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)
+
             st.download_button(
                 label="Скачать Excel файл",
                 data=excel_buffer.getvalue(),
                 file_name="results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            logging.info("Файл Excel готов к скачиванию.")
+            logging.info("Файл Excel готов к скачиванию (ручной).")
 
-    # ====== Блок логов приложения (показ и скачивание) ======
+    # ------------------- Логи и скачивание логов -------------------
     if st.session_state.get("show_logs_btn"):
         logging.info("Кнопка 'Показать логи' нажата.")
         logs_text = read_logs()
@@ -238,7 +276,7 @@ def main():
             mime="text/plain",
         )
 
-    # ====== Кнопка “Скачать архив (модели + логи)” ======
+    # ------------------- Скачивание архива (модели+логи) -------------------
     if st.session_state.get("download_model_and_logs"):
         logging.info("Кнопка 'Скачать архив (модели + логи)' нажата.")
         zip_buffer = io.BytesIO()
@@ -251,10 +289,9 @@ def main():
                         rel_path = os.path.relpath(full_path, start=model_dir)
                         zf.write(full_path, arcname=os.path.join("AutogluonModels", rel_path))
 
-            # Добавим логи
-            log_file_path = LOG_FILE
-            if os.path.exists(log_file_path):
-                zf.write(log_file_path, arcname="logs/app.log")
+            # Добавляем логи
+            if os.path.exists(LOG_FILE):
+                zf.write(LOG_FILE, arcname="logs/app.log")
 
         st.download_button(
             label="Скачать архив (модели + логи)",
