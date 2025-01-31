@@ -28,7 +28,7 @@ model_choices = [all_models_opt] + model_keys
 
 def setup_ui():
     # Версия
-    st.markdown("### Версия 1.0")
+    st.markdown("### Версия 1.1")
     st.title("Бизнес-приложение для прогнозирования временных рядов")
 
     pages = ["Главная", "Help"]
