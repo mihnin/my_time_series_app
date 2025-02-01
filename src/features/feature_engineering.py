@@ -1,4 +1,5 @@
 #feature_engineering.py
+# src/features/feature_engineering.py
 import pandas as pd
 import streamlit as st
 import holidays
@@ -6,20 +7,13 @@ import logging
 
 def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None) -> pd.DataFrame:
     """
-    Заполняет пропуски (только для числовых столбцов).
-      - "Constant=0": NaN -> 0
-      - "Forward fill": ffill/bfill
-      - "Group mean": fillna средним в группе
-      - "None": не трогаем
+    Заполняет пропуски для числовых столбцов.
     """
     numeric_cols = df.select_dtypes(include=["float", "int"]).columns
-
     if not group_cols:
         group_cols = []
-
     if len(group_cols) == 1:
         group_cols = (group_cols[0],)
-
     if method == "None":
         return df
     elif method == "Constant=0":
@@ -41,28 +35,22 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
             for c in numeric_cols:
                 df[c] = df[c].fillna(df[c].mean())
         return df
-
     return df
-
 
 def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_col="russian_holiday") -> pd.DataFrame:
     """
-    Добавляет колонку holiday_col (0 или 1) для праздников РФ (дата из date_col).
+    Добавляет колонку с индикатором праздников РФ.
     """
     if date_col not in df.columns:
         st.warning("Колонка даты не найдена, не можем добавить признак праздника.")
         return df
     if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-
     min_year = df[date_col].dt.year.min()
     max_year = df[date_col].dt.year.max()
-
     ru_holidays = holidays.country_holidays(country="RU", years=range(min_year, max_year + 1))
-
     def is_holiday(dt):
         return 1.0 if dt.date() in ru_holidays else 0.0
-
     df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
     return df
 

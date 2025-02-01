@@ -1,3 +1,4 @@
+# src/help_page.py
 import streamlit as st
 
 def show_help_page():

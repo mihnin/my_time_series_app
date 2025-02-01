@@ -6,17 +6,14 @@ import os
 import json
 from autogluon.timeseries import TimeSeriesPredictor
 
-# Папка с моделью
 MODEL_DIR = "AutogluonModels/TimeSeriesModel"
 MODEL_INFO_FILE = "model_info.json"
 
-
 def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
-                       fill_method_val, group_cols_fill_val, use_holidays_val,
-                       metric, presets, chosen_models, mean_only):
+                        fill_method_val, group_cols_fill_val, use_holidays_val,
+                        metric, presets, chosen_models, mean_only):
     """
-    Сохраняет метаданные (колонки, настройки) в JSON-файл (model_info.json),
-    чтобы при следующем запуске можно было восстановить session_state.
+    Сохраняет метаданные (колонки и настройки) в JSON-файл.
     """
     os.makedirs(MODEL_DIR, exist_ok=True)
     info_dict = {
@@ -40,11 +37,9 @@ def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
     except Exception as e:
         logging.error(f"Ошибка при сохранении model_info.json: {e}")
 
-
 def load_model_metadata():
     """
-    Загружаем метаданные (dt_col, tgt_col и т.д.) из model_info.json.
-    Возвращаем словарь или None, если файла нет.
+    Загружает метаданные из model_info.json.
     """
     path_json = os.path.join(MODEL_DIR, MODEL_INFO_FILE)
     if not os.path.exists(path_json):
@@ -57,11 +52,10 @@ def load_model_metadata():
         logging.warning(f"Не удалось загрузить model_info.json: {e}")
         return None
 
-
 def try_load_existing_model():
     """
     Если в папке MODEL_DIR есть ранее обученная модель (predictor.pkl),
-    загружаем её и восстанавливаем метаданные в session_state.
+    загружаем её и восстанавливаем настройки в session_state.
     """
     if not os.path.exists(MODEL_DIR):
         st.info("Папка с моделью не найдена — модель не загружена.")
@@ -77,7 +71,6 @@ def try_load_existing_model():
         st.session_state["predictor"] = loaded_predictor
         st.info(f"Загружена ранее обученная модель из {MODEL_DIR}")
 
-        # Загружаем настройки (model_info.json) и восстанавливаем session_state
         meta = load_model_metadata()
         if meta:
             st.session_state["dt_col_key"] = meta.get("dt_col", "<нет>")
@@ -95,3 +88,4 @@ def try_load_existing_model():
             st.info("Настройки из model_info.json восстановлены.")
     except Exception as e:
         st.warning(f"Ошибка при загрузке модели: {e}")
+
