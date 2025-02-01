@@ -37,7 +37,6 @@ def run_prediction():
             st.info("Признак `russian_holiday` включён при прогнозировании.")
             df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
 
-        # Заполняем пропуски
         df_pred = fill_missing_values(
             df_pred,
             st.session_state.get("fill_method_key", "None"),
@@ -46,15 +45,13 @@ def run_prediction():
 
         st.session_state["df"] = df_pred
 
-        # Статические признаки
         static_feats_val = st.session_state.get("static_feats_key", [])
         static_df = None
         if static_feats_val:
             tmp = df_pred[[id_col] + static_feats_val].drop_duplicates(subset=[id_col]).copy()
-            tmp.rename(columns={id_col:"item_id"}, inplace=True)
+            tmp.rename(columns={id_col: "item_id"}, inplace=True)
             static_df = tmp
 
-        # Если target нет — создаём пустой
         if tgt_col not in df_pred.columns:
             df_pred[tgt_col] = None
 
@@ -73,9 +70,6 @@ def run_prediction():
         st.subheader("Предсказанные значения (первые строки)")
         st.dataframe(preds.reset_index().head())
 
-        # Убрали повторный вывод "Лучшая модель при обучении" — как просили
-
-        # Если хотим — графики по квантилю 0.5
         if "0.5" in preds.columns:
             preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
             unique_ids = preds_df["item_id"].unique()
@@ -97,6 +91,7 @@ def run_prediction():
     except Exception as ex:
         st.error(f"Ошибка прогноза: {ex}")
         return False
+
 
 
 
