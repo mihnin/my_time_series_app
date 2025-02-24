@@ -1,10 +1,12 @@
 # app.py
+# app.py
 import streamlit as st
 import logging
 import os
 import zipfile
 import io
 import pandas as pd
+import psutil
 from openpyxl.styles import PatternFill
 
 from app_ui import setup_ui
@@ -14,6 +16,7 @@ from app_saving import try_load_existing_model, save_model_metadata, load_model_
 from src.utils.utils import setup_logger, read_logs, LOG_FILE
 from src.help_page import show_help_page
 from src.utils.exporter import generate_excel_buffer
+from data_analysis import run_data_analysis  # Новый импорт
 
 def main():
     # Инициализация логгера
@@ -59,6 +62,11 @@ def main():
         f"pred_len={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
     )
     
+    # Отображение информации о памяти
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss / (1024 * 1024)  # в МБ
+    st.sidebar.markdown(f"**Использование памяти**: {memory_usage:.2f} МБ")
+    
     # ------------- Очистка логов -------------
     st.sidebar.header("Очистка логов")
     clear_logs_input = st.sidebar.text_input("Введите 'delete', чтобы очистить логи:")
@@ -96,10 +104,39 @@ def main():
         else:
             st.warning("Неверное слово. Логи не очищены.")
     
+    # Управление памятью
+    if st.sidebar.button("Очистить память"):
+        # Освобождаем неиспользуемые объекты
+        for key in list(st.session_state.keys()):
+            if key not in ["df", "predictor", "page_choice", "dt_col_key", "tgt_col_key", "id_col_key", 
+                          "static_feats_key", "use_holidays_key", "fill_method_key", "group_cols_for_fill_key",
+                          "freq_key", "metric_key", "models_key", "presets_key", "prediction_length_key",
+                          "time_limit_key", "mean_only_key"]:
+                del st.session_state[key]
+        
+        import gc
+        gc.collect()
+        
+        # Обновляем информацию о памяти
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss / (1024 * 1024)  # в МБ
+        st.sidebar.success(f"Память очищена. Текущее использование: {memory_usage:.2f} МБ")
+    
     # Если выбрана страница Help — показываем справку и выходим
     if page_choice == "Help":
         logging.info("Пользователь на странице Help.")
         show_help_page()
+        return
+    
+    # Если выбрана страница анализа данных - запускаем анализ и выходим
+    # Если выбрана страница анализа данных - запускаем анализ и выходим
+    if page_choice == "Анализ данных":
+        logging.info("Пользователь на странице анализа данных.")
+        try:
+            run_data_analysis()
+        except Exception as e:
+            st.error(f"Произошла ошибка при анализе данных: {e}")
+            logging.error(f"Ошибка в run_data_analysis: {e}")
         return
     
     # ------------- Обучение модели -------------
