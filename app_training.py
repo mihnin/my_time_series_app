@@ -149,15 +149,11 @@ def run_training():
         eval_key = chosen_metric_val.split(" ")[0]
         q_levels = [0.5] if mean_only_val else None
 
-        # Кросс-валидация
-        use_cv = True  # Можно сделать опциональным через UI
-        cv_params = None
-        if use_cv:
-            cv_params = {
-                "num_val_windows": 1,
-                "val_step_size": p_length,
-                "val_use_training_window": False
-            }
+        # Параметры кросс-валидации (вместо val_params)
+        # Используем параметры, которые доступны напрямую в методе fit()
+        num_val_windows = 1
+        val_step_size = p_length
+        refit_every_n_windows = 1
 
         # Создаем предиктор
         status_text.text("Создание предиктора...")
@@ -185,13 +181,16 @@ def run_training():
             # Создаем дополнительный контейнер для вывода информации во время обучения
             training_info = st.empty()
             
-            # Запускаем обучение
+            # Запускаем обучение с правильными параметрами кросс-валидации
+            # В AutoGluon 1.2 используем параметры напрямую
             predictor.fit(
                 train_data=ts_df,
                 time_limit=t_limit,
                 presets=presets_val,
                 hyperparameters=hyperparams,
-                val_params=cv_params
+                num_val_windows=num_val_windows,
+                val_step_size=val_step_size,
+                refit_every_n_windows=refit_every_n_windows
             )
             
             # Обновляем прогресс
