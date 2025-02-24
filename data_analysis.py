@@ -6,7 +6,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import logging
+import os
 from typing import Dict, List, Any, Optional, Tuple
+import time
 
 from src.validation.data_validation import (
     validate_dataset, display_validation_results,
@@ -23,7 +25,7 @@ from src.features.drift_detection import (
     detect_concept_drift, display_drift_results
 )
 from src.data.data_processing import (
-    split_train_test, detect_outliers
+    load_data, show_dataset_stats, split_train_test, detect_outliers
 )
 from src.features.feature_engineering import (
     add_time_features, apply_target_transformations,
@@ -32,58 +34,193 @@ from src.features.feature_engineering import (
 
 def run_data_analysis():
     """
-    Страница расширенного анализа данных.
+    Страница расширенного анализа данных с возможностью загрузки данных
+    непосредственно на странице.
     """
     st.title("Расширенный анализ данных")
     
-    # Проверяем, инициализированы ли все необходимые переменные в session_state
-    if "df" not in st.session_state:
-        st.session_state["df"] = None
+    # Раздел для загрузки данных
+    st.header("1. Загрузка данных")
     
-    if "dt_col_key" not in st.session_state:
-        st.session_state["dt_col_key"] = "<нет>"
+    # Инициализируем session_state переменные для анализа данных если их нет
+    if "df_analysis" not in st.session_state:
+        st.session_state["df_analysis"] = None
     
-    if "tgt_col_key" not in st.session_state:
-        st.session_state["tgt_col_key"] = "<нет>"
+    if "analysis_dt_col" not in st.session_state:
+        st.session_state["analysis_dt_col"] = "<нет>"
     
-    if "id_col_key" not in st.session_state:
-        st.session_state["id_col_key"] = "<нет>"
+    if "analysis_tgt_col" not in st.session_state:
+        st.session_state["analysis_tgt_col"] = "<нет>"
     
-    # Получаем данные из session_state
-    df = st.session_state.get("df")
-    dt_col = st.session_state.get("dt_col_key")
-    tgt_col = st.session_state.get("tgt_col_key")
-    id_col = st.session_state.get("id_col_key")
+    if "analysis_id_col" not in st.session_state:
+        st.session_state["analysis_id_col"] = "<нет>"
     
-    logging.info(f"Данные для анализа: df={type(df)}, dt_col={dt_col}, tgt_col={tgt_col}, id_col={id_col}")
+    if "analysis_static_feats" not in st.session_state:
+        st.session_state["analysis_static_feats"] = []
     
-    if df is None:
-        st.warning("Сначала загрузите данные на главной странице!")
+    # Опции загрузки данных
+    upload_options = [
+        "Загрузить новые данные", 
+        "Использовать данные с главной страницы"
+    ]
+    upload_choice = st.radio("Источник данных:", upload_options)
+    
+    if upload_choice == "Загрузить новые данные":
+        # Настройки для больших файлов
+        with st.expander("Настройки для больших файлов"):
+            chunk_size = st.number_input(
+                "Размер чанка (строк)",
+                min_value=1000,
+                max_value=1000000,
+                value=100000,
+                step=10000,
+                help="Для больших файлов (>100 МБ) данные будут загружаться частями. Задайте размер каждой части."
+            )
+        
+        # Загрузка файла
+        uploaded_file = st.file_uploader(
+            "Выберите файл для анализа", 
+            type=["csv", "xls", "xlsx"],
+            key="analysis_file_uploader"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                with st.spinner("Загрузка данных..."):
+                    df = load_data(uploaded_file, chunk_size=chunk_size)
+                    st.session_state["df_analysis"] = df
+                    st.success(f"Файл загружен! Строк: {len(df)}, колонок: {len(df.columns)}")
+                    
+                    # Показываем превью загруженных данных
+                    if len(df) > 1000:
+                        st.dataframe(df.head(1000))
+                        st.info(f"Показаны первые 1000 из {len(df)} строк.")
+                    else:
+                        st.dataframe(df)
+                    
+                    # Показываем статистику
+                    with st.expander("Статистика данных", expanded=True):
+                        show_dataset_stats(df)
+            except Exception as e:
+                st.error(f"Ошибка загрузки: {e}")
+                logging.error(f"Ошибка загрузки файла на странице анализа: {e}")
+    else:
+        # Используем данные с главной страницы
+        if "df" in st.session_state and st.session_state["df"] is not None:
+            if st.button("Загрузить данные с главной страницы"):
+                st.session_state["df_analysis"] = st.session_state["df"].copy()
+                
+                # Копируем настройки колонок с главной страницы
+                if "dt_col_key" in st.session_state and st.session_state["dt_col_key"] != "<нет>":
+                    st.session_state["analysis_dt_col"] = st.session_state["dt_col_key"]
+                
+                if "tgt_col_key" in st.session_state and st.session_state["tgt_col_key"] != "<нет>":
+                    st.session_state["analysis_tgt_col"] = st.session_state["tgt_col_key"]
+                
+                if "id_col_key" in st.session_state and st.session_state["id_col_key"] != "<нет>":
+                    st.session_state["analysis_id_col"] = st.session_state["id_col_key"]
+                
+                if "static_feats_key" in st.session_state:
+                    st.session_state["analysis_static_feats"] = st.session_state["static_feats_key"]
+                
+                st.success("Данные с главной страницы успешно загружены для анализа!")
+                
+                # Показываем превью
+                if len(st.session_state["df_analysis"]) > 1000:
+                    st.dataframe(st.session_state["df_analysis"].head(1000))
+                    st.info(f"Показаны первые 1000 из {len(st.session_state['df_analysis'])} строк.")
+                else:
+                    st.dataframe(st.session_state["df_analysis"])
+        else:
+            st.warning("На главной странице нет загруженных данных. Сначала загрузите данные на главной странице или выберите 'Загрузить новые данные'.")
+    
+    # Получаем данные для анализа
+    df_analysis = st.session_state.get("df_analysis")
+    
+    if df_analysis is None:
+        st.warning("Пожалуйста, загрузите данные для анализа!")
         return
     
-    # Выводим информацию о датафрейме
-    st.info(f"Текущий датафрейм: {df.shape[0]} строк, {df.shape[1]} колонок")
-    st.info(f"Выбранные колонки: Дата={dt_col}, Target={tgt_col}, ID={id_col}")
+    # Выбор колонок для анализа
+    st.header("2. Выбор колонок для анализа")
     
+    # Получаем список всех колонок
+    all_cols = list(df_analysis.columns)
+    
+    # Проверяем, есть ли выбранные колонки в текущем датафрейме
+    dt_stored = st.session_state["analysis_dt_col"]
+    tgt_stored = st.session_state["analysis_tgt_col"]
+    id_stored = st.session_state["analysis_id_col"]
+    
+    if dt_stored not in ["<нет>"] + all_cols:
+        st.session_state["analysis_dt_col"] = "<нет>"
+    if tgt_stored not in ["<нет>"] + all_cols:
+        st.session_state["analysis_tgt_col"] = "<нет>"
+    if id_stored not in ["<нет>"] + all_cols:
+        st.session_state["analysis_id_col"] = "<нет>"
+    
+    # Выбор колонок
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        dt_col = st.selectbox(
+            "Колонка с датой", 
+            ["<нет>"] + all_cols, 
+            index=["<нет>"] + all_cols.index(dt_stored) if dt_stored in all_cols else 0,
+            key="analysis_dt_col_select"
+        )
+        st.session_state["analysis_dt_col"] = dt_col
+    
+    with col2:
+        tgt_col = st.selectbox(
+            "Колонка target", 
+            ["<нет>"] + all_cols,
+            index=["<нет>"] + all_cols.index(tgt_stored) if tgt_stored in all_cols else 0,
+            key="analysis_tgt_col_select"
+        )
+        st.session_state["analysis_tgt_col"] = tgt_col
+    
+    with col3:
+        id_col = st.selectbox(
+            "Колонка ID", 
+            ["<нет>"] + all_cols,
+            index=["<нет>"] + all_cols.index(id_stored) if id_stored in all_cols else 0,
+            key="analysis_id_col_select"
+        )
+        st.session_state["analysis_id_col"] = id_col
+    
+    # Выбор статических признаков (если есть ID)
+    if id_col != "<нет>":
+        possible_static = [c for c in all_cols if c not in [dt_col, tgt_col, id_col, "<нет>"]]
+        
+        # Фильтруем сохраненные статические признаки, чтобы они существовали в текущем датафрейме
+        stored_static_feats = st.session_state["analysis_static_feats"]
+        filtered_feats = [feat for feat in stored_static_feats if feat in possible_static]
+        
+        if len(filtered_feats) != len(stored_static_feats):
+            st.session_state["analysis_static_feats"] = filtered_feats
+        
+        st.multiselect(
+            "Статические признаки (до 3):", 
+            possible_static,
+            default=filtered_feats,
+            max_selections=3,
+            key="analysis_static_feats_select"
+        )
+        st.session_state["analysis_static_feats"] = st.session_state["analysis_static_feats_select"]
+    
+    # Проверяем, выбраны ли необходимые колонки
     if dt_col == "<нет>" or tgt_col == "<нет>":
-        st.error("Выберите хотя бы колонки с датой и целевой переменной на главной странице!")
+        st.warning("Для анализа требуется выбрать колонки даты и целевой переменной!")
         return
     
-    # Проверяем наличие колонок в датафрейме
-    missing_cols = []
-    if dt_col not in df.columns:
-        missing_cols.append(f"Дата ({dt_col})")
-    if tgt_col not in df.columns:
-        missing_cols.append(f"Target ({tgt_col})")
-    if id_col != "<нет>" and id_col not in df.columns:
-        missing_cols.append(f"ID ({id_col})")
+    # Автоматическое преобразование колонки даты
+    if not pd.api.types.is_datetime64_any_dtype(df_analysis[dt_col]):
+        with st.spinner("Преобразование колонки даты..."):
+            df_analysis[dt_col] = pd.to_datetime(df_analysis[dt_col], errors="coerce")
+            st.info(f"Колонка {dt_col} преобразована в формат даты.")
     
-    if missing_cols:
-        st.error(f"В датафрейме отсутствуют выбранные колонки: {', '.join(missing_cols)}")
-        st.error("Пожалуйста, вернитесь на главную страницу и выберите корректные колонки.")
-        return
-    
-    # Создаем вкладки для разных типов анализа
+    # Создаем вкладки для различных типов анализа
     tabs = st.tabs([
         "Валидация данных", 
         "Анализ целевой переменной", 
@@ -93,24 +230,21 @@ def run_data_analysis():
         "Разделение данных"
     ])
     
-     # 1. Вкладка валидации данных
+    # 1. Вкладка валидации данных
     with tabs[0]:
         st.header("Валидация данных")
         
-        # Показываем превью данных
-        st.subheader("Превью данных")
-        st.dataframe(df.head())
-        
+        # Кнопка для запуска валидации
         if st.button("Запустить валидацию данных", key="run_validation_btn"):
             with st.spinner("Выполняется валидация данных..."):
                 try:
-                    validation_results = validate_dataset(df, dt_col, tgt_col, id_col)
+                    validation_results = validate_dataset(df_analysis, dt_col, tgt_col, id_col)
                     display_validation_results(validation_results)
                     
                     # Подсчет строк по ID, если указан
-                    if id_col != "<нет>" and id_col is not None and id_col in df.columns:
+                    if id_col != "<нет>" and id_col in df_analysis.columns:
                         st.subheader("Распределение по ID")
-                        id_counts = df[id_col].value_counts().reset_index()
+                        id_counts = df_analysis[id_col].value_counts().reset_index()
                         id_counts.columns = [id_col, "Количество"]
                         
                         # Отображаем таблицу и график
@@ -139,23 +273,23 @@ def run_data_analysis():
             st.subheader("Распределение целевой переменной")
             
             # График распределения
-            fig_dist = plot_target_distribution(df, tgt_col)
+            fig_dist = plot_target_distribution(df_analysis, tgt_col)
             if fig_dist:
                 st.plotly_chart(fig_dist, use_container_width=True)
             else:
                 st.warning(f"Не удалось построить график распределения для колонки {tgt_col}")
             
             # Боксплот
-            fig_box = plot_target_boxplot(df, tgt_col, id_col)
+            fig_box = plot_target_boxplot(df_analysis, tgt_col, id_col)
             if fig_box:
                 st.plotly_chart(fig_box, use_container_width=True)
             else:
                 st.warning(f"Не удалось построить боксплот для колонки {tgt_col}")
             
             # Основные статистики
-            if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+            if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                 st.subheader("Статистики целевой переменной")
-                stats = df[tgt_col].describe()
+                stats = df_analysis[tgt_col].describe()
                 st.dataframe(stats)
         
         # 2.2 Временной ряд
@@ -163,7 +297,7 @@ def run_data_analysis():
             st.subheader("Временной ряд целевой переменной")
             
             # График временного ряда
-            fig_ts = plot_target_time_series(df, dt_col, tgt_col, id_col)
+            fig_ts = plot_target_time_series(df_analysis, dt_col, tgt_col, id_col)
             if fig_ts:
                 st.plotly_chart(fig_ts, use_container_width=True)
             else:
@@ -173,49 +307,57 @@ def run_data_analysis():
             st.subheader("Сезонные паттерны")
             if st.button("Проанализировать сезонные паттерны", key="analyze_seasonal_btn"):
                 with st.spinner("Анализ сезонных паттернов..."):
-                    seasonal_results = analyze_seasonal_patterns(df, dt_col, tgt_col, id_col)
-                    
-                    if "error" in seasonal_results:
-                        st.error(f"Ошибка при анализе сезонности: {seasonal_results['error']}")
-                    else:
-                        # Отображение по месяцам
-                        if 'figures' in seasonal_results and 'monthly' in seasonal_results['figures']:
-                            st.write("#### Сезонность по месяцам")
-                            st.plotly_chart(seasonal_results['figures']['monthly'], use_container_width=True)
+                    try:
+                        seasonal_results = analyze_seasonal_patterns(df_analysis, dt_col, tgt_col, id_col)
                         
-                        # Отображение по дням недели
-                        if 'figures' in seasonal_results and 'weekday' in seasonal_results['figures']:
-                            st.write("#### Сезонность по дням недели")
-                            st.plotly_chart(seasonal_results['figures']['weekday'], use_container_width=True)
-                        
-                        # Отображение по кварталам
-                        if 'figures' in seasonal_results and 'quarterly' in seasonal_results['figures']:
-                            st.write("#### Сезонность по кварталам")
-                            st.plotly_chart(seasonal_results['figures']['quarterly'], use_container_width=True)
+                        if "error" in seasonal_results:
+                            st.error(f"Ошибка при анализе сезонности: {seasonal_results['error']}")
+                        else:
+                            # Отображение по месяцам
+                            if 'figures' in seasonal_results and 'monthly' in seasonal_results['figures']:
+                                st.write("#### Сезонность по месяцам")
+                                st.plotly_chart(seasonal_results['figures']['monthly'], use_container_width=True)
+                            
+                            # Отображение по дням недели
+                            if 'figures' in seasonal_results and 'weekday' in seasonal_results['figures']:
+                                st.write("#### Сезонность по дням недели")
+                                st.plotly_chart(seasonal_results['figures']['weekday'], use_container_width=True)
+                            
+                            # Отображение по кварталам
+                            if 'figures' in seasonal_results and 'quarterly' in seasonal_results['figures']:
+                                st.write("#### Сезонность по кварталам")
+                                st.plotly_chart(seasonal_results['figures']['quarterly'], use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Ошибка при анализе сезонности: {e}")
+                        logging.error(f"Ошибка при анализе сезонности: {e}")
             
             # Автокорреляция
             st.subheader("Автокорреляция")
             if st.button("Проанализировать автокорреляцию", key="analyze_autocorr_btn"):
                 with st.spinner("Анализ автокорреляции..."):
-                    max_lag = st.slider("Максимальный лаг", 5, 100, 30)
-                    autocorr_results = detect_autocorrelation(df, dt_col, tgt_col, id_col, max_lag=max_lag)
-                    
-                    if 'error' in autocorr_results:
-                        st.error(f"Ошибка при анализе автокорреляции: {autocorr_results['error']}")
-                    else:
-                        # Отображение ACF
-                        if 'figures' in autocorr_results and 'acf' in autocorr_results['figures']:
-                            st.write("#### Автокорреляционная функция (ACF)")
-                            st.plotly_chart(autocorr_results['figures']['acf'], use_container_width=True)
+                    try:
+                        max_lag = st.slider("Максимальный лаг", 5, 100, 30)
+                        autocorr_results = detect_autocorrelation(df_analysis, dt_col, tgt_col, id_col, max_lag=max_lag)
                         
-                        # Отображение PACF
-                        if 'figures' in autocorr_results and 'pacf' in autocorr_results['figures']:
-                            st.write("#### Частичная автокорреляционная функция (PACF)")
-                            st.plotly_chart(autocorr_results['figures']['pacf'], use_container_width=True)
-                        
-                        # Интерпретация
-                        if 'analyzed_id' in autocorr_results:
-                            st.info(f"Анализ проведен для ID={autocorr_results['analyzed_id']} (самый длинный временной ряд).")
+                        if 'error' in autocorr_results:
+                            st.error(f"Ошибка при анализе автокорреляции: {autocorr_results['error']}")
+                        else:
+                            # Отображение ACF
+                            if 'figures' in autocorr_results and 'acf' in autocorr_results['figures']:
+                                st.write("#### Автокорреляционная функция (ACF)")
+                                st.plotly_chart(autocorr_results['figures']['acf'], use_container_width=True)
+                            
+                            # Отображение PACF
+                            if 'figures' in autocorr_results and 'pacf' in autocorr_results['figures']:
+                                st.write("#### Частичная автокорреляционная функция (PACF)")
+                                st.plotly_chart(autocorr_results['figures']['pacf'], use_container_width=True)
+                            
+                            # Интерпретация
+                            if 'analyzed_id' in autocorr_results:
+                                st.info(f"Анализ проведен для ID={autocorr_results['analyzed_id']} (самый длинный временной ряд).")
+                    except Exception as e:
+                        st.error(f"Ошибка при анализе автокорреляции: {e}")
+                        logging.error(f"Ошибка при анализе автокорреляции: {e}")
         
         # 2.3 Аномалии/выбросы
         with target_tabs[2]:
@@ -236,20 +378,21 @@ def run_data_analysis():
                 }
                 
                 if st.button("Найти выбросы", key="find_outliers_btn"):
-                    if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                    if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                         with st.spinner("Поиск выбросов..."):
                             try:
                                 clean_df, outliers_df = detect_outliers(
-                                    df, tgt_col, id_col if id_col != "<нет>" else None, 
+                                    df_analysis, tgt_col, id_col if id_col != "<нет>" else None, 
                                     method=method_map[outlier_method]
                                 )
                                 
                                 st.session_state["clean_df"] = clean_df
                                 st.session_state["outliers_df"] = outliers_df
                                 
-                                st.success(f"Найдено {len(outliers_df)} выбросов ({len(outliers_df)/len(df)*100:.2f}% от всех данных).")
+                                st.success(f"Найдено {len(outliers_df)} выбросов ({len(outliers_df)/len(df_analysis)*100:.2f}% от всех данных).")
                             except Exception as e:
                                 st.error(f"Ошибка при поиске выбросов: {e}")
+                                logging.error(f"Ошибка при поиске выбросов: {e}")
                     else:
                         st.error(f"Не удалось найти колонку {tgt_col} для поиска выбросов")
             
@@ -259,7 +402,7 @@ def run_data_analysis():
                     outliers_df = st.session_state["outliers_df"]
                     clean_df = st.session_state["clean_df"]
                     
-                    if dt_col and dt_col != "<нет>" and dt_col in df.columns and not outliers_df.empty:
+                    if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns and not outliers_df.empty:
                         # Создаем датафрейм для графика
                         plot_df = pd.DataFrame()
                         clean_df_plot = clean_df.copy()
@@ -292,12 +435,12 @@ def run_data_analysis():
                 
                 with col1:
                     if st.button("Использовать данные без выбросов", key="use_clean_data_btn"):
-                        st.session_state["df"] = st.session_state["clean_df"]
+                        st.session_state["df_analysis"] = st.session_state["clean_df"]
                         st.success("Теперь используются данные без выбросов!")
                 
                 with col2:
                     if st.button("Восстановить исходные данные", key="restore_original_data_btn"):
-                        st.session_state["df"] = df
+                        st.session_state["df_analysis"] = df_analysis
                         st.success("Восстановлены исходные данные.")
         
         # 2.4 Трансформации
@@ -313,7 +456,7 @@ def run_data_analysis():
             
             # Строим график и применяем трансформацию при нажатии кнопки
             if st.button("Применить трансформацию", key="apply_transform_btn"):
-                if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                     with st.spinner("Применение трансформации..."):
                         # Словарь соответствия трансформаций
                         transform_map = {
@@ -328,7 +471,7 @@ def run_data_analysis():
                             try:
                                 # Применяем трансформацию
                                 transformed_df = apply_target_transformations(
-                                    df, tgt_col, transformation=transform_map[transformation]
+                                    df_analysis, tgt_col, transformation=transform_map[transformation]
                                 )
                                 
                                 # Сохраняем в session_state
@@ -343,7 +486,7 @@ def run_data_analysis():
                                 
                                 # Гистограмма до трансформации
                                 fig.add_trace(
-                                    go.Histogram(x=df[tgt_col], name="До"),
+                                    go.Histogram(x=df_analysis[tgt_col], name="До"),
                                     row=1, col=1
                                 )
                                 
@@ -363,7 +506,7 @@ def run_data_analysis():
                                 # Сравнение статистик
                                 st.subheader("Сравнение статистик")
                                 
-                                stats_before = df[tgt_col].describe()
+                                stats_before = df_analysis[tgt_col].describe()
                                 stats_after = transformed_df[tgt_col].describe()
                                 
                                 stats_comparison = pd.DataFrame({
@@ -375,10 +518,11 @@ def run_data_analysis():
                                 
                                 # Кнопка для использования трансформированных данных
                                 if st.button("Использовать трансформированные данные", key="use_transformed_data_btn"):
-                                    st.session_state["df"] = transformed_df
+                                    st.session_state["df_analysis"] = transformed_df
                                     st.success(f"Теперь используются данные с {transformation} трансформацией!")
                             except Exception as e:
                                 st.error(f"Ошибка при применении трансформации: {e}")
+                                logging.error(f"Ошибка при применении трансформации: {e}")
                         else:
                             st.info("Трансформация не выбрана.")
                 else:
@@ -389,21 +533,22 @@ def run_data_analysis():
         st.header("Анализ корреляций и статических признаков")
         
         # Получаем статические признаки
-        static_feats = st.session_state.get("static_feats_key", [])
+        static_feats = st.session_state.get("analysis_static_feats", [])
         
         if not static_feats:
-            st.warning("Статические признаки не выбраны. Выберите их на главной странице.")
+            st.warning("Статические признаки не выбраны. Выберите их в разделе 'Выбор колонок для анализа'.")
         else:
             if st.button("Анализировать корреляции", key="analyze_correlations_btn"):
                 with st.spinner("Анализ корреляций..."):
                     try:
-                        correlation_results = analyze_correlations(df, static_feats, tgt_col)
+                        correlation_results = analyze_correlations(df_analysis, static_feats, tgt_col)
                         display_correlation_results(correlation_results)
                         
                         # Сохраняем результаты в session_state
                         st.session_state["correlation_results"] = correlation_results
                     except Exception as e:
                         st.error(f"Ошибка при анализе корреляций: {e}")
+                        logging.error(f"Ошибка при анализе корреляций: {e}")
     
     # 4. Вкладка временного ряда и сезонности
     with tabs[3]:
@@ -425,11 +570,11 @@ def run_data_analysis():
             )
             
             if st.button("Выполнить декомпозицию", key="decompose_btn"):
-                if dt_col and dt_col != "<нет>" and dt_col in df.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                     with st.spinner("Выполняется декомпозиция временного ряда..."):
                         try:
                             decomposition_results = decompose_time_series(
-                                df, dt_col, tgt_col, 
+                                df_analysis, dt_col, tgt_col, 
                                 id_col if id_col != "<нет>" else None,
                                 period=None if period == 0 else period
                             )
@@ -439,6 +584,7 @@ def run_data_analysis():
                             st.session_state["decomposition_results"] = decomposition_results
                         except Exception as e:
                             st.error(f"Ошибка при декомпозиции временного ряда: {e}")
+                            logging.error(f"Ошибка при декомпозиции временного ряда: {e}")
                 else:
                     st.error(f"Не удалось найти колонки {dt_col} и {tgt_col} для декомпозиции")
         
@@ -466,12 +612,12 @@ def run_data_analysis():
                 )
                 
                 if st.button("Сгенерировать временные признаки", key="generate_time_features_btn"):
-                    if dt_col and dt_col != "<нет>" and dt_col in df.columns:
+                    if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns:
                         with st.spinner("Генерация временных признаков..."):
                             if time_features:
                                 try:
                                     # Генерируем признаки
-                                    df_with_time_features = add_time_features(df, dt_col, features=time_features)
+                                    df_with_time_features = add_time_features(df_analysis, dt_col, features=time_features)
                                     
                                     # Показываем примеры новых признаков
                                     st.subheader("Примеры сгенерированных признаков")
@@ -483,10 +629,11 @@ def run_data_analysis():
                                     
                                     # Кнопка для использования новых данных
                                     if st.button("Использовать данные с временными признаками", key="use_time_features_btn"):
-                                        st.session_state["df"] = df_with_time_features
+                                        st.session_state["df_analysis"] = df_with_time_features
                                         st.success("Теперь используются данные с временными признаками!")
                                 except Exception as e:
                                     st.error(f"Ошибка при генерации временных признаков: {e}")
+                                    logging.error(f"Ошибка при генерации временных признаков: {e}")
                             else:
                                 st.warning("Выберите хотя бы один временной признак.")
                     else:
@@ -511,14 +658,14 @@ def run_data_analysis():
                     lag_periods = []
                 
                 if st.button("Сгенерировать лаговые признаки", key="generate_lag_features_btn"):
-                    if dt_col and dt_col != "<нет>" and dt_col in df.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                    if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                         with st.spinner("Генерация лаговых признаков..."):
                             if lag_periods:
                                 try:
                                     # Генерируем признаки
                                     df_with_lags = generate_lag_features(
-                                        df, tgt_col, dt_col, 
-                                        id_col if id_col != "<нет>" and id_col in df.columns else None, 
+                                        df_analysis, tgt_col, dt_col, 
+                                        id_col if id_col != "<нет>" and id_col in df_analysis.columns else None, 
                                         lag_periods=lag_periods
                                     )
                                     
@@ -543,10 +690,11 @@ def run_data_analysis():
                                     
                                     # Кнопка для использования новых данных
                                     if st.button("Использовать данные с лаговыми признаками", key="use_lag_features_btn"):
-                                        st.session_state["df"] = df_with_lags
+                                        st.session_state["df_analysis"] = df_with_lags
                                         st.success("Теперь используются данные с лаговыми признаками!")
                                 except Exception as e:
                                     st.error(f"Ошибка при генерации лаговых признаков: {e}")
+                                    logging.error(f"Ошибка при генерации лаговых признаков: {e}")
                             else:
                                 st.warning("Введите хотя бы один период лага.")
                     else:
@@ -579,14 +727,14 @@ def run_data_analysis():
                     windows = []
                 
                 if st.button("Сгенерировать скользящие признаки", key="generate_rolling_features_btn"):
-                    if dt_col and dt_col != "<нет>" and dt_col in df.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                    if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                         with st.spinner("Генерация скользящих признаков..."):
                             if windows and window_functions:
                                 try:
                                     # Генерируем признаки
                                     df_with_rolling = generate_rolling_features(
-                                        df, tgt_col, dt_col, 
-                                        id_col if id_col != "<нет>" and id_col in df.columns else None,
+                                        df_analysis, tgt_col, dt_col, 
+                                        id_col if id_col != "<нет>" and id_col in df_analysis.columns else None,
                                         windows=windows, functions=window_functions
                                     )
                                     
@@ -616,10 +764,11 @@ def run_data_analysis():
                                     
                                     # Кнопка для использования новых данных
                                     if st.button("Использовать данные со скользящими признаками", key="use_rolling_features_btn"):
-                                        st.session_state["df"] = df_with_rolling
+                                        st.session_state["df_analysis"] = df_with_rolling
                                         st.success("Теперь используются данные со скользящими признаками!")
                                 except Exception as e:
                                     st.error(f"Ошибка при генерации скользящих признаков: {e}")
+                                    logging.error(f"Ошибка при генерации скользящих признаков: {e}")
                             else:
                                 st.warning("Выберите хотя бы один размер окна и одну функцию.")
                     else:
@@ -641,14 +790,14 @@ def run_data_analysis():
             key="drift_split_method"
         )
         
-        if dt_col and dt_col != "<нет>" and dt_col in df.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+        if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns and tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
             if split_method == "По дате":
                 # Получаем минимальную и максимальную даты
-                if not pd.api.types.is_datetime64_any_dtype(df[dt_col]):
-                    df_dates = df.copy()
+                if not pd.api.types.is_datetime64_any_dtype(df_analysis[dt_col]):
+                    df_dates = df_analysis.copy()
                     df_dates[dt_col] = pd.to_datetime(df_dates[dt_col], errors="coerce")
                 else:
-                    df_dates = df
+                    df_dates = df_analysis
                 
                 min_date = df_dates[dt_col].min().date()
                 max_date = df_dates[dt_col].max().date()
@@ -680,11 +829,12 @@ def run_data_analysis():
                                 # Обнаружение дрифта
                                 drift_results = detect_concept_drift(
                                     historical_df, new_df, tgt_col, dt_col, 
-                                    id_col if id_col != "<нет>" and id_col in df.columns else None
+                                    id_col if id_col != "<нет>" and id_col in df_analysis.columns else None
                                 )
                                 display_drift_results(drift_results)
                         except Exception as e:
                             st.error(f"Ошибка при проверке концепт-дрифта: {e}")
+                            logging.error(f"Ошибка при проверке концепт-дрифта: {e}")
             else:  # По доле данных
                 # Выбор доли данных для теста
                 test_size = st.slider(
@@ -700,11 +850,11 @@ def run_data_analysis():
                     with st.spinner("Проверка концепт-дрифта..."):
                         try:
                             # Убеждаемся, что колонка даты в формате datetime
-                            if not pd.api.types.is_datetime64_any_dtype(df[dt_col]):
-                                df_dates = df.copy()
+                            if not pd.api.types.is_datetime64_any_dtype(df_analysis[dt_col]):
+                                df_dates = df_analysis.copy()
                                 df_dates[dt_col] = pd.to_datetime(df_dates[dt_col], errors="coerce")
                             else:
-                                df_dates = df
+                                df_dates = df_analysis
                             
                             # Сортируем данные по дате
                             df_sorted = df_dates.sort_values(dt_col)
@@ -722,11 +872,12 @@ def run_data_analysis():
                                 # Обнаружение дрифта
                                 drift_results = detect_concept_drift(
                                     historical_df, new_df, tgt_col, dt_col, 
-                                    id_col if id_col != "<нет>" and id_col in df.columns else None
+                                    id_col if id_col != "<нет>" and id_col in df_analysis.columns else None
                                 )
                                 display_drift_results(drift_results)
                         except Exception as e:
                             st.error(f"Ошибка при проверке концепт-дрифта: {e}")
+                            logging.error(f"Ошибка при проверке концепт-дрифта: {e}")
         else:
             st.error(f"Не удалось найти колонки {dt_col} и {tgt_col} для проверки концепт-дрифта")
     
@@ -741,14 +892,14 @@ def run_data_analysis():
             key="split_method"
         )
         
-        if dt_col and dt_col != "<нет>" and dt_col in df.columns:
+        if dt_col and dt_col != "<нет>" and dt_col in df_analysis.columns:
             if split_method == "По дате":
                 # Получаем минимальную и максимальную даты
-                if not pd.api.types.is_datetime64_any_dtype(df[dt_col]):
-                    df_dates = df.copy()
+                if not pd.api.types.is_datetime64_any_dtype(df_analysis[dt_col]):
+                    df_dates = df_analysis.copy()
                     df_dates[dt_col] = pd.to_datetime(df_dates[dt_col], errors="coerce")
                 else:
-                    df_dates = df
+                    df_dates = df_analysis
                 
                 min_date = df_dates[dt_col].min().date()
                 max_date = df_dates[dt_col].max().date()
@@ -799,7 +950,7 @@ def run_data_analysis():
                                     st.session_state["test_df"] = test_df
                                     
                                     # Отображаем распределение целевой переменной
-                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                                         train_df['dataset'] = 'Train'
                                         val_df['dataset'] = 'Validation'
                                         test_df['dataset'] = 'Test'
@@ -827,7 +978,7 @@ def run_data_analysis():
                                     st.session_state["val_df"] = None
                                     
                                     # Отображаем распределение целевой переменной
-                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                                         train_df['dataset'] = 'Train'
                                         test_df['dataset'] = 'Test'
                                         
@@ -840,6 +991,7 @@ def run_data_analysis():
                                         st.plotly_chart(fig, use_container_width=True)
                         except Exception as e:
                             st.error(f"Ошибка при разделении данных: {e}")
+                            logging.error(f"Ошибка при разделении данных: {e}")
             else:  # По доле данных
                 # Выбор доли данных для теста
                 test_size = st.slider(
@@ -873,7 +1025,7 @@ def run_data_analysis():
                         try:
                             if use_validation:
                                 train_df, test_df, val_df = split_train_test(
-                                    df, dt_col, test_size=test_size, validation_size=val_size
+                                    df_analysis, dt_col, test_size=test_size, validation_size=val_size
                                 )
                                 
                                 if len(train_df) < 10 or len(val_df) < 10 or len(test_df) < 10:
@@ -887,7 +1039,7 @@ def run_data_analysis():
                                     st.session_state["test_df"] = test_df
                                     
                                     # Отображаем распределение целевой переменной
-                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                                         train_df['dataset'] = 'Train'
                                         val_df['dataset'] = 'Validation'
                                         test_df['dataset'] = 'Test'
@@ -901,7 +1053,7 @@ def run_data_analysis():
                                         st.plotly_chart(fig, use_container_width=True)
                             else:
                                 train_df, test_df, _ = split_train_test(
-                                    df, dt_col, test_size=test_size, validation_size=0.0
+                                    df_analysis, dt_col, test_size=test_size, validation_size=0.0
                                 )
                                 
                                 if len(train_df) < 10 or len(test_df) < 10:
@@ -915,7 +1067,7 @@ def run_data_analysis():
                                     st.session_state["val_df"] = None
                                     
                                     # Отображаем распределение целевой переменной
-                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df.columns:
+                                    if tgt_col and tgt_col != "<нет>" and tgt_col in df_analysis.columns:
                                         train_df['dataset'] = 'Train'
                                         test_df['dataset'] = 'Test'
                                         
@@ -928,6 +1080,7 @@ def run_data_analysis():
                                         st.plotly_chart(fig, use_container_width=True)
                         except Exception as e:
                             st.error(f"Ошибка при разделении данных: {e}")
+                            logging.error(f"Ошибка при разделении данных: {e}")
         else:
             st.error(f"Не удалось найти колонку {dt_col} для разделения данных")
         
@@ -936,11 +1089,19 @@ def run_data_analysis():
             col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("Использовать обучающую выборку", key="use_train_btn"):
+                if st.button("Использовать обучающую выборку для анализа", key="use_train_analysis_btn"):
+                    st.session_state["df_analysis"] = st.session_state["train_df"]
+                    st.success("Теперь для анализа используется обучающая выборка!")
+                
+                if st.button("Использовать обучающую выборку на главной", key="use_train_main_btn"):
                     st.session_state["df"] = st.session_state["train_df"]
-                    st.success("Теперь используется обучающая выборка!")
+                    st.success("Теперь на главной странице используется обучающая выборка!")
             
             with col2:
-                if st.button("Использовать тестовую выборку", key="use_test_btn"):
+                if st.button("Использовать тестовую выборку для анализа", key="use_test_analysis_btn"):
+                    st.session_state["df_analysis"] = st.session_state["test_df"]
+                    st.success("Теперь для анализа используется тестовая выборка!")
+                
+                if st.button("Использовать тестовую выборку на главной", key="use_test_main_btn"):
                     st.session_state["df"] = st.session_state["test_df"]
-                    st.success("Теперь используется тестовая выборка!")
+                    st.success("Теперь на главной странице используется тестовая выборка!")
