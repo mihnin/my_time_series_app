@@ -163,28 +163,46 @@ def run_data_analysis():
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        # Исправление: конвертируем индекс в число, а не список с числом
+        if dt_stored in all_cols:
+            dt_index = all_cols.index(dt_stored) + 1  # +1 из-за опции "<нет>" в начале списка
+        else:
+            dt_index = 0  # Индекс опции "<нет>"
+            
         dt_col = st.selectbox(
             "Колонка с датой", 
             ["<нет>"] + all_cols, 
-            index=["<нет>"] + all_cols.index(dt_stored) if dt_stored in all_cols else 0,
+            index=dt_index,
             key="analysis_dt_col_select"
         )
         st.session_state["analysis_dt_col"] = dt_col
     
     with col2:
+        # Исправление для целевой колонки
+        if tgt_stored in all_cols:
+            tgt_index = all_cols.index(tgt_stored) + 1
+        else:
+            tgt_index = 0
+            
         tgt_col = st.selectbox(
             "Колонка target", 
             ["<нет>"] + all_cols,
-            index=["<нет>"] + all_cols.index(tgt_stored) if tgt_stored in all_cols else 0,
+            index=tgt_index,
             key="analysis_tgt_col_select"
         )
         st.session_state["analysis_tgt_col"] = tgt_col
     
     with col3:
+        # Исправление для ID колонки
+        if id_stored in all_cols:
+            id_index = all_cols.index(id_stored) + 1
+        else:
+            id_index = 0
+            
         id_col = st.selectbox(
             "Колонка ID", 
             ["<нет>"] + all_cols,
-            index=["<нет>"] + all_cols.index(id_stored) if id_stored in all_cols else 0,
+            index=id_index,
             key="analysis_id_col_select"
         )
         st.session_state["analysis_id_col"] = id_col
