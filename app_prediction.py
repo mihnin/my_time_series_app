@@ -13,27 +13,31 @@ from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.features.drift_detection import detect_concept_drift, display_drift_results
 from src.utils.exporter import generate_excel_buffer  # Добавлен новый импорт
 
-# Удалите предыдущую функцию cached_forecast и добавьте эту
-@st.cache_data
+# Заменить существующий декоратор в начале файла (примерно строка 13)
+@st.cache_data(ttl=3600)  # Кэш действителен 1 час
 def get_cached_predictions(predictions_data):
     """Кэширует только результаты прогнозирования"""
     return predictions_data
 
 def run_prediction():
     """Функция для запуска прогнозирования."""
+    # Получаем все необходимые значения из session_state в начале функции
     predictor = st.session_state.get("predictor")
+    dt_col = st.session_state.get("dt_col_key")
+    tgt_cols = st.session_state.get("tgt_cols_key", [])
+    id_col = st.session_state.get("id_col_key")
+    use_multi_target = st.session_state.get("use_multi_target_key", False)
+    use_holidays = st.session_state.get("use_holidays_key", False)
+    fill_method = st.session_state.get("fill_method_key", "None")
+    group_cols_for_fill = st.session_state.get("group_cols_for_fill_key", [])
+    freq_val = st.session_state.get("freq_key", "auto (угадать)")
+    static_feats_val = st.session_state.get("static_feats_key", [])
+
     if predictor is None:
         st.warning("Сначала обучите модель или загрузите уже существующую!")
         return False
 
-    dt_col = st.session_state.get("dt_col_key")
-    tgt_cols = st.session_state.get("tgt_cols_key", [])  # Список целевых переменных
-    id_col = st.session_state.get("id_col_key")
-    
     # Проверяем, используется ли режим множественного выбора целевых переменных
-    use_multi_target = st.session_state.get("use_multi_target_key", False)
-
-    # Проверяем наличие необходимых данных в соответствии с режимом
     if dt_col == "<нет>":
         st.error("Колонка с датой должна быть указана!")
         return False
@@ -49,6 +53,13 @@ def run_prediction():
             st.error("Выберите целевую переменную!")
             return False
         active_tgt_cols = [tgt_col]
+
+    active_tgt_cols = [tgt_col]
+
+    # Добавить эту проверку
+    if not active_tgt_cols:
+        st.error("Список целевых переменных пуст!")
+        return False
 
     df_train = st.session_state.get("df")
     if df_train is None:
@@ -79,13 +90,13 @@ def run_prediction():
                 artificial_id = f"col_{tgt_col}"
                 
                 # Добавляем признаки при необходимости
-                if st.session_state.get("use_holidays_key", False):
+                if use_holidays:
                     df_pred = add_russian_holiday_feature(df_pred, date_col=dt_col, holiday_col="russian_holiday")
                 
-                # Заполняем пропуски
+                # Заполняем пропуски используя локальные переменные
                 df_pred = fill_missing_values(
                     df_pred,
-                    st.session_state.get("fill_method_key", "None"),
+                    fill_method,
                     []  # Нет группировки для одной переменной
                 )
                 
@@ -104,7 +115,7 @@ def run_prediction():
                 
                 # Устанавливаем частоту, если она задана явно
                 if freq_val != "auto (угадать)":
-                    freq_short = freq_val.split(" ")[0]
+                    freq_short = freq_val.split(" ")[0] if " " in freq_val else freq_val
                     ts_df = ts_df.convert_frequency(freq_short)
                     ts_df = ts_df.fill_missing_values(method="ffill")
                 
@@ -242,7 +253,7 @@ def run_prediction():
             freq_val = st.session_state.get("freq_key", "auto (угадать)")
             if freq_val != "auto (угадать)":
                 status_text.text(f"Преобразование к частоте {freq_val}...")
-                freq_short = freq_val.split(" ")[0]
+                freq_short = freq_val.split(" ")[0] if " " in freq_val else freq_val
                 ts_df = ts_df.convert_frequency(freq_short)
                 ts_df = ts_df.fill_missing_values(method="ffill")
             progress_bar.progress(60)
@@ -264,8 +275,15 @@ def run_prediction():
                     status_text.text("Используем существующий прогноз...")
 
             if prediction_needed:
+                # Измеряем начальное использование памяти
+                start_mem = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+                
                 status_text.text("Выполнение прогнозирования...")
                 preds = forecast(predictor, ts_df)
+                
+                # Измеряем конечное использование памяти
+                end_mem = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+                st.info(f"Использовано памяти при прогнозировании: {end_mem - start_mem:.2f} МБ")
                 
                 # Сохраняем входные данные для следующей проверки
                 if "last_prediction_inputs" not in st.session_state:
@@ -305,7 +323,14 @@ def run_prediction():
             return True
 
     except Exception as ex:
+        import traceback
+        error_details = traceback.format_exc()
         st.error(f"Ошибка прогноза: {ex}")
+        st.expander("Детали ошибки").code(error_details)
+        # Логирование ошибки
+        import logging
+        logging.error(f"Ошибка прогноза: {ex}")
+        gc.collect()  # Освобождаем память при ошибке
         return False
 
 
