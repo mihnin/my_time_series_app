@@ -28,7 +28,7 @@ model_keys = list(AG_MODELS.keys())
 model_choices = [all_models_opt] + model_keys
 
 def setup_ui():
-    st.markdown("### Версия 1.1")
+    st.markdown("### Версия 2.0")
     st.title("Бизнес-приложение для прогнозирования временных рядов")
     
     # Добавляем страницу анализа данных
