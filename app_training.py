@@ -161,6 +161,9 @@ def run_training():
         val_step_size = p_length
         refit_every_n_windows = 1
 
+        # После успешного обучения добавить явное сохранение модели в файл
+        model_save_path = "AutogluonModels/TimeSeriesModel"
+
         # Создаем предиктор
         status_text.text("Создание предиктора...")
         predictor = TimeSeriesPredictor(
@@ -169,7 +172,7 @@ def run_training():
             eval_metric=eval_key,
             freq=actual_freq,
             quantile_levels=q_levels,
-            path="AutogluonModels/TimeSeriesModel",
+            path=model_save_path,
             verbosity=2
         )
         progress_bar.progress(45)
@@ -214,6 +217,10 @@ def run_training():
             st.error(f"Ошибка при обучении: {e}")
             logging.error(f"Ошибка при обучении: {e}")
             return False
+
+        # После обучения явно указать, что модель сохранена
+        st.success(f"Модель успешно обучена и сохранена в {model_save_path}")
+        st.info("Вы можете безопасно взаимодействовать с визуализациями - модель не потеряется")
 
         # Получаем и отображаем результаты обучения
         status_text.text("Получение результатов обучения...")

@@ -262,33 +262,27 @@ def run_prediction():
                 preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
                 unique_ids = preds_df["item_id"].unique()
                 
-                # Проверка концепт-дрифта на прогнозе
-                if st.checkbox("Проверить концепт-дрифт в прогнозе"):
-                    with st.spinner("Проверка концепт-дрифта..."):
-                        # Подготовка исторических данных
-                        historical_df = df_pred.copy()
-                        
-                        # Подготовка данных прогноза
-                        new_df = preds_df.copy()
-                        new_df.rename(columns={"timestamp": dt_col, "prediction": tgt_col, "item_id": id_col}, inplace=True)
-                        
-                        # Обнаружение дрифта
-                        drift_results = detect_concept_drift(
-                            historical_df, new_df, tgt_col, dt_col, id_col
-                        )
-                        display_drift_results(drift_results)
+                # Сохраняем данные графиков в session_state
+                if "graphs_data" not in st.session_state:
+                    st.session_state["graphs_data"] = {}
+                
+                st.session_state["graphs_data"]["preds_df"] = preds_df
+                st.session_state["graphs_data"]["unique_ids"] = unique_ids
                 
                 # Интерактивная визуализация
                 st.subheader("Графики прогноза (0.5)")
                 
-                # Настройки визуализации
-                max_graphs = st.slider("Максимальное количество графиков", 1, min(10, len(unique_ids)), 3)
+                # Настройки визуализации с ключами
+                max_graphs = st.slider("Максимальное количество графиков", 
+                                    1, min(10, len(unique_ids)), 3, 
+                                    key="max_graphs_slider")
                 
-                # Выбор ID для визуализации
+                # Выбор ID для визуализации с ключом
                 selected_ids = st.multiselect(
                     "Выберите ID для визуализации", 
                     options=unique_ids,
-                    default=unique_ids[:min(3, len(unique_ids))]
+                    default=unique_ids[:min(3, len(unique_ids))],
+                    key="selected_ids_multiselect"
                 )
                 
                 # Отображение графиков
@@ -300,15 +294,6 @@ def run_prediction():
                         markers=True
                     )
                     st.plotly_chart(fig_, use_container_width=True)
-                
-                # График всех ID
-                if st.checkbox("Показать сводный график всех ID"):
-                    fig_all = px.line(
-                        preds_df, x="timestamp", y="prediction", color="item_id",
-                        title="Прогноз для всех ID (квантиль 0.5)",
-                        markers=True
-                    )
-                    st.plotly_chart(fig_all, use_container_width=True)
             else:
                 st.info("Колонка '0.5' не найдена — возможно mean_only=True или квантильные настройки отключены.")
             
