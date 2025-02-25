@@ -6,3 +6,6 @@ openpyxl
 autogluon-timeseries
 holidays
 chardet
+scikit-learn
+statsmodels
+psutil

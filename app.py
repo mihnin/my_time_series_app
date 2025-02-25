@@ -1,10 +1,12 @@
 # app.py
+# app.py
 import streamlit as st
 import logging
 import os
 import zipfile
 import io
 import pandas as pd
+import psutil
 from openpyxl.styles import PatternFill
 
 from app_ui import setup_ui
@@ -14,6 +16,7 @@ from app_saving import try_load_existing_model, save_model_metadata, load_model_
 from src.utils.utils import setup_logger, read_logs, LOG_FILE
 from src.help_page import show_help_page
 from src.utils.exporter import generate_excel_buffer
+from data_analysis import run_data_analysis  # Новый импорт
 
 def main():
     # Инициализация логгера
@@ -21,9 +24,32 @@ def main():
     logging.info("========== Приложение запущено ========== ")
     logging.info("=== Запуск приложения Streamlit (main) ===")
     
-    # Пытаемся загрузить ранее обученную модель, если её нет в session_state
+    # В начале функции, добавьте:
     if "predictor" not in st.session_state or st.session_state["predictor"] is None:
-        try_load_existing_model()
+        try:
+            from autogluon.timeseries import TimeSeriesPredictor
+            model_path = "AutogluonModels/TimeSeriesModel"
+            if os.path.exists(model_path):
+                st.session_state["predictor"] = TimeSeriesPredictor.load(model_path)
+                st.success("Загружена ранее обученная модель")
+        except Exception as e:
+            logging.error(f"Не удалось загрузить сохраненную модель: {e}")
+    
+    # После загрузки предиктора
+    if "predictor" in st.session_state and st.session_state["predictor"] is not None:
+        # Если предсказания уже были сделаны, но приложение было перезагружено
+        if "predictions" in st.session_state and "graphs_data" not in st.session_state:
+            # Инициализируем данные для графиков
+            preds = st.session_state["predictions"]
+            if preds is not None and "0.5" in preds.columns:
+                preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
+                unique_ids = preds_df["item_id"].unique()
+                
+                if "graphs_data" not in st.session_state:
+                    st.session_state["graphs_data"] = {}
+                
+                st.session_state["graphs_data"]["preds_df"] = preds_df
+                st.session_state["graphs_data"]["unique_ids"] = unique_ids
     
     # Рисуем боковое меню и получаем выбранную страницу
     page_choice = setup_ui()
@@ -58,6 +84,11 @@ def main():
         f"freq={freq_val}, metric={metric_val}, models={models_val}, presets={presets_val}, "
         f"pred_len={prediction_length_val}, time_limit={time_limit_val}, mean_only={mean_only_val}"
     )
+    
+    # Отображение информации о памяти
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss / (1024 * 1024)  # в МБ
+    st.sidebar.markdown(f"**Использование памяти**: {memory_usage:.2f} МБ")
     
     # ------------- Очистка логов -------------
     st.sidebar.header("Очистка логов")
@@ -96,10 +127,39 @@ def main():
         else:
             st.warning("Неверное слово. Логи не очищены.")
     
+    # Управление памятью
+    if st.sidebar.button("Очистить память"):
+        # Освобождаем неиспользуемые объекты
+        for key in list(st.session_state.keys()):
+            if key not in ["df", "predictor", "page_choice", "dt_col_key", "tgt_col_key", "id_col_key", 
+                          "static_feats_key", "use_holidays_key", "fill_method_key", "group_cols_for_fill_key",
+                          "freq_key", "metric_key", "models_key", "presets_key", "prediction_length_key",
+                          "time_limit_key", "mean_only_key"]:
+                del st.session_state[key]
+        
+        import gc
+        gc.collect()
+        
+        # Обновляем информацию о памяти
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss / (1024 * 1024)  # в МБ
+        st.sidebar.success(f"Память очищена. Текущее использование: {memory_usage:.2f} МБ")
+    
     # Если выбрана страница Help — показываем справку и выходим
     if page_choice == "Help":
         logging.info("Пользователь на странице Help.")
         show_help_page()
+        return
+    
+    # Если выбрана страница анализа данных - запускаем анализ и выходим
+    # Если выбрана страница анализа данных - запускаем анализ и выходим
+    if page_choice == "Анализ данных":
+        logging.info("Пользователь на странице анализа данных.")
+        try:
+            run_data_analysis()
+        except Exception as e:
+            st.error(f"Произошла ошибка при анализе данных: {e}")
+            logging.error(f"Ошибка в run_data_analysis: {e}")
         return
     
     # ------------- Обучение модели -------------
@@ -154,6 +214,12 @@ def main():
     # ------------- Прогноз -------------
     if st.session_state.get("predict_btn"):
         logging.info("Кнопка 'Сделать прогноз' нажата.")
+        
+        # Добавляем эту проверку перед вызовом run_prediction:
+        if "graphs_data" in st.session_state:
+            # Очищаем старые данные графиков перед новым прогнозом
+            del st.session_state["graphs_data"]
+        
         result = run_prediction()
         if result:
             logging.info("Прогноз успешно выполнен.")
@@ -179,21 +245,14 @@ def main():
     # ------------- Сохранение результатов в Excel -------------
     if st.session_state.get("save_excel_btn"):
         logging.info("Кнопка 'Сохранить результаты в Excel' нажата.")
-        df_train = st.session_state.get("df")
-        lb = st.session_state.get("leaderboard")
         preds = st.session_state.get("predictions")
+        lb = st.session_state.get("leaderboard")
         stt_train = st.session_state.get("static_df_train")
         ensemble_info_df = st.session_state.get("weighted_ensemble_info")
         
-        has_data_to_save = any([
-            df_train is not None,
-            lb is not None,
-            preds is not None,
-            (stt_train is not None and not stt_train.empty),
-            (ensemble_info_df is not None)
-        ])
+        has_data_to_save = preds is not None
         if not has_data_to_save:
-            st.warning("Нет данных для сохранения в Excel.")
+            st.warning("Нет данных прогноза для сохранения в Excel.")
         else:
             excel_buffer = generate_excel_buffer(preds, lb, stt_train, ensemble_info_df)
             st.download_button(

@@ -1,10 +1,11 @@
 # app_ui.py
-# app_ui.py
 import streamlit as st
 import yaml
 import os
 import pandas as pd
 import plotly.express as px
+import psutil
+import gc
 
 from src.data.data_processing import load_data, show_dataset_stats
 
@@ -27,10 +28,11 @@ model_keys = list(AG_MODELS.keys())
 model_choices = [all_models_opt] + model_keys
 
 def setup_ui():
-    st.markdown("### Версия 1.1")
+    st.markdown("### Версия 2.0")
     st.title("Бизнес-приложение для прогнозирования временных рядов")
     
-    pages = ["Главная", "Help"]
+    # Добавляем страницу анализа данных
+    pages = ["Главная", "Анализ данных", "Help"]
     page_choice = st.sidebar.selectbox("Навигация", pages, key="page_choice")
     
     # Инициализация session_state
@@ -55,20 +57,49 @@ def setup_ui():
     if "static_df_fore" in st.session_state:
         del st.session_state["static_df_fore"]
     
+    # Если выбрана страница анализа данных или справки, не отображаем остальные элементы UI
+    if page_choice in ["Анализ данных", "Help"]:
+        return page_choice
+    
     # ========== (1) Загрузка данных ==========
     st.sidebar.header("1. Загрузка данных")
+    
+    # Опциональные настройки загрузки для больших файлов
+    with st.sidebar.expander("Настройки для больших файлов"):
+        chunk_size = st.number_input(
+            "Размер чанка (строк)",
+            min_value=1000,
+            max_value=1000000,
+            value=100000,
+            step=10000,
+            help="Для больших файлов (>100 МБ) данные будут загружаться частями. Задайте размер каждой части."
+        )
+    
     train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv", "xls", "xlsx"], key="train_file_uploader")
     if st.sidebar.button("Загрузить данные", key="load_data_btn"):
         if not train_file:
             st.error("Train-файл обязателен!")
         else:
             try:
-                df_train = load_data(train_file)
-                st.session_state["df"] = df_train
-                st.success("Train-файл загружен!")
-                st.dataframe(df_train.head())
-                st.subheader("Статистика Train")
-                show_dataset_stats(df_train)
+                with st.spinner("Загрузка данных..."):
+                    df_train = load_data(train_file, chunk_size=chunk_size)
+                    st.session_state["df"] = df_train
+                    st.success(f"Train-файл загружен! Строк: {len(df_train)}, колонок: {len(df_train.columns)}")
+                    
+                    # Для больших датафреймов используем выборку при отображении
+                    if len(df_train) > 1000:
+                        st.dataframe(df_train.head(1000))
+                        st.info(f"Показаны первые 1000 из {len(df_train)} строк.")
+                    else:
+                        st.dataframe(df_train)
+                    
+                    st.subheader("Статистика Train")
+                    show_dataset_stats(df_train)
+                    
+                    # Освобождаем память, если её мало
+                    memory_usage = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024 * 1024)  # в ГБ
+                    if memory_usage > 1.5:  # если используется больше 1.5 ГБ
+                        gc.collect()
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
     
@@ -117,10 +148,22 @@ def setup_ui():
     
     # ========== (3) Обработка пропусков ==========
     st.sidebar.header("3. Обработка пропусков")
-    fill_options = ["None", "Constant=0", "Group mean", "Forward fill"]
-    if "fill_method_key" not in st.session_state:
-        st.session_state["fill_method_key"] = "None"
-    st.sidebar.selectbox("Способ заполнения пропусков", fill_options, key="fill_method_key")
+    # Заменить существующий selectbox для fill_method более информативным
+    fill_options = [
+        "None (оставить как есть)", 
+        "Constant=0 (заменить на нули)", 
+        "Group mean (среднее по группе)", 
+        "Forward fill (протянуть значения)", 
+        "Interpolate (линейная интерполяция)", 
+        "KNN imputer (k ближайших соседей)"
+    ]
+    fill_map = {opt: opt.split(" ")[0] for opt in fill_options}
+    selected_fill = st.sidebar.selectbox(
+        "Способ заполнения пропусков", 
+        fill_options, 
+        key="fill_method_display"
+    )
+    st.session_state["fill_method_key"] = fill_map[selected_fill]
     
     if "group_cols_for_fill_key" not in st.session_state:
         st.session_state["group_cols_for_fill_key"] = []
@@ -128,7 +171,7 @@ def setup_ui():
     
     # ========== (4) Частота (freq) ==========
     st.sidebar.header("4. Частота (freq)")
-    freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)"]
+    freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
     if "freq_key" not in st.session_state:
         st.session_state["freq_key"] = "auto (угадать)"
     st.sidebar.selectbox("freq", freq_options, index=0, key="freq_key")
@@ -138,22 +181,64 @@ def setup_ui():
     st.sidebar.selectbox("Метрика", metrics_list, index=metrics_list.index(st.session_state["metric_key"]), key="metric_key")
     st.sidebar.multiselect("Модели AutoGluon", model_choices, key="models_key")
     st.sidebar.selectbox("Presets", presets_list, index=presets_list.index(st.session_state["presets_key"]), key="presets_key")
-    st.sidebar.number_input("prediction_length", 1, 365, 10, key="prediction_length_key")
-    st.sidebar.number_input("time_limit (sec)", 10, 36000, 60, key="time_limit_key")
-    st.sidebar.checkbox("Прогнозировать только среднее (mean)?", value=st.session_state.get("mean_only_key", False), key="mean_only_key")
+    st.sidebar.number_input(
+        "prediction_length", 
+        1, 365, 10, 
+        key="prediction_length_key",
+        help="Горизонт прогноза (количество точек в будущем). Модель будет обучена предсказывать именно на это количество шагов вперед."
+    )
+    
+    st.sidebar.number_input(
+        "time_limit (sec)", 
+        10, 36000, 60, 
+        key="time_limit_key",
+        help="Максимальное время (в секундах) для обучения всех моделей. Чем больше времени, тем лучше результат, но медленнее обучение."
+    )
+    
+    st.sidebar.checkbox(
+        "Прогнозировать только среднее (mean)?", 
+        value=st.session_state.get("mean_only_key", False), 
+        key="mean_only_key",
+        help="Если включено, модель будет предсказывать только среднее значение (0.5 квантиль). Если выключено, будут предсказаны все квантили (0.1, 0.5, 0.9), что даст интервалы неопределенности."
+    )
     
     # Предварительный график
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
         try:
-            df_plot = df_current.copy()
-            df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
-            df_plot = df_plot.dropna(subset=[dt_col])
-            if id_col != "<нет>":
-                fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, color=id_col, title="График Target по ID")
-            else:
-                fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, title="График Target (без ID)")
-            st.subheader("Предварительный анализ Target")
-            st.plotly_chart(fig_target, use_container_width=True)
+            with st.spinner("Построение графика..."):
+                df_plot = df_current.copy()
+                
+                # Для больших датафреймов используем выборку при построении графика
+                if len(df_plot) > 10000:
+                    st.info(f"Для графика используется выборка из 10000 точек (из {len(df_plot)} строк).")
+                    # Если есть ID, берем по несколько ID
+                    if id_col != "<нет>":
+                        ids = df_plot[id_col].unique()
+                        if len(ids) > 10:
+                            selected_ids = ids[:10]  # Берем первые 10 ID
+                            df_plot = df_plot[df_plot[id_col].isin(selected_ids)]
+                        
+                        # Если все еще слишком много точек
+                        if len(df_plot) > 10000:
+                            df_plot = df_plot.sample(10000, random_state=42)
+                    else:
+                        df_plot = df_plot.sample(10000, random_state=42)
+                
+                df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
+                df_plot = df_plot.dropna(subset=[dt_col])
+                
+                if id_col != "<нет>":
+                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, color=id_col, title="График Target по ID")
+                else:
+                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, title="График Target (без ID)")
+                
+                fig_target.update_layout(height=400)
+                st.subheader("Предварительный анализ Target")
+                st.plotly_chart(fig_target, use_container_width=True)
+                
+                # Освобождаем память
+                del df_plot
+                gc.collect()
         except Exception as e:
             st.warning(f"Не удалось построить график: {e}")
     

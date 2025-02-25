@@ -1,13 +1,13 @@
-# app_saving.py
-# app_saving.py
 import streamlit as st
 import logging
 import os
 import json
 from autogluon.timeseries import TimeSeriesPredictor
+from src.config import get_config
 
-MODEL_DIR = "AutogluonModels/TimeSeriesModel"
-MODEL_INFO_FILE = "model_info.json"
+# Используем константы из централизованной конфигурации вместо хардкода
+MODEL_DIR = get_config("MODEL_DIR")
+MODEL_INFO_FILE = get_config("MODEL_INFO_FILE")
 
 def save_model_metadata(dt_col, tgt_col, id_col, static_feats, freq_val,
                         fill_method_val, group_cols_fill_val, use_holidays_val,
