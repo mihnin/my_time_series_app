@@ -287,16 +287,17 @@ def run_prediction():
             status_text.text("Прогнозирование успешно завершено!")
 
             # Сразу предложим пользователю скачать результаты
-            excel_buffer = generate_excel_buffer(preds, st.session_state.get("leaderboard"), 
-                                                st.session_state.get("static_df_train"), 
-                                                st.session_state.get("weighted_ensemble_info"))
-
-            st.download_button(
-                label="📥 Скачать результаты в Excel",
-                data=excel_buffer.getvalue(),
-                file_name="forecast_results.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            if not st.session_state.get("train_predict_save_checkbox", False):
+                excel_buffer = generate_excel_buffer(preds, st.session_state.get("leaderboard"), 
+                                                    st.session_state.get("static_df_train"), 
+                                                    st.session_state.get("weighted_ensemble_info"))
+                
+                st.download_button(
+                    label="📥 Скачать результаты в Excel",
+                    data=excel_buffer.getvalue(),
+                    file_name="forecast_results.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
             # Освобождаем память
             gc.collect()
