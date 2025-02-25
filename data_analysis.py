@@ -55,15 +55,58 @@ def show_data_usage_info(feature_type):
     st.info(f"""
     ### Как использовать {feature_type}?
     
-    - **Для анализа**: Сгенерированные данные применяются к текущей сессии анализа и не влияют на основной датасет. 
+    - **Для анализа**: Сгенерированные данные применяются к текущей сессии анализа. 
       С ними можно проводить дальнейший анализ, строить графики и исследовать взаимосвязи.
-    
-    - **Для обучения моделей**: Вы можете использовать кнопку "Использовать на главной странице" для передачи этих данных 
-      на основную страницу для обучения моделей.
     
     - **Для экспорта**: С помощью кнопки "Выгрузить в Excel" вы можете скачать данные для использования в других 
       инструментах аналитики или сохранения результатов.
+      
+    - **Для повторного использования**: Загрузите сохраненные данные в начале следующей сессии для продолжения анализа.
     """)
+
+# Функция для заполнения пропусков во временном ряде
+def fill_time_series_gaps(df, dt_col, tgt_col, id_col=None, method='ffill'):
+    """
+    Заполняет пропуски в данных временного ряда
+    
+    Параметры:
+        df (pd.DataFrame): Исходный датафрейм
+        dt_col (str): Имя колонки с датами
+        tgt_col (str): Имя колонки с целевой переменной
+        id_col (str, optional): Имя колонки с идентификаторами временных рядов
+        method (str): Метод заполнения: 'ffill', 'bfill', 'linear', 'cubic', 'mean', 'median'
+        
+    Возвращает:
+        pd.DataFrame: Датафрейм с заполненными пропусками
+    """
+    result_df = df.copy()
+    
+    # Если нет ID колонки, просто заполняем пропуски для всего ряда
+    if id_col is None or id_col == "<нет>":
+        if method in ['ffill', 'bfill']:
+            result_df[tgt_col] = result_df[tgt_col].fillna(method=method)
+        elif method in ['linear', 'cubic']:
+            result_df[tgt_col] = result_df.sort_values(dt_col)[tgt_col].interpolate(method=method)
+        elif method == 'mean':
+            result_df[tgt_col] = result_df[tgt_col].fillna(result_df[tgt_col].mean())
+        elif method == 'median':
+            result_df[tgt_col] = result_df[tgt_col].fillna(result_df[tgt_col].median())
+    else:
+        # Если есть ID колонка, обрабатываем каждый временной ряд отдельно
+        for id_val, group in result_df.groupby(id_col):
+            if method in ['ffill', 'bfill']:
+                result_df.loc[group.index, tgt_col] = group[tgt_col].fillna(method=method)
+            elif method in ['linear', 'cubic']:
+                sorted_group = group.sort_values(dt_col)
+                result_df.loc[sorted_group.index, tgt_col] = sorted_group[tgt_col].interpolate(method=method)
+            elif method == 'mean':
+                mean_val = group[tgt_col].mean()
+                result_df.loc[group.index, tgt_col] = group[tgt_col].fillna(mean_val)
+            elif method == 'median':
+                median_val = group[tgt_col].median()
+                result_df.loc[group.index, tgt_col] = group[tgt_col].fillna(median_val)
+    
+    return result_df
 
 def run_data_analysis():
     """
@@ -480,7 +523,7 @@ def run_data_analysis():
                             st.write("#### Распределение выбросов по ID")
                             st.dataframe(outlier_counts)
             
-            # Кнопки для экспорта
+            # Кнопки для экспорта и обработки данных
             if "clean_df" in st.session_state and "outliers_df" in st.session_state:
                 col1, col2 = st.columns(2)
                 
@@ -494,8 +537,109 @@ def run_data_analysis():
                         st.session_state["df_analysis"] = df_analysis
                         st.success("Восстановлены исходные данные.")
                 
-                # Добавляем новый блок для экспорта и информации по использованию
-                st.subheader("Экспорт и использование очищенных данных")
+                # Добавляем блок для заполнения пропусков
+                st.subheader("Заполнение пропусков после удаления выбросов")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fill_method = st.selectbox(
+                        "Метод заполнения пропусков",
+                        ["Без заполнения", "Прямое заполнение (ffill)", "Обратное заполнение (bfill)",
+                         "Линейная интерполяция", "Кубическая интерполяция", "Среднее", "Медиана"],
+                        key="fill_gaps_method"
+                    )
+                
+                method_map = {
+                    "Прямое заполнение (ffill)": "ffill",
+                    "Обратное заполнение (bfill)": "bfill",
+                    "Линейная интерполяция": "linear",
+                    "Кубическая интерполяция": "cubic",
+                    "Среднее": "mean",
+                    "Медиана": "median"
+                }
+                
+                with col2:
+                    if st.button("Заполнить пропуски", key="fill_gaps_btn"):
+                        if fill_method != "Без заполнения":
+                            with st.spinner("Заполнение пропусков..."):
+                                try:
+                                    # Получаем очищенные данные
+                                    clean_data = st.session_state["clean_df"]
+                                    
+                                    # Заполняем пропуски
+                                    filled_data = fill_time_series_gaps(
+                                        clean_data, dt_col, tgt_col, 
+                                        id_col=id_col if id_col != "<нет>" else None,
+                                        method=method_map[fill_method]
+                                    )
+                                    
+                                    # Проверяем, сколько пропусков заполнили
+                                    na_before = clean_data[tgt_col].isna().sum()
+                                    na_after = filled_data[tgt_col].isna().sum()
+                                    
+                                    # Сохраняем результат
+                                    st.session_state["filled_df"] = filled_data
+                                    
+                                    # Выводим информацию
+                                    st.success(f"Заполнено пропусков: {na_before - na_after} из {na_before}")
+                                    
+                                    # Показываем график до и после заполнения
+                                    if dt_col and tgt_col and dt_col in clean_data.columns and tgt_col in clean_data.columns:
+                                        # Создаем график сравнения
+                                        fig = make_subplots(rows=1, cols=2, 
+                                                   subplot_titles=("До заполнения", "После заполнения"))
+                                        
+                                        # Лимитируем количество показываемых точек
+                                        max_points = 1000
+                                        if len(clean_data) > max_points:
+                                            sample_clean = clean_data.sample(max_points)
+                                            sample_filled = filled_data.loc[sample_clean.index]
+                                        else:
+                                            sample_clean = clean_data
+                                            sample_filled = filled_data
+                                        
+                                        # График до заполнения
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=sample_clean[dt_col], 
+                                                y=sample_clean[tgt_col],
+                                                mode='markers',
+                                                name='До'
+                                            ),
+                                            row=1, col=1
+                                        )
+                                        
+                                        # График после заполнения
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=sample_filled[dt_col], 
+                                                y=sample_filled[tgt_col],
+                                                mode='markers',
+                                                name='После'
+                                            ),
+                                            row=1, col=2
+                                        )
+                                        
+                                        fig.update_layout(
+                                            title_text="Сравнение данных до и после заполнения пропусков", 
+                                            height=500
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                    
+                                    # Кнопка для использования заполненных данных
+                                    if st.button("Использовать данные с заполненными пропусками", key="use_filled_data_btn"):
+                                        st.session_state["df_analysis"] = filled_data
+                                        st.success("Теперь используются данные с заполненными пропусками!")
+                                except Exception as e:
+                                    st.error(f"Ошибка при заполнении пропусков: {e}")
+                                    logging.error(f"Ошибка при заполнении пропусков: {e}")
+                        else:
+                            st.info("Выберите метод заполнения пропусков.")
+                
+                # Добавляем блок для экспорта данных
+                st.subheader("Экспорт данных")
                 
                 # Колонки для выгрузки разных типов данных
                 exp_col1, exp_col2 = st.columns(2)
@@ -505,16 +649,31 @@ def run_data_analysis():
                     download_excel(st.session_state["clean_df"], "clean_data.xlsx")
                 
                 with exp_col2:
-                    st.write("#### Данные с выбросами")
+                    st.write("#### Выбросы")
                     download_excel(st.session_state["outliers_df"], "outliers_data.xlsx")
                 
-                # Кнопка для передачи очищенных данных на главную страницу
-                if st.button("Использовать данные без выбросов на главной странице", key="use_clean_data_main_btn"):
-                    st.session_state["df"] = st.session_state["clean_df"]
-                    st.success("Данные без выбросов переданы на главную страницу!")
+                # Добавляем выгрузку заполненных данных, если они есть
+                if "filled_df" in st.session_state:
+                    st.write("#### Данные с заполненными пропусками")
+                    download_excel(st.session_state["filled_df"], "filled_data.xlsx")
                 
                 # Информация о том, как использовать очищенные данные
                 show_data_usage_info("очищенные данные")
+                
+                # Дополнительное пояснение про пропуски
+                st.info("""
+                **О пропусках во временных рядах:**
+                
+                После удаления выбросов временной ряд может содержать пропуски. Доступные методы заполнения:
+                
+                - **Прямое заполнение (ffill)** - заполняет пропуски предыдущими значениями
+                - **Обратное заполнение (bfill)** - заполняет пропуски последующими значениями
+                - **Линейная интерполяция** - заполняет пропуски по прямой между соседними точками
+                - **Кубическая интерполяция** - создаёт гладкую кривую через все точки
+                - **Среднее/Медиана** - заполняет пропуски средним или медианным значением
+                
+                Рекомендуется выбирать метод в зависимости от характера данных и длины временного ряда.
+                """)
         
         # 2.4 Трансформации
         with target_tabs[3]:
@@ -603,15 +762,10 @@ def run_data_analysis():
             
             # После трансформации добавляем экспорт
             if "transformed_df" in st.session_state:
-                st.subheader("Экспорт и использование трансформированных данных")
+                st.subheader("Экспорт трансформированных данных")
                 
                 # Кнопка выгрузки в Excel
                 download_excel(st.session_state["transformed_df"], "transformed_data.xlsx")
-                
-                # Кнопка для передачи трансформированных данных на главную страницу
-                if st.button("Использовать трансформированные данные на главной странице", key="use_transformed_main_btn"):
-                    st.session_state["df"] = st.session_state["transformed_df"]
-                    st.success("Трансформированные данные переданы на главную страницу!")
                 
                 # Информация о том, как использовать трансформированные данные
                 show_data_usage_info("трансформированные данные")
@@ -729,15 +883,10 @@ def run_data_analysis():
                 
                 # После генерации временных признаков добавляем экспорт
                 if "df_with_time_features" in st.session_state:
-                    st.subheader("Экспорт и использование данных с временными признаками")
+                    st.subheader("Экспорт данных с временными признаками")
                     
                     # Кнопка выгрузки в Excel
                     download_excel(st.session_state["df_with_time_features"], "time_features_data.xlsx")
-                    
-                    # Кнопка для передачи данных с временными признаками на главную страницу
-                    if st.button("Использовать данные с временными признаками на главной странице", key="use_time_features_main_btn"):
-                        st.session_state["df"] = st.session_state["df_with_time_features"]
-                        st.success("Данные с временными признаками переданы на главную страницу!")
                     
                     # Информация о том, как использовать временные признаки
                     show_data_usage_info("временные признаки")
@@ -818,15 +967,10 @@ def run_data_analysis():
                 
                 # После генерации лаговых признаков добавляем экспорт
                 if "df_with_lags" in st.session_state:
-                    st.subheader("Экспорт и использование данных с лаговыми признаками")
+                    st.subheader("Экспорт данных с лаговыми признаками")
                     
                     # Кнопка выгрузки в Excel
                     download_excel(st.session_state["df_with_lags"], "lag_features_data.xlsx")
-                    
-                    # Кнопка для передачи данных с лагами на главную страницу
-                    if st.button("Использовать данные с лаговыми признаками на главной странице", key="use_lag_features_main_btn"):
-                        st.session_state["df"] = st.session_state["df_with_lags"]
-                        st.success("Данные с лаговыми признаками переданы на главную страницу!")
                     
                     # Информация о том, как использовать лаговые признаки
                     show_data_usage_info("лаговые признаки")
@@ -921,15 +1065,10 @@ def run_data_analysis():
                 
                 # После генерации скользящих признаков добавляем экспорт
                 if "df_with_rolling" in st.session_state:
-                    st.subheader("Экспорт и использование данных со скользящими признаками")
+                    st.subheader("Экспорт данных со скользящими признаками")
                     
                     # Кнопка выгрузки в Excel
                     download_excel(st.session_state["df_with_rolling"], "rolling_features_data.xlsx")
-                    
-                    # Кнопка для передачи данных со скользящими признаками на главную страницу
-                    if st.button("Использовать данные со скользящими признаками на главной странице", key="use_rolling_features_main_btn"):
-                        st.session_state["df"] = st.session_state["df_with_rolling"]
-                        st.success("Данные со скользящими признаками переданы на главную страницу!")
                     
                     # Информация о том, как использовать скользящие признаки
                     show_data_usage_info("скользящие признаки")
@@ -1053,7 +1192,7 @@ def run_data_analysis():
                             st.error(f"Ошибка при проверке концепт-дрифта: {e}")
                             logging.error(f"Ошибка при проверке концепт-дрифта: {e}")
         else:
-            st.error(f"Не удалось найти колонки {dt_col} и {tgt_col} для проверки концепт-дрифта")
+            st.error(f"Не удалось найти колонки {dt_col} and {tgt_col} для проверки концепт-дрифта")
     
     # 6. Вкладка разделения данных
     with tabs[5]:
@@ -1266,19 +1405,11 @@ def run_data_analysis():
                 if st.button("Использовать обучающую выборку для анализа", key="use_train_analysis_btn"):
                     st.session_state["df_analysis"] = st.session_state["train_df"]
                     st.success("Теперь для анализа используется обучающая выборка!")
-                
-                if st.button("Использовать обучающую выборку на главной", key="use_train_main_btn"):
-                    st.session_state["df"] = st.session_state["train_df"]
-                    st.success("Теперь на главной странице используется обучающая выборка!")
             
             with col2:
                 if st.button("Использовать тестовую выборку для анализа", key="use_test_analysis_btn"):
                     st.session_state["df_analysis"] = st.session_state["test_df"]
                     st.success("Теперь для анализа используется тестовая выборка!")
-                
-                if st.button("Использовать тестовую выборку на главной", key="use_test_main_btn"):
-                    st.session_state["df"] = st.session_state["test_df"]
-                    st.success("Теперь на главной странице используется тестовая выборка!")
         
         # После разделения данных добавляем кнопки для экспорта
         if "train_df" in st.session_state and "test_df" in st.session_state:
@@ -1307,7 +1438,7 @@ def run_data_analysis():
             
             Вы можете:
             - Выгрузить каждую выборку в Excel для использования в других инструментах
-            - Использовать любую из выборок для анализа или как основной датасет на главной странице
+            - Использовать любую из выборок для анализа
             - Разделение важно для правильной оценки моделей и предотвращения переобучения
             """)
     
@@ -1317,12 +1448,11 @@ def run_data_analysis():
     **Важно понимать:**
     
     1. Все изменения данных (очистка выбросов, генерация признаков и т.д.) 
-       при нажатии кнопки "Использовать..." применяются только для текущего анализа.
+       применяются только для текущей сессии анализа.
        
-    2. Чтобы использовать модифицированные данные для обучения моделей, 
-       нажмите кнопку "Использовать ... на главной странице".
-       
-    3. Для сохранения результатов используйте кнопки "Выгрузить в Excel".
+    2. Для сохранения результатов используйте кнопки "Выгрузить в Excel".
+    
+    3. В начале следующей сессии загрузите сохраненные данные для продолжения работы.
     
     4. Вы всегда можете вернуться к исходным данным, загрузив их заново.
     """)
