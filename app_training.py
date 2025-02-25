@@ -11,7 +11,7 @@ from autogluon.timeseries import TimeSeriesPredictor
 import psutil
 
 from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
-from src.data.data_processing import convert_to_timeseries
+from src.data.data_processing import convert_to_timeseries, safely_prepare_timeseries_data
 from src.models.forecasting import make_timeseries_dataframe
 from app_saving import save_model_metadata
 from src.validation.data_validation import validate_dataset, display_validation_results
@@ -122,9 +122,14 @@ def run_training():
 
         # Преобразуем в TimeSeriesDataFrame
         status_text.text("Преобразование в TimeSeriesDataFrame...")
-        df_ready = convert_to_timeseries(df2, id_col, dt_col, tgt_col)
-        ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-        progress_bar.progress(30)
+        try:
+            df_ready = safely_prepare_timeseries_data(df2, dt_col, id_col, tgt_col)
+            ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
+            progress_bar.progress(30)
+        except Exception as e:
+            st.error(f"Ошибка при преобразовании данных: {e}")
+            logging.error(f"Ошибка преобразования данных: {e}")
+            return False
 
         # Частота
         actual_freq = None
@@ -241,6 +246,7 @@ def run_training():
                 model_weights = ensemble_block.get("model_weights", {})
                 logging.info(f"[WeightedEnsemble] Состав и веса: {model_weights}")
 
+                ensemble_info_df = None  # Инициализируем переменную перед условием
                 if model_weights:
                     data_rows = [{"Model": model_name, "Weight": w} for model_name, w in model_weights.items()]
                     ensemble_info_df = pd.DataFrame(data_rows)

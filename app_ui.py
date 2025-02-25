@@ -148,10 +148,22 @@ def setup_ui():
     
     # ========== (3) Обработка пропусков ==========
     st.sidebar.header("3. Обработка пропусков")
-    fill_options = ["None", "Constant=0", "Group mean", "Forward fill", "Interpolate", "KNN imputer"]
-    if "fill_method_key" not in st.session_state:
-        st.session_state["fill_method_key"] = "None"
-    st.sidebar.selectbox("Способ заполнения пропусков", fill_options, key="fill_method_key")
+    # Заменить существующий selectbox для fill_method более информативным
+    fill_options = [
+        "None (оставить как есть)", 
+        "Constant=0 (заменить на нули)", 
+        "Group mean (среднее по группе)", 
+        "Forward fill (протянуть значения)", 
+        "Interpolate (линейная интерполяция)", 
+        "KNN imputer (k ближайших соседей)"
+    ]
+    fill_map = {opt: opt.split(" ")[0] for opt in fill_options}
+    selected_fill = st.sidebar.selectbox(
+        "Способ заполнения пропусков", 
+        fill_options, 
+        key="fill_method_display"
+    )
+    st.session_state["fill_method_key"] = fill_map[selected_fill]
     
     if "group_cols_for_fill_key" not in st.session_state:
         st.session_state["group_cols_for_fill_key"] = []
@@ -169,9 +181,26 @@ def setup_ui():
     st.sidebar.selectbox("Метрика", metrics_list, index=metrics_list.index(st.session_state["metric_key"]), key="metric_key")
     st.sidebar.multiselect("Модели AutoGluon", model_choices, key="models_key")
     st.sidebar.selectbox("Presets", presets_list, index=presets_list.index(st.session_state["presets_key"]), key="presets_key")
-    st.sidebar.number_input("prediction_length", 1, 365, 10, key="prediction_length_key")
-    st.sidebar.number_input("time_limit (sec)", 10, 36000, 60, key="time_limit_key")
-    st.sidebar.checkbox("Прогнозировать только среднее (mean)?", value=st.session_state.get("mean_only_key", False), key="mean_only_key")
+    st.sidebar.number_input(
+        "prediction_length", 
+        1, 365, 10, 
+        key="prediction_length_key",
+        help="Горизонт прогноза (количество точек в будущем). Модель будет обучена предсказывать именно на это количество шагов вперед."
+    )
+    
+    st.sidebar.number_input(
+        "time_limit (sec)", 
+        10, 36000, 60, 
+        key="time_limit_key",
+        help="Максимальное время (в секундах) для обучения всех моделей. Чем больше времени, тем лучше результат, но медленнее обучение."
+    )
+    
+    st.sidebar.checkbox(
+        "Прогнозировать только среднее (mean)?", 
+        value=st.session_state.get("mean_only_key", False), 
+        key="mean_only_key",
+        help="Если включено, модель будет предсказывать только среднее значение (0.5 квантиль). Если выключено, будут предсказаны все квантили (0.1, 0.5, 0.9), что даст интервалы неопределенности."
+    )
     
     # Предварительный график
     if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
