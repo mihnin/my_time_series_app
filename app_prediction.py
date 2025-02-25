@@ -11,6 +11,13 @@ from src.features.feature_engineering import add_russian_holiday_feature, fill_m
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.features.drift_detection import detect_concept_drift, display_drift_results
+from src.utils.exporter import generate_excel_buffer  # Добавлен новый импорт
+
+# Удалите предыдущую функцию cached_forecast и добавьте эту
+@st.cache_data
+def get_cached_predictions(predictions_data):
+    """Кэширует только результаты прогнозирования"""
+    return predictions_data
 
 def run_prediction():
     """Функция для запуска прогнозирования."""
@@ -104,6 +111,7 @@ def run_prediction():
                 # Прогнозирование для текущей целевой переменной
                 status_text.text(f"Выполнение прогнозирования для {tgt_col}...")
                 preds = forecast(predictor, ts_df)
+                preds = get_cached_predictions(preds)
                 
                 # Добавляем имя исходной переменной в прогноз
                 preds["original_variable"] = tgt_col
@@ -241,10 +249,29 @@ def run_prediction():
 
             # Начальное время
             start_time = time.time()
-            status_text.text("Выполнение прогнозирования...")
-            
-            # Запускаем прогнозирование
-            preds = forecast(predictor, ts_df)
+
+            # Проверяем, изменились ли входные данные или нет прогноза
+            prediction_needed = True
+
+            if "last_prediction_inputs" in st.session_state:
+                last_ts_df_str = st.session_state["last_prediction_inputs"].get("ts_df_str")
+                current_ts_df_str = str(ts_df.head())
+                
+                # Если входные данные не изменились и прогноз уже есть
+                if last_ts_df_str == current_ts_df_str and "predictions" in st.session_state:
+                    preds = st.session_state["predictions"]
+                    prediction_needed = False
+                    status_text.text("Используем существующий прогноз...")
+
+            if prediction_needed:
+                status_text.text("Выполнение прогнозирования...")
+                preds = forecast(predictor, ts_df)
+                
+                # Сохраняем входные данные для следующей проверки
+                if "last_prediction_inputs" not in st.session_state:
+                    st.session_state["last_prediction_inputs"] = {}
+                st.session_state["last_prediction_inputs"]["ts_df_str"] = str(ts_df.head())
+                st.session_state["predictions"] = preds
             
             # Обновляем прогресс
             elapsed_time = time.time() - start_time
@@ -255,58 +282,24 @@ def run_prediction():
 
             st.subheader("Предсказанные значения (первые строки)")
             st.dataframe(preds.reset_index().head())
-            progress_bar.progress(90)
 
-            # Визуализация результатов
-            if "0.5" in preds.columns:
-                preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
-                unique_ids = preds_df["item_id"].unique()
-                
-                # Сохраняем данные графиков в session_state
-                if "graphs_data" not in st.session_state:
-                    st.session_state["graphs_data"] = {}
-                
-                st.session_state["graphs_data"]["preds_df"] = preds_df
-                st.session_state["graphs_data"]["unique_ids"] = unique_ids
-                
-                # Интерактивная визуализация
-                st.subheader("Графики прогноза (0.5)")
-                
-                # Настройки визуализации с ключами
-                max_graphs = st.slider("Максимальное количество графиков", 
-                                    1, min(10, len(unique_ids)), 3, 
-                                    key="max_graphs_slider")
-                
-                # Выбор ID для визуализации с ключом
-                selected_ids = st.multiselect(
-                    "Выберите ID для визуализации", 
-                    options=unique_ids,
-                    default=unique_ids[:min(3, len(unique_ids))],
-                    key="selected_ids_multiselect"
-                )
-                
-                # Отображение графиков
-                for i, uid in enumerate(selected_ids[:max_graphs]):
-                    subset = preds_df[preds_df["item_id"] == uid]
-                    fig_ = px.line(
-                        subset, x="timestamp", y="prediction",
-                        title=f"Прогноз для item_id={uid} (квантиль 0.5)",
-                        markers=True
-                    )
-                    st.plotly_chart(fig_, use_container_width=True)
-            else:
-                st.info("Колонка '0.5' не найдена — возможно mean_only=True или квантильные настройки отключены.")
-            
             progress_bar.progress(100)
             status_text.text("Прогнозирование успешно завершено!")
-            
+
+            # Сразу предложим пользователю скачать результаты
+            excel_buffer = generate_excel_buffer(preds, st.session_state.get("leaderboard"), 
+                                                st.session_state.get("static_df_train"), 
+                                                st.session_state.get("weighted_ensemble_info"))
+
+            st.download_button(
+                label="📥 Скачать результаты в Excel",
+                data=excel_buffer.getvalue(),
+                file_name="forecast_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
             # Освобождаем память
             gc.collect()
-            
-            # Показываем использование памяти
-            process = psutil.Process(os.getpid())
-            memory_usage = process.memory_info().rss / (1024 * 1024)  # в МБ
-            st.info(f"Текущее использование памяти: {memory_usage:.2f} МБ")
 
             return True
 
