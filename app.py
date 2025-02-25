@@ -24,9 +24,16 @@ def main():
     logging.info("========== Приложение запущено ========== ")
     logging.info("=== Запуск приложения Streamlit (main) ===")
     
-    # Пытаемся загрузить ранее обученную модель, если её нет в session_state
+    # В начале функции, добавьте:
     if "predictor" not in st.session_state or st.session_state["predictor"] is None:
-        try_load_existing_model()
+        try:
+            from autogluon.timeseries import TimeSeriesPredictor
+            model_path = "AutogluonModels/TimeSeriesModel"
+            if os.path.exists(model_path):
+                st.session_state["predictor"] = TimeSeriesPredictor.load(model_path)
+                st.success("Загружена ранее обученная модель")
+        except Exception as e:
+            logging.error(f"Не удалось загрузить сохраненную модель: {e}")
     
     # Рисуем боковое меню и получаем выбранную страницу
     page_choice = setup_ui()
