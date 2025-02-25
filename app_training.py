@@ -28,7 +28,7 @@ def run_training():
     id_col  = st.session_state.get("id_col_key")
 
     if dt_col == "<нет>" or tgt_col == "<нет>" or id_col == "<нет>":
-        st.error("Ошибка: выбраны неверные колонки! Убедитесь, что в датасете имеются колонки: дата, target и ID.")
+        st.error("Выберите корректно колонки: дата, target, ID!")
         return False
 
     try:
