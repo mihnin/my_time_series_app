@@ -15,26 +15,6 @@ def validate_dataset(df: pd.DataFrame,
                     id_col: Optional[str] = None) -> Dict[str, Any]:
     """
     Проверяет датасет на корректность и возвращает словарь с результатами валидации.
-    
-    Parameters:
-    -----------
-    df : pandas.DataFrame
-        Датафрейм для валидации
-    dt_col : str
-        Название колонки с датами
-    tgt_col : str
-        Название целевой колонки
-    id_col : str, optional
-        Название колонки с идентификаторами
-        
-    Returns:
-    --------
-    Dict[str, Any]
-        Словарь с результатами валидации, включающий:
-        - is_valid (bool): общий результат валидации
-        - errors (List[str]): список ошибок
-        - warnings (List[str]): список предупреждений
-        - stats (Dict): статистики по данным
     """
     result = {
         "is_valid": True,
@@ -42,6 +22,9 @@ def validate_dataset(df: pd.DataFrame,
         "warnings": [],
         "stats": {}
     }
+    
+    # Инициализируем outliers_count для безопасного использования в stats
+    outliers_count = 0
     
     # Проверка наличия обязательных колонок
     required_cols = []

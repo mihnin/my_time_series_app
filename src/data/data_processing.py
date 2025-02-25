@@ -96,12 +96,14 @@ def _load_csv_standard(uploaded_file) -> pd.DataFrame:
             return df_comma
         raise ValueError("Не удалось автоматически определить разделитель CSV. Попробуйте ';' или ',' или сохраните файл в UTF-8.")
 
-def _load_csv_in_chunks(uploaded_file, chunk_size: int) -> pd.DataFrame:
+def _load_csv_in_chunks(uploaded_file, chunk_size):
     """
-    Загрузка большого CSV файла чанками для экономии памяти.
+    Оптимизированная загрузка большого CSV файла чанками для экономии памяти.
     """
+    import concurrent.futures
+    
     # Сначала определяем разделитель на маленьком образце
-    sample_size = min(1024 * 10, uploaded_file.size)  # 10 КБ или меньше
+    sample_size = min(1024 * 10, uploaded_file.size)
     uploaded_file.seek(0)
     sample_data = uploaded_file.read(sample_size)
     sample_text = StringIO(sample_data.decode('utf-8', errors='replace'))
@@ -127,25 +129,48 @@ def _load_csv_in_chunks(uploaded_file, chunk_size: int) -> pd.DataFrame:
             except:
                 raise ValueError("Не удалось определить разделитель CSV на основе образца.")
     
-    # Теперь читаем весь файл чанками
-    chunks = []
+    # Сбрасываем указатель на начало файла
     uploaded_file.seek(0)
     
-    for chunk in pd.read_csv(
-        uploaded_file, 
-        sep=separator, 
-        engine='python' if separator is None else 'c',
-        chunksize=chunk_size, 
-        encoding=encoding, 
-        errors='replace',
-        thousands=' ',
-        low_memory=True
-    ):
-        # Освобождаем память в процессе загрузки
-        st.text(f"Загружено строк: {sum(len(df) for df in chunks) + len(chunk)}")
-        chunks.append(chunk)
+    # Функция для обработки одного чанка
+    def process_chunk(chunk):
+        # Можно добавить дополнительную обработку чанка при необходимости
+        return chunk
+    
+    # Читаем и обрабатываем чанки параллельно
+    chunks = []
+    
+    # Используем ThreadPoolExecutor для параллельной обработки
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        
+        # Читаем файл чанками
+        for chunk in pd.read_csv(
+            uploaded_file, 
+            sep=separator, 
+            engine='python' if separator is None else 'c',
+            chunksize=chunk_size, 
+            encoding=encoding, 
+            errors='replace',
+            thousands=' ',
+            low_memory=True
+        ):
+            # Отправляем чанк на обработку
+            futures.append(executor.submit(process_chunk, chunk))
+            
+        # Собираем обработанные чанки
+        total_rows = 0
+        for future in concurrent.futures.as_completed(futures):
+            processed_chunk = future.result()
+            total_rows += len(processed_chunk)
+            chunks.append(processed_chunk)
+            # Обновляем статус загрузки
+            st.text(f"Загружено строк: {total_rows}")
     
     # Объединяем все чанки
+    if not chunks:
+        raise ValueError("Не удалось прочитать данные из файла")
+    
     df = pd.concat(chunks, ignore_index=True)
     logging.info(f"Успешно загружен большой CSV по частям. Всего строк: {len(df)}, колонки: {list(df.columns)}")
     
@@ -154,16 +179,55 @@ def _load_csv_in_chunks(uploaded_file, chunk_size: int) -> pd.DataFrame:
 def convert_to_timeseries(df: pd.DataFrame, id_col: str, timestamp_col: str, target_col: str) -> pd.DataFrame:
     """
     Преобразует DataFrame в формат с колонками (item_id, timestamp, target).
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Исходный датафрейм
+    id_col : str
+        Название колонки с идентификаторами
+    timestamp_col : str
+        Название колонки с датами
+    target_col : str
+        Название целевой колонки
+        
+    Returns:
+    --------
+    pd.DataFrame
+        Датафрейм с переименованными колонками для AutoGluon
     """
+    # Проверяем наличие необходимых колонок
+    required_cols = [id_col, timestamp_col, target_col]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Отсутствуют необходимые колонки: {', '.join(missing_cols)}")
+    
+    # Создаем копию датафрейма, чтобы не изменять оригинал
     df_local = df.copy()
-    df_local.rename(columns={
+    
+    # Переименовываем колонки
+    column_mapping = {
         id_col: "item_id",
         timestamp_col: "timestamp",
         target_col: "target"
-    }, inplace=True)
+    }
+    
+    # Выполняем переименование с проверкой успешности
+    df_local = df_local.rename(columns=column_mapping)
+    
+    # Проверяем, что колонки были успешно переименованы
+    for new_col in ["item_id", "timestamp", "target"]:
+        if new_col not in df_local.columns:
+            raise ValueError(f"Не удалось создать колонку '{new_col}'. Проверьте правильность указанных имен колонок.")
+    
+    # Преобразуем item_id в строку и сортируем
     df_local["item_id"] = df_local["item_id"].astype(str)
-    df_local.sort_values(["item_id", "timestamp"], inplace=True)
-    df_local.reset_index(drop=True, inplace=True)
+    df_local = df_local.sort_values(["item_id", "timestamp"])
+    df_local = df_local.reset_index(drop=True)
+    
+    # Логирование результата
+    logging.info(f"Преобразовано в TimeSeriesDataFrame формат. Колонки: {list(df_local.columns)}")
+    
     return df_local
 
 def show_dataset_stats(df: pd.DataFrame):
@@ -308,3 +372,91 @@ def detect_outliers(df: pd.DataFrame,
             df_clean = df[~outliers_mask]
     
     return df_clean, df_outliers
+
+def safe_convert_datetime(df, datetime_col, inplace=False):
+    """
+    Безопасно преобразует колонку в формат datetime с оптимизацией повторных вызовов.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Исходный датафрейм
+    datetime_col : str
+        Название колонки для преобразования
+    inplace : bool, optional
+        Выполнять ли преобразование в исходном датафрейме
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        Датафрейм с преобразованной колонкой
+    """
+    if datetime_col not in df.columns:
+        raise ValueError(f"Колонка {datetime_col} не найдена в датафрейме")
+    
+    result_df = df if inplace else df.copy()
+    
+    # Проверяем, не является ли колонка уже datetime типом
+    if not pd.api.types.is_datetime64_any_dtype(result_df[datetime_col]):
+        result_df[datetime_col] = pd.to_datetime(result_df[datetime_col], errors="coerce")
+        
+    return result_df
+
+def safely_prepare_timeseries_data(df, dt_col, id_col, tgt_col):
+    """
+    Безопасно подготавливает данные для TimeSeriesDataFrame с подробной диагностикой ошибок.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Исходный датафрейм
+    dt_col : str
+        Название колонки с датами
+    id_col : str
+        Название колонки с идентификаторами
+    tgt_col : str
+        Название целевой колонки
+        
+    Returns:
+    --------
+    pd.DataFrame
+        Подготовленный датафрейм для TimeSeriesDataFrame
+    """
+    try:
+        # Проверка наличия колонок
+        required_cols = [dt_col, id_col, tgt_col]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        
+        if missing_cols:
+            raise ValueError(f"Отсутствуют необходимые колонки: {', '.join(missing_cols)}")
+        
+        # Проверка типа данных в колонке с датой
+        if not pd.api.types.is_datetime64_any_dtype(df[dt_col]):
+            logging.info(f"Преобразование колонки {dt_col} в datetime")
+            df = df.copy()
+            df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce")
+            
+            # Проверяем результат преобразования
+            if df[dt_col].isna().any():
+                n_invalid = df[dt_col].isna().sum()
+                logging.warning(f"После преобразования даты обнаружено {n_invalid} невалидных значений")
+        
+        # Проверяем и преобразуем id_col в строку, если нужно
+        if not pd.api.types.is_object_dtype(df[id_col]) and not pd.api.types.is_string_dtype(df[id_col]):
+            df = df.copy() if id(df) == id(df) else df
+            df[id_col] = df[id_col].astype(str)
+        
+        # Преобразуем в формат для TimeSeriesDataFrame
+        ts_df = convert_to_timeseries(df, id_col, dt_col, tgt_col)
+        
+        # Анализ результата
+        logging.info(f"Успешно подготовлены данные. Строк: {len(ts_df)}, уникальных ID: {ts_df['item_id'].nunique()}")
+        
+        return ts_df
+        
+    except Exception as e:
+        logging.error(f"Ошибка при подготовке данных: {str(e)}")
+        if "timestamp" in str(e):
+            logging.error(f"Проблема с колонкой timestamp. Проверьте правильность названия колонки даты: '{dt_col}'")
+            logging.error(f"Доступные колонки в датафрейме: {list(df.columns)}")
+        raise
