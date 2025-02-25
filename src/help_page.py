@@ -1,7 +1,5 @@
 # src/help_page.py
 # Обновленный файл src/help_page.py
-
-```python
 # src/help_page.py
 import streamlit as st
 
