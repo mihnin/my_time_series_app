@@ -35,6 +35,22 @@ def main():
         except Exception as e:
             logging.error(f"Не удалось загрузить сохраненную модель: {e}")
     
+    # После загрузки предиктора
+    if "predictor" in st.session_state and st.session_state["predictor"] is not None:
+        # Если предсказания уже были сделаны, но приложение было перезагружено
+        if "predictions" in st.session_state and "graphs_data" not in st.session_state:
+            # Инициализируем данные для графиков
+            preds = st.session_state["predictions"]
+            if preds is not None and "0.5" in preds.columns:
+                preds_df = preds.reset_index().rename(columns={"0.5": "prediction"})
+                unique_ids = preds_df["item_id"].unique()
+                
+                if "graphs_data" not in st.session_state:
+                    st.session_state["graphs_data"] = {}
+                
+                st.session_state["graphs_data"]["preds_df"] = preds_df
+                st.session_state["graphs_data"]["unique_ids"] = unique_ids
+    
     # Рисуем боковое меню и получаем выбранную страницу
     page_choice = setup_ui()
     logging.info(f"Страница выбрана: {page_choice}")
@@ -198,6 +214,12 @@ def main():
     # ------------- Прогноз -------------
     if st.session_state.get("predict_btn"):
         logging.info("Кнопка 'Сделать прогноз' нажата.")
+        
+        # Добавляем эту проверку перед вызовом run_prediction:
+        if "graphs_data" in st.session_state:
+            # Очищаем старые данные графиков перед новым прогнозом
+            del st.session_state["graphs_data"]
+        
         result = run_prediction()
         if result:
             logging.info("Прогноз успешно выполнен.")
@@ -223,21 +245,14 @@ def main():
     # ------------- Сохранение результатов в Excel -------------
     if st.session_state.get("save_excel_btn"):
         logging.info("Кнопка 'Сохранить результаты в Excel' нажата.")
-        df_train = st.session_state.get("df")
-        lb = st.session_state.get("leaderboard")
         preds = st.session_state.get("predictions")
+        lb = st.session_state.get("leaderboard")
         stt_train = st.session_state.get("static_df_train")
         ensemble_info_df = st.session_state.get("weighted_ensemble_info")
         
-        has_data_to_save = any([
-            df_train is not None,
-            lb is not None,
-            preds is not None,
-            (stt_train is not None and not stt_train.empty),
-            (ensemble_info_df is not None)
-        ])
+        has_data_to_save = preds is not None
         if not has_data_to_save:
-            st.warning("Нет данных для сохранения в Excel.")
+            st.warning("Нет данных прогноза для сохранения в Excel.")
         else:
             excel_buffer = generate_excel_buffer(preds, lb, stt_train, ensemble_info_df)
             st.download_button(
