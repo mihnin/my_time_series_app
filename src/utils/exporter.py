@@ -286,7 +286,8 @@ def generate_excel_buffer(result):
             best_model_name = None
             if 'predictor' in result and result['predictor'] is not None:
                 try:
-                    best_model_name = result['predictor'].get_model_best()
+                    # Используем property model_best вместо устаревшего метода get_model_best
+                    best_model_name = result['predictor'].model_best if hasattr(result['predictor'], 'model_best') else result['predictor'].get_model_best()
                     logging.info(f"Лучшая модель: {best_model_name}")
                 except Exception as e:
                     logging.warning(f"Не удалось получить имя лучшей модели: {e}")
@@ -331,7 +332,8 @@ def extract_ensemble_weights(predictor):
             
         # Проверяем, является ли лучшая модель ансамблевой
         try:
-            best_model_name = predictor.get_model_best()
+            # Используем новое property model_best вместо устаревшего метода get_model_best
+            best_model_name = predictor.model_best if hasattr(predictor, 'model_best') else predictor.get_model_best()
             logging.info(f"Лучшая модель: {best_model_name}")
             if "Ensemble" not in best_model_name:
                 logging.info(f"Лучшая модель не является ансамблевой: {best_model_name}")
@@ -344,48 +346,117 @@ def extract_ensemble_weights(predictor):
         ensemble_weights = None
         model_details = []
         
-        # Способ 1: Прямой метод get_model_weights()
+        # Способ 1: Прямой метод get_model_weights() или weights_
         try:
-            ensemble_weights = predictor.get_model_weights()
-            if ensemble_weights is not None:
+            # Сначала пробуем новый способ получения весов через атрибут weights_
+            if hasattr(predictor, 'weights_'):
+                ensemble_weights = predictor.weights_
+                if isinstance(ensemble_weights, dict):
+                    ensemble_weights = pd.DataFrame({
+                        'Модель': list(ensemble_weights.keys()),
+                        'Вес': list(ensemble_weights.values())
+                    })
+                logging.info("Веса ансамбля успешно извлечены через атрибут weights_")
+            elif hasattr(predictor, 'get_model_weights'):
+                ensemble_weights = predictor.get_model_weights()
                 logging.info("Веса ансамбля успешно извлечены методом get_model_weights()")
-        except (AttributeError, Exception) as e:
-            logging.warning(f"Не удалось получить веса ансамбля методом get_model_weights(): {e}")
             
-        # Способ 2: Через свойство best_model.weights и информацию о моделях
+            if ensemble_weights is not None:
+                logging.info(f"Веса ансамбля успешно извлечены, форма: {ensemble_weights.shape if isinstance(ensemble_weights, pd.DataFrame) else 'dict'}")
+        except (AttributeError, Exception) as e:
+            logging.warning(f"Не удалось получить веса ансамбля стандартным методом: {e}")
+            
+        # Способ 2: Через директории и файлы модели
         if ensemble_weights is None:
             try:
-                model_path = predictor.path
-                logging.info(f"Путь к модели: {model_path}")
+                # Получаем путь к директории модели
+                if hasattr(predictor, 'path'):
+                    model_path = predictor.path
+                else:
+                    # Пробуем альтернативный способ получения пути к моделям
+                    model_path = getattr(predictor, '_learner_path', None)
+                    if not model_path:
+                        # Пробуем получить путь из _learner объекта, если он есть
+                        learner = getattr(predictor, '_learner', None)
+                        if learner:
+                            model_path = getattr(learner, 'path', None)
                 
-                # Получаем информацию о моделях
-                import os
-                import pickle
-                import pandas as pd
-                
-                models_dir = os.path.join(model_path, "models")
-                if not os.path.exists(models_dir):
-                    logging.warning(f"Директория моделей не существует: {models_dir}")
+                if not model_path:
+                    logging.warning("Не удалось определить путь к моделям")
                     return None, None
                     
-                ensemble_file = None
+                logging.info(f"Путь к модели: {model_path}")
                 
-                # Ищем файл ансамблевой модели
+                # Проверяем разные варианты директорий моделей
+                models_dirs = [
+                    os.path.join(model_path, "models"),
+                    model_path,
+                    os.path.join(model_path, ".."),
+                    os.path.join(model_path, "..", "models")
+                ]
+                
+                models_dir = None
+                for dir_path in models_dirs:
+                    if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                        # Проверяем, есть ли в директории файлы .pkl
+                        pkl_files = [f for f in os.listdir(dir_path) if f.endswith('.pkl')]
+                        if pkl_files:
+                            models_dir = dir_path
+                            logging.info(f"Найдена директория с моделями: {models_dir}")
+                            break
+                
+                if not models_dir:
+                    logging.warning("Не найдена директория с моделями")
+                    return None, None
+                
+                # Ищем файл ансамблевой модели с более гибким поиском
+                ensemble_file = None
+                ensemble_patterns = ["Ensemble", "ensemble", "WeightedEnsemble"]
+                
                 for filename in os.listdir(models_dir):
-                    if "Ensemble" in filename and filename.endswith(".pkl"):
+                    if filename.endswith(".pkl") and any(pattern in filename for pattern in ensemble_patterns):
                         ensemble_file = os.path.join(models_dir, filename)
                         logging.info(f"Найден файл ансамбля: {ensemble_file}")
                         break
                 
+                if not ensemble_file:
+                    # Попробуем поискать в подпапках
+                    for root, dirs, files in os.walk(models_dir):
+                        for filename in files:
+                            if filename.endswith(".pkl") and any(pattern in filename for pattern in ensemble_patterns):
+                                ensemble_file = os.path.join(root, filename)
+                                logging.info(f"Найден файл ансамбля в подпапке: {ensemble_file}")
+                                break
+                        if ensemble_file:
+                            break
+                
                 if ensemble_file:
-                    with open(ensemble_file, 'rb') as f:
-                        try:
+                    import pickle
+                    
+                    try:
+                        with open(ensemble_file, 'rb') as f:
                             ensemble_model = pickle.load(f)
                             logging.info(f"Тип ансамблевой модели: {type(ensemble_model).__name__}")
                             
-                            # Получаем веса
-                            if hasattr(ensemble_model, 'weights'):
-                                weights = ensemble_model.weights
+                            # Получаем веса - проверяем разные атрибуты, которые могут содержать веса
+                            weights = None
+                            for attr_name in ['weights', '_weights', 'model_weights', 'weights_', 'w_']:
+                                if hasattr(ensemble_model, attr_name):
+                                    weights = getattr(ensemble_model, attr_name)
+                                    logging.info(f"Найдены веса в атрибуте {attr_name}")
+                                    break
+                            
+                            if weights is None:
+                                # Еще один подход: попробуем изучить все атрибуты модели
+                                for attr_name in dir(ensemble_model):
+                                    if 'weight' in attr_name.lower() and not attr_name.startswith('_'):
+                                        attr_value = getattr(ensemble_model, attr_name)
+                                        if isinstance(attr_value, dict) or isinstance(attr_value, pd.DataFrame):
+                                            weights = attr_value
+                                            logging.info(f"Найдены веса в атрибуте {attr_name}")
+                                            break
+                            
+                            if weights is not None:
                                 if isinstance(weights, dict):
                                     ensemble_weights = pd.DataFrame({
                                         'Модель': list(weights.keys()),
@@ -398,10 +469,13 @@ def extract_ensemble_weights(predictor):
                                     for model_name in weights.keys():
                                         model_info = {'Название модели': model_name}
                                         
-                                        # Ищем файл модели
+                                        # Более гибкий поиск файла модели
                                         model_file = None
                                         for filename in os.listdir(models_dir):
-                                            if filename.startswith(model_name) and filename.endswith(".pkl"):
+                                            if filename.endswith(".pkl") and (
+                                                filename.startswith(model_name) or 
+                                                model_name in filename
+                                            ):
                                                 model_file = os.path.join(models_dir, filename)
                                                 break
                                         
@@ -416,20 +490,43 @@ def extract_ensemble_weights(predictor):
                                                     model_info.update({
                                                         'Параметры': str(params)
                                                     })
+                                                else:
+                                                    # Альтернативное получение параметров
+                                                    params = {}
+                                                    for attr_name in dir(model):
+                                                        if not attr_name.startswith('_') and not callable(getattr(model, attr_name)):
+                                                            try:
+                                                                attr_value = getattr(model, attr_name)
+                                                                if isinstance(attr_value, (int, float, str, bool)):
+                                                                    params[attr_name] = attr_value
+                                                            except:
+                                                                pass
+                                                    
+                                                    if params:
+                                                        model_info.update({
+                                                            'Параметры': str(params)
+                                                        })
                                                 
                                                 # Получаем метрики модели, если есть
-                                                if hasattr(model, 'score'):
-                                                    model_info['Метрика'] = str(model.score)
+                                                for metric_attr in ['score', 'metric', 'score_val', 'val_score']:
+                                                    if hasattr(model, metric_attr):
+                                                        model_info['Метрика'] = str(getattr(model, metric_attr))
+                                                        break
                                             except Exception as e:
                                                 logging.warning(f"Ошибка при получении информации о модели {model_name}: {e}")
+                                        else:
+                                            logging.warning(f"Не удалось найти файл модели для {model_name}")
                                         
                                         model_details.append(model_info)
+                                elif isinstance(weights, pd.DataFrame):
+                                    ensemble_weights = weights
+                                    logging.info(f"Извлечены веса как DataFrame, строк: {len(ensemble_weights)}")
                                 else:
-                                    logging.warning(f"Веса ансамбля не в формате словаря: {type(weights)}")
+                                    logging.warning(f"Веса ансамбля в неожиданном формате: {type(weights)}")
                             else:
-                                logging.warning("У ансамблевой модели нет атрибута weights")
-                        except Exception as e:
-                            logging.warning(f"Ошибка при загрузке ансамблевой модели: {e}")
+                                logging.warning("Не удалось найти атрибут с весами в ансамблевой модели")
+                    except Exception as e:
+                        logging.warning(f"Ошибка при загрузке и обработке ансамблевой модели: {e}")
                 else:
                     logging.warning("Файл ансамблевой модели не найден в директории моделей")
                 

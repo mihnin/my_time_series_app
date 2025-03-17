@@ -482,24 +482,33 @@ def setup_ui():
             
             # Проверяем, является ли лучшая модель ансамблевой
             if 'leaderboard' in st.session_state and not st.session_state['leaderboard'].empty:
-                best_model_name = st.session_state['leaderboard'].iloc[0]['model']
-                if 'Ensemble' in best_model_name:
-                    st.info("🔄 Лучшая модель - ансамблевая (Weighted Ensemble).")
-                    
-                    # Пробуем получить информацию о составе ансамбля
+                try:
+                    # Пытаемся получить имя лучшей модели
                     predictor = st.session_state.get('predictor')
                     if predictor:
-                        from src.utils.exporter import extract_ensemble_weights
-                        ensemble_weights, model_details = extract_ensemble_weights(predictor)
+                        # Используем property model_best вместо доступа через лидерборд
+                        best_model_name = predictor.model_best if hasattr(predictor, 'model_best') else predictor.get_model_best()
+                    else:
+                        # Если предиктора нет, берем из лидерборда
+                        best_model_name = st.session_state['leaderboard'].iloc[0]['model']
+                    
+                    if 'Ensemble' in best_model_name:
+                        st.info("🔄 Лучшая модель - ансамблевая (Weighted Ensemble).")
                         
-                        if ensemble_weights is not None and not ensemble_weights.empty:
-                            st.subheader("📊 Состав ансамблевой модели")
+                        # Пробуем получить информацию о составе ансамбля
+                        predictor = st.session_state.get('predictor')
+                        if predictor:
+                            from src.utils.exporter import extract_ensemble_weights
+                            ensemble_weights, model_details = extract_ensemble_weights(predictor)
                             
-                            # Преобразуем веса в проценты для лучшей читаемости
-                            if 'Вес' in ensemble_weights.columns:
-                                ensemble_weights['Вес (%)'] = (ensemble_weights['Вес'] * 100).round(2)
-                                ensemble_weights = ensemble_weights.sort_values('Вес (%)', ascending=False)
-                            
+                            if ensemble_weights is not None and not ensemble_weights.empty:
+                                st.subheader("📊 Состав ансамблевой модели")
+                                
+                                # Преобразуем веса в проценты для лучшей читаемости
+                                if 'Вес' in ensemble_weights.columns:
+                                    ensemble_weights['Вес (%)'] = (ensemble_weights['Вес'] * 100).round(2)
+                                    ensemble_weights = ensemble_weights.sort_values('Вес (%)', ascending=False)
+                                
                                 # Создаем столбчатую диаграмму для визуализации весов
                                 fig = px.bar(
                                     ensemble_weights, 
@@ -512,17 +521,19 @@ def setup_ui():
                                 fig.update_layout(height=400)
                                 st.plotly_chart(fig, use_container_width=True)
                             
-                            # Отображаем таблицу с весами моделей
-                            st.subheader("📋 Таблица весов моделей")
-                            st.dataframe(ensemble_weights)
-                            
-                            # Если есть детальная информация о моделях, отображаем ее
-                            if model_details is not None and not model_details.empty:
-                                with st.expander("Детальная информация о моделях в ансамбле"):
-                                    st.dataframe(model_details)
-                        else:
-                            st.warning("⚠️ Не удалось получить информацию о составе ансамблевой модели.")
-                            st.info("Подробная информация об ансамбле будет доступна в Excel при экспорте результатов.")
+                                # Отображаем таблицу с весами моделей
+                                st.subheader("📋 Таблица весов моделей")
+                                st.dataframe(ensemble_weights)
+                                
+                                # Если есть детальная информация о моделях, отображаем ее
+                                if model_details is not None and not model_details.empty:
+                                    with st.expander("Детальная информация о моделях в ансамбле"):
+                                        st.dataframe(model_details)
+                            else:
+                                st.warning("⚠️ Не удалось получить информацию о составе ансамблевой модели.")
+                                st.info("Подробная информация об ансамбле будет доступна в Excel при экспорте результатов.")
+                except Exception as e:
+                    st.warning(f"Не удалось получить информацию о составе ансамблевой модели: {e}")
     
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
