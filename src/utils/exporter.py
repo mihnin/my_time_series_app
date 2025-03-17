@@ -32,7 +32,12 @@ def get_local_model_path(model_name):
     if (model_name in CHRONOS_MODELS_MAPPING):
         model_dir = os.path.join(chronos_dir, CHRONOS_MODELS_MAPPING[model_name])
         if os.path.exists(model_dir):
-            logging.info(f"Используется локальная модель Chronos: {model_dir}")
+            logging.info(f"ВАЖНО: Используется локальная модель Chronos из папки: {model_dir}")
+            # Проверяем наличие модельного файла
+            model_file = os.path.join(model_dir, "model.safetensors")
+            if os.path.exists(model_file):
+                model_size_mb = round(os.path.getsize(model_file) / (1024 * 1024), 2)
+                logging.info(f"Размер файла модели: {model_size_mb} МБ")
             return model_dir
     
     logging.info(f"Локальная модель не найдена для {model_name}, будет использован Hugging Face")
@@ -59,12 +64,15 @@ def generate_excel_buffer(result):
                     writer, sheet_name="Ошибка", index=False)
                 return excel_buffer
             
+            # Счетчик созданных листов
+            sheets_created = 0
+            
             # Лист с прогнозами для каждой целевой переменной
             sheet_idx = 0
             
             for target_col, forecast_data in result.get('forecasts', {}).items():
                 predictions = forecast_data.get('predictions')
-                if predictions is not None:
+                if predictions is not None and not predictions.empty:
                     sheet_name = f"Прогноз_{target_col}"
                     if len(sheet_name) > 31:  # Ограничение Excel на длину имени листа
                         sheet_name = f"Прогноз_{sheet_idx}"
@@ -73,9 +81,21 @@ def generate_excel_buffer(result):
                     # Сбрасываем индекс для экспорта в Excel
                     try:
                         predictions.reset_index().to_excel(writer, sheet_name=sheet_name, index=False)
+                        sheets_created += 1
                     except Exception as e:
                         logging.error(f"Ошибка при сохранении прогноза для {target_col}: {e}")
                         pd.DataFrame([{"Ошибка": str(e)}]).to_excel(writer, sheet_name=sheet_name, index=False)
+                else:
+                    # Создаем пустую страницу с уведомлением
+                    sheet_name = f"Прогноз_{target_col}_пусто"
+                    if len(sheet_name) > 31:
+                        sheet_name = f"Прогноз_{sheet_idx}_пусто"
+                        sheet_idx += 1
+                    
+                    pd.DataFrame([{"Уведомление": f"Нет данных прогноза для {target_col}"}]).to_excel(
+                        writer, sheet_name=sheet_name, index=False)
+                    sheets_created += 1
+                    logging.info(f"Создана пустая страница для {target_col}, т.к. данные отсутствуют")
             
             # Добавляем сводную информацию
             summary_data = []
@@ -88,9 +108,44 @@ def generate_excel_buffer(result):
             
             if summary_data:
                 pd.DataFrame(summary_data).to_excel(writer, sheet_name="Сводка", index=False)
+                sheets_created += 1
             
-            # При наличии дополнительной информации о лидерборде, статических признаках или ансамбле,
-            # можно добавить их на отдельные листы здесь
+            # Добавляем лидерборд, если он есть
+            if 'leaderboard' in result and isinstance(result['leaderboard'], pd.DataFrame) and not result['leaderboard'].empty:
+                try:
+                    leaderboard_df = result['leaderboard'].copy()
+                    
+                    # Округляем числовые колонки для лучшего отображения
+                    for col in leaderboard_df.select_dtypes(include=['float']).columns:
+                        leaderboard_df[col] = leaderboard_df[col].round(6)
+                    
+                    leaderboard_df.to_excel(writer, sheet_name="Лидерборд", index=False)
+                    
+                    # Подсвечиваем лучшую модель
+                    try:
+                        sheet_lb = writer.sheets["Лидерборд"]
+                        best_idx = 0  # первая строка - лучшая модель
+                        fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                        row_excel = best_idx + 2  # +2 из-за заголовка и 1-индексации в Excel
+                        for col_idx in range(1, leaderboard_df.shape[1] + 1):
+                            cell = sheet_lb.cell(row=row_excel, column=col_idx)
+                            cell.fill = fill_green
+                    except Exception as e:
+                        logging.warning(f"Не удалось подсветить лучшую модель в лидерборде: {e}")
+                    
+                    sheets_created += 1
+                except Exception as e:
+                    logging.error(f"Ошибка при сохранении лидерборда: {e}")
+                    pd.DataFrame([{"Ошибка": f"Ошибка при отображении лидерборда: {str(e)}"}]).to_excel(
+                        writer, sheet_name="Лидерборд_ошибка", index=False)
+            
+            # Если не создано ни одной страницы, создаем информационную страницу
+            if sheets_created == 0:
+                pd.DataFrame([{
+                    "Информация": "Нет данных для отображения",
+                    "Примечание": "Проверьте параметры и результаты прогнозирования"
+                }]).to_excel(writer, sheet_name="Информация", index=False)
+                logging.warning("В Excel-файле нет данных для отображения")
             
     except Exception as e:
         logging.exception(f"Ошибка при создании Excel файла: {e}")

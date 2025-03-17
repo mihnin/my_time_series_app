@@ -423,12 +423,19 @@ def run_training():
                 
                 # Генерируем Excel для скачивания результатов
                 from src.utils.exporter import generate_excel_buffer
-                excel_buffer = generate_excel_buffer(
-                    None,  # прогнозы
-                    leaderboard_df,  # лидерборд
-                    None,  # static_df_train
-                    None   # weighted_ensemble_info
-                )
+                
+                # Создаем структуру результата для новой версии функции generate_excel_buffer
+                excel_result = {
+                    'success': True,
+                    'forecasts': {}
+                }
+                
+                # Добавляем лидерборд в данные для Excel
+                if 'leaderboard' in result:
+                    excel_result['leaderboard'] = result['leaderboard']
+                
+                # Создаем буфер с Excel-файлом
+                excel_buffer = generate_excel_buffer(excel_result)
                 
                 st.download_button(
                     label="📥 Скачать результаты обучения в Excel",
