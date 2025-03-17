@@ -111,10 +111,18 @@ def generate_excel_buffer(result):
                 sheets_created += 1
             
             # Добавляем лидерборд, если он есть
+            # Проверяем наличие лидерборда как прямого ключа или как атрибута предиктора
+            leaderboard_df = None
             if 'leaderboard' in result and isinstance(result['leaderboard'], pd.DataFrame) and not result['leaderboard'].empty:
+                leaderboard_df = result['leaderboard'].copy()
+            elif 'predictor' in result and hasattr(result['predictor'], 'leaderboard'):
                 try:
-                    leaderboard_df = result['leaderboard'].copy()
-                    
+                    leaderboard_df = result['predictor'].leaderboard()
+                except:
+                    logging.warning("Не удалось получить лидерборд из предиктора")
+            
+            if leaderboard_df is not None and not leaderboard_df.empty:
+                try:
                     # Округляем числовые колонки для лучшего отображения
                     for col in leaderboard_df.select_dtypes(include=['float']).columns:
                         leaderboard_df[col] = leaderboard_df[col].round(6)
@@ -134,15 +142,25 @@ def generate_excel_buffer(result):
                         logging.warning(f"Не удалось подсветить лучшую модель в лидерборде: {e}")
                     
                     sheets_created += 1
+                    logging.info("Добавлен лидерборд моделей")
                 except Exception as e:
                     logging.error(f"Ошибка при сохранении лидерборда: {e}")
                     pd.DataFrame([{"Ошибка": f"Ошибка при отображении лидерборда: {str(e)}"}]).to_excel(
                         writer, sheet_name="Лидерборд_ошибка", index=False)
             
             # Добавляем информацию о модели-ансамбле, если она присутствует
+            # Проверяем наличие информации об ансамбле как прямого ключа или атрибута предиктора
+            ensemble_df = None
             if 'ensemble_info' in result and isinstance(result['ensemble_info'], pd.DataFrame) and not result['ensemble_info'].empty:
+                ensemble_df = result['ensemble_info'].copy()
+            elif 'predictor' in result and hasattr(result['predictor'], 'get_model_weights'):
                 try:
-                    ensemble_df = result['ensemble_info'].copy()
+                    ensemble_df = result['predictor'].get_model_weights()
+                except:
+                    logging.warning("Не удалось получить информацию об ансамбле из предиктора")
+            
+            if ensemble_df is not None and not ensemble_df.empty:
+                try:
                     ensemble_df.to_excel(writer, sheet_name="WeightedEnsembleInfo", index=False)
                     sheets_created += 1
                     logging.info("Добавлена информация о модели типа ансамбль")

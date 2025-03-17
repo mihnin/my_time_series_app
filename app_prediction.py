@@ -249,11 +249,29 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
         # Проверяем успешность выполнения
         if all_forecasts:
             logging.info(f"Прогнозирование успешно завершено за {time.time() - start_time:.2f} сек.")
-            return {
+            
+            # Добавляем сам предиктор и его лидерборд в результат для последующего использования в Excel
+            result = {
                 'success': True,
                 'forecasts': all_forecasts,
-                'graphs_data': all_graphs_data
+                'graphs_data': all_graphs_data,
+                'predictor': predictor
             }
+            
+            # Попробуем получить лидерборд из предиктора
+            try:
+                result['leaderboard'] = predictor.leaderboard()
+            except:
+                logging.info("Не удалось получить лидерборд из предиктора")
+            
+            # Попробуем получить информацию о моделях ансамбля
+            try:
+                if hasattr(predictor, 'get_model_weights'):
+                    result['ensemble_info'] = predictor.get_model_weights()
+            except:
+                logging.info("Не удалось получить информацию о весах моделей ансамбля")
+                
+            return result
         else:
             return {
                 'success': False,

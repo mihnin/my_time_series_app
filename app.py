@@ -40,7 +40,7 @@ def clear_logs():
             
             # Теперь очищаем текущий лог
             with open(LOG_FILE, 'w', encoding='utf-8') as f:
-                f.write(f"# Логи очищены {datetime.datetime.now().strftime('%Y-%м-%d %H:%M:%S')}\n")
+                f.write(f"# Логи очищены {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 
             return True, f"Логи успешно очищены. Предыдущая версия сохранена как {archive_filename}"
         else:
