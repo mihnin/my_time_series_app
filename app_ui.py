@@ -459,16 +459,16 @@ def setup_ui():
     
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
-    st.sidebar.button("Сохранить результаты в CSV", key="save_csv_btn")
-    st.sidebar.button("Сохранить результаты в Excel", key="save_excel_btn")
-    
+    # Используем другой ключ для session_state, не совпадающий с ключом виджета
+    st.sidebar.button("Сохранить результаты в Excel", key="save_excel_btn", on_click=lambda: st.session_state.update({"excel_save_clicked": True}), use_container_width=True)
+
     # ========== (9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
-    st.sidebar.button("Показать логи", key="show_logs_btn")
-    st.sidebar.button("Скачать логи", key="download_logs_btn")
-    
+    st.sidebar.button("Показать логи", key="show_logs_btn", on_click=lambda: st.session_state.update({"logs_show_clicked": True}), use_container_width=True)
+    st.sidebar.button("Скачать логи", key="download_logs_btn", on_click=lambda: st.session_state.update({"logs_download_clicked": True}), use_container_width=True)
+
     # ========== (10) Выгрузка моделей и логов ==========
     st.sidebar.header("10. Выгрузка моделей и логов")
-    st.sidebar.button("Скачать архив (модели + логи)", key="download_model_and_logs")
+    st.sidebar.button("Скачать архив (модели + логи)", key="download_model_and_logs", on_click=lambda: st.session_state.update({"model_download_clicked": True}), use_container_width=True)
     
     return page_choice

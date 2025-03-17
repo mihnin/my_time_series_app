@@ -107,6 +107,113 @@ def main():
         # Обработка действий и кнопок
         if st.sidebar.button("🚀 Обучить модель", key="sidebar_fit_model_btn", use_container_width=True):
             run_training()
+        
+        # === ОБРАБОТЧИКИ КНОПОК СОХРАНЕНИЯ И ЛОГОВ ===
+        
+        # Проверяем, есть ли прогнозы для сохранения
+        forecasts_available = 'forecasts' in st.session_state and st.session_state['forecasts'] is not None
+        
+        # Сохранение результатов в Excel
+        if st.session_state.get('excel_save_clicked', False):
+            # После обработки сбрасываем флаг
+            st.session_state['excel_save_clicked'] = False
+            
+            if forecasts_available:
+                try:
+                    # Используем функцию для создания Excel
+                    excel_buffer = generate_excel_buffer(
+                        st.session_state.get('forecasts'),
+                        st.session_state.get('leaderboard'),
+                        None,  # статический датафрейм
+                        None   # информация о моделях ансамбля
+                    )
+                    
+                    # Кнопка для скачивания Excel
+                    st.sidebar.download_button(
+                        label="📥 Скачать Excel",
+                        data=excel_buffer.getvalue(),
+                        file_name="forecast_results.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                    st.sidebar.success("Excel готов для скачивания!")
+                except Exception as e:
+                    st.sidebar.error(f"Ошибка при создании Excel: {str(e)}")
+                    logging.error(f"Ошибка при создании Excel: {str(e)}")
+            else:
+                st.sidebar.warning("Нет данных прогноза для сохранения в Excel")
+        
+        # Показать логи
+        if st.session_state.get('logs_show_clicked', False):
+            # После обработки сбрасываем флаг
+            st.session_state['logs_show_clicked'] = False
+            
+            try:
+                logs = read_logs()
+                if logs:
+                    st.sidebar.text_area("Логи приложения", logs, height=300)
+                else:
+                    st.sidebar.info("Логи пусты или файл логов не найден")
+            except Exception as e:
+                st.sidebar.error(f"Ошибка при чтении логов: {str(e)}")
+                logging.error(f"Ошибка при чтении логов: {str(e)}")
+        
+        # Скачать логи
+        if st.session_state.get('logs_download_clicked', False):
+            # После обработки сбрасываем флаг
+            st.session_state['logs_download_clicked'] = False
+            
+            try:
+                if os.path.exists(LOG_FILE):
+                    with open(LOG_FILE, "r", encoding="utf-8") as log_file:
+                        logs_content = log_file.read()
+                    
+                    st.sidebar.download_button(
+                        label="📥 Скачать файл логов",
+                        data=logs_content,
+                        file_name="app_logs.log",
+                        mime="text/plain",
+                    )
+                    st.sidebar.success("Файл логов готов для скачивания!")
+                else:
+                    st.sidebar.warning("Файл логов не найден")
+            except Exception as e:
+                st.sidebar.error(f"Ошибка при подготовке логов: {str(e)}")
+                logging.error(f"Ошибка при подготовке логов: {str(e)}")
+        
+        # Скачать архив с моделями и логами
+        if st.session_state.get('model_download_clicked', False):
+            # После обработки сбрасываем флаг
+            st.session_state['model_download_clicked'] = False
+            
+            try:
+                # Создаем буфер для архива
+                zip_buffer = io.BytesIO()
+                
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    # Добавляем логи в архив
+                    if os.path.exists(LOG_FILE):
+                        zip_file.write(LOG_FILE, arcname="logs/app_logs.log")
+                    
+                    # Добавляем файлы модели в архив
+                    model_directory = "AutogluonModels/TimeSeriesModel"
+                    if os.path.exists(model_directory):
+                        for root, dirs, files in os.walk(model_directory):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                archive_path = os.path.join("models", os.path.relpath(file_path, model_directory))
+                                zip_file.write(file_path, arcname=archive_path)
+                
+                # Создаем кнопку для скачивания архива
+                st.sidebar.download_button(
+                    label="📥 Скачать архив",
+                    data=zip_buffer.getvalue(),
+                    file_name="model_and_logs.zip",
+                    mime="application/zip",
+                )
+                st.sidebar.success("Архив с моделями и логами готов для скачивания!")
+            except Exception as e:
+                st.sidebar.error(f"Ошибка при создании архива: {str(e)}")
+                logging.error(f"Ошибка при создании архива: {str(e)}")
             
     except Exception as e:
         logging.error(f"Ошибка при выполнении функции main: {e}")
