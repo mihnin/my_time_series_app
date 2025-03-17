@@ -1,41 +1,109 @@
-# config/config.yaml
-metrics_dict:
-  "SQL (Scaled quantile loss)": "SQL"
-  "WQL (Weighted quantile loss)": "WQL"
-  "MAE (Mean absolute error)": "MAE"
-  "MAPE (Mean absolute percentage error)": "MAPE"
-  "MASE (Mean absolute scaled error)": "MASE"
-  "MSE (Mean squared error)": "MSE"
-  "RMSE (Root mean squared error)": "RMSE"
-  "RMSLE (Root mean squared logarithmic error)": "RMSLE"
-  "RMSSE (Root mean squared scaled error)": "RMSSE"
-  "SMAPE (Symmetric mean absolute percentage error)": "SMAPE"
-  "WAPE (Weighted absolute percentage error)": "WAPE"
-
 ag_models:
-  "NaiveModel": "Базовая модель: прогноз = последнее наблюдение"
-  "SeasonalNaiveModel": "Прогноз = последнее значение той же фазы сезона"
-  "AverageModel": "Прогноз = среднее/квантиль"
-  "SeasonalAverageModel": "Прогноз = среднее по тем же фазам сезона"
-  "ZeroModel": "Прогноз = 0"
-  "ETSModel": "Экспоненциальное сглаживание (ETS)"
-  "AutoARIMAModel": "Автоматическая ARIMA"
-  "AutoETSModel": "Автоматическая ETS"
-  "AutoCESModel": "Комплексное экспоненциальное сглаживание (AIC)"
-  "ThetaModel": "Theta"
-  "ADIDAModel": "Intermittent demand (ADIDA)"
-  "CrostonModel": "Intermittent demand (Croston)"
-  "IMAPAModel": "Intermittent demand (IMAPA)"
-  "NPTSModel": "Non-Parametric Time Series"
-  "DeepARModel": "RNN (DeepAR)"
-  "DLinearModel": "DLinear (убирает тренд)"
-  "PatchTSTModel": "PatchTST (Transformer)"
-  "SimpleFeedForwardModel": "Простая полносвязная сеть"
-  "TemporalFusionTransformerModel": "LSTM + Transformer (TFT)"
-  "TiDEModel": "Time series dense encoder"
-  "WaveNetModel": "WaveNet (CNN)"
-  "DirectTabularModel": "AutoGluon-Tabular (Direct)"
-  "RecursiveTabularModel": "AutoGluon-Tabular (Recursive)"
-  "ChronosModel": "Chronos pretrained"
-
-
+  ADIDAModel: Intermittent demand (ADIDA)
+  AutoARIMAModel: Автоматическая ARIMA
+  AutoCESModel: Комплексное экспоненциальное сглаживание (AIC)
+  AutoETSModel: Автоматическая ETS
+  AverageModel: Прогноз = среднее/квантиль
+  ChronosModel: Chronos pretrained
+  CrostonModel: Intermittent demand (Croston)
+  DLinearModel: DLinear (убирает тренд)
+  DeepARModel: RNN (DeepAR)
+  DirectTabularModel: AutoGluon-Tabular (Direct)
+  ETSModel: Экспоненциальное сглаживание (ETS)
+  IMAPAModel: Intermittent demand (IMAPA)
+  NPTSModel: Non-Parametric Time Series
+  NaiveModel: 'Базовая модель: прогноз = последнее наблюдение'
+  PatchTSTModel: PatchTST (Transformer)
+  RecursiveTabularModel: AutoGluon-Tabular (Recursive)
+  SeasonalAverageModel: Прогноз = среднее по тем же фазам сезона
+  SeasonalNaiveModel: Прогноз = последнее значение той же фазы сезона
+  SimpleFeedForwardModel: Простая полносвязная сеть
+  TemporalFusionTransformerModel: LSTM + Transformer (TFT)
+  ThetaModel: Theta
+  TiDEModel: Time series dense encoder
+  WaveNetModel: WaveNet (CNN)
+  ZeroModel: Прогноз = 0
+app_name: Бизнес-приложение для прогнозирования временных рядов
+app_version: 2.1.0
+auto_detection:
+  date_column_patterns:
+  - дата
+  - date
+  - time
+  - время
+  - период
+  - период прогноза
+  date_formats:
+  - '%Y-%m-%d %H:%M:%S'
+  - '%Y-%m-%d'
+  - '%d.%m.%Y'
+  - '%d.%m.%Y %H:%M:%S'
+  - '%d/%m/%Y'
+  - '%m/%d/%Y'
+  fields_enabled: true
+  frequency_enabled: true
+  frequency_thresholds:
+    day: 0.9
+    hour: 0.04
+    month: 28
+    week: 6
+  id_column_patterns:
+  - id
+  - код
+  - индекс
+  - артикул
+  - категория
+  target_column_patterns:
+  - target
+  - цель
+  - значение
+  - продажи
+  - спрос
+  - выручка
+  - доход
+  - revenue
+  - sales
+data_dir: data
+debug_mode: false
+logging:
+  backup_count: 5
+  date_format: '%Y-%m-%d %H:%M:%S'
+  log_dir: logs
+  log_format: '%(asctime)s [%(levelname)s] %(module)s.%(funcName)s - %(message)s'
+  log_level: ERROR
+  max_log_size: 10485760
+metrics_dict:
+  MAE (Mean absolute error): MAE
+  MAPE (Mean absolute percentage error): MAPE
+  MASE (Mean absolute scaled error): MASE
+  MSE (Mean squared error): MSE
+  RMSE (Root mean squared error): RMSE
+  RMSLE (Root mean squared logarithmic error): RMSLE
+  RMSSE (Root mean squared scaled error): RMSSE
+  SMAPE (Symmetric mean absolute percentage error): SMAPE
+  SQL (Scaled quantile loss): SQL
+  WAPE (Weighted absolute percentage error): WAPE
+  WQL (Weighted quantile loss): WQL
+model_dir: AutogluonModels/TimeSeriesModel
+queue:
+  clean_interval: 3600
+  max_task_age: 86400
+  max_workers: 3
+  task_timeout: 3600
+resource:
+  check_interval: 5
+  cpu_threshold: 95.0
+  disk_threshold: 95.0
+  memory_threshold: 98.0
+session:
+  clean_interval: 3600
+  session_dir: data/sessions
+  session_ttl: 24
+ui:
+  error_color: '#E53935'
+  info_color: '#29B6F6'
+  max_graphs_per_page: 5
+  primary_color: '#1E88E5'
+  secondary_color: '#4CAF50'
+  theme: light
+  warning_color: '#FFA726'

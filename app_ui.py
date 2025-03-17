@@ -6,8 +6,12 @@ import pandas as pd
 import plotly.express as px
 import psutil
 import gc
+import logging
+from typing import Dict, Any, Optional
 
 from src.data.data_processing import load_data, show_dataset_stats
+from src.data.auto_detect import detect_column_names, detect_frequency
+from src.config.app_config import get_config
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -27,11 +31,102 @@ all_models_opt = "* (все)"
 model_keys = list(AG_MODELS.keys())
 model_choices = [all_models_opt] + model_keys
 
+# Зададим соответствие между базовыми значениями частоты и полными описаниями
+FREQ_MAPPING = {
+    "auto": "auto (угадать)",
+    "D": "D (день)",
+    "H": "H (час)",
+    "M": "M (месяц)",
+    "B": "B (рабочие дни)",
+    "W": "W (неделя)",
+    "Q": "Q (квартал)"
+}
+
+# Обратное отображение для получения базового значения из полного описания
+FREQ_REVERSE_MAPPING = {v: k for k, v in FREQ_MAPPING.items()}
+
+def get_base_freq(freq_display):
+    """
+    Преобразует отображаемое значение частоты в базовое значение для библиотеки.
+    
+    Parameters:
+    -----------
+    freq_display : str
+        Отображаемое значение частоты (например, "D (день)")
+        
+    Returns:
+    --------
+    str
+        Базовое значение частоты (например, "D")
+    """
+    return FREQ_REVERSE_MAPPING.get(freq_display, "auto")
+
+def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Автоматически определяет колонки даты, ID и target на основе данных
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Датафрейм с данными
+        
+    Returns:
+    --------
+    Dict[str, str]
+        Словарь с определенными полями
+    """
+    config = get_config()
+    auto_detection_enabled = config.get('auto_detection', {}).get('fields_enabled', True)
+    
+    if not auto_detection_enabled:
+        return {}
+    
+    try:
+        # Определяем колонки
+        detected_fields = detect_column_names(df)
+        
+        # Проверяем, что полученные значения не являются pandas Series
+        for key in ['dt_col', 'id_col', 'tgt_col']:
+            if key in detected_fields and isinstance(detected_fields[key], pd.Series):
+                # Если это Series и содержит одно значение, берем первый элемент
+                if len(detected_fields[key]) == 1:
+                    detected_fields[key] = detected_fields[key].iloc[0]
+                else:
+                    # Иначе используем наиболее подходящее значение или None
+                    logging.warning(f"Поле {key} содержит множество значений, берем первое")
+                    detected_fields[key] = detected_fields[key].iloc[0] if not detected_fields[key].empty else None
+        
+        # Определяем частоту, если есть колонка с датой
+        if detected_fields.get('dt_col') is not None and detected_fields['dt_col'] in df.columns:
+            try:
+                freq = detect_frequency(
+                    df, 
+                    date_col=detected_fields['dt_col'], 
+                    id_col=detected_fields.get('id_col')
+                )
+                # Преобразуем базовое значение частоты в полное описание
+                if freq in FREQ_MAPPING:
+                    detected_fields['freq'] = FREQ_MAPPING[freq]
+                else:
+                    detected_fields['freq'] = FREQ_MAPPING['auto']
+                    logging.warning(f"Определена неизвестная частота: {freq}, используем 'auto'")
+                
+            except Exception as e:
+                logging.error(f"Ошибка при определении частоты: {e}")
+                detected_fields['freq'] = FREQ_MAPPING['auto']
+        
+        logging.info(f"Автоматически определены поля: {detected_fields}")
+        return detected_fields
+    
+    except Exception as e:
+        logging.error(f"Ошибка при автоматическом определении полей: {e}")
+        return {}
+
 def setup_ui():
     st.markdown("### Версия 2.0")
     st.title("Бизнес-приложение для прогнозирования временных рядов")
     
-    # Добавляем страницу анализа данных
+    # Убираем админку из списка страниц, оставляем только основные
     pages = ["Главная", "Анализ данных", "Help"]
     page_choice = st.sidebar.selectbox("Навигация", pages, key="page_choice")
     
@@ -86,12 +181,45 @@ def setup_ui():
                     st.session_state["df"] = df_train
                     st.success(f"Train-файл загружен! Строк: {len(df_train)}, колонок: {len(df_train.columns)}")
                     
+                    # Автоматическое определение полей
+                    auto_detected = auto_select_fields(df_train)
+                    
+                    # Применяем автоматически определенные поля
+                    if auto_detected:
+                        if auto_detected.get('dt_col'):
+                            st.session_state["dt_col_key"] = auto_detected['dt_col']
+                        
+                        if auto_detected.get('id_col'):
+                            st.session_state["id_col_key"] = auto_detected['id_col']
+                        
+                        if auto_detected.get('tgt_col'):
+                            st.session_state["tgt_col_key"] = auto_detected['tgt_col']
+                        
+                        if auto_detected.get('freq'):
+                            st.session_state["freq_key"] = auto_detected['freq']
+                        
+                        st.info("Автоматически определены поля:\n" +
+                               f"- Дата: {auto_detected.get('dt_col', '<не определено>')}\n" +
+                               f"- ID: {auto_detected.get('id_col', '<не определено>')}\n" +
+                               f"- Target: {auto_detected.get('tgt_col', '<не определено>')}\n" +
+                               f"- Частота: {auto_detected.get('freq', '<не определено>')}")
+                    
                     # Для больших датафреймов используем выборку при отображении
                     if len(df_train) > 1000:
-                        st.dataframe(df_train.head(1000))
+                        # Отображаем датафрейм на всю ширину экрана с горизонтальной прокруткой
+                        st.dataframe(
+                            df_train.head(1000),
+                            use_container_width=True,
+                            height=500
+                        )
                         st.info(f"Показаны первые 1000 из {len(df_train)} строк.")
                     else:
-                        st.dataframe(df_train)
+                        # Отображаем весь датафрейм на всю ширину экрана
+                        st.dataframe(
+                            df_train,
+                            use_container_width=True,
+                            height=500
+                        )
                     
                     st.subheader("Статистика Train")
                     show_dataset_stats(df_train)
@@ -126,9 +254,50 @@ def setup_ui():
     if id_stored not in ["<нет>"] + all_cols:
         st.session_state["id_col_key"] = "<нет>"
     
+    # Проверяем наличие временных значений и применяем их перед созданием виджетов
+    if "_temp_dt_col" in st.session_state:
+        st.session_state["dt_col_key"] = st.session_state["_temp_dt_col"]
+        del st.session_state["_temp_dt_col"]
+    
+    if "_temp_id_col" in st.session_state:
+        st.session_state["id_col_key"] = st.session_state["_temp_id_col"]
+        del st.session_state["_temp_id_col"]
+    
+    if "_temp_tgt_col" in st.session_state:
+        st.session_state["tgt_col_key"] = st.session_state["_temp_tgt_col"]
+        del st.session_state["_temp_tgt_col"]
+    
+    if "_temp_freq" in st.session_state:
+        st.session_state["freq_key"] = st.session_state["_temp_freq"]
+        del st.session_state["_temp_freq"]
+        
     dt_col = st.sidebar.selectbox("Колонка с датой", ["<нет>"] + all_cols, key="dt_col_key")
     tgt_col = st.sidebar.selectbox("Колонка target", ["<нет>"] + all_cols, key="tgt_col_key")
     id_col = st.sidebar.selectbox("Колонка ID (категориальный)", ["<нет>"] + all_cols, key="id_col_key")
+    
+    # Кнопка автоматического определения полей
+    if df_current is not None and st.sidebar.button("🔍 Автоопределение полей", key="auto_detect_fields_btn"):
+        auto_detected = auto_select_fields(df_current)
+        if auto_detected:
+            # Вместо прямого изменения session_state виджетов, 
+            # создаем временные ключи, которые будут использоваться при следующем рендеринге
+            if auto_detected.get('dt_col'):
+                st.session_state["_temp_dt_col"] = auto_detected['dt_col']
+            
+            if auto_detected.get('id_col'):
+                st.session_state["_temp_id_col"] = auto_detected['id_col']
+            
+            if auto_detected.get('tgt_col'):
+                st.session_state["_temp_tgt_col"] = auto_detected['tgt_col']
+            
+            if auto_detected.get('freq'):
+                st.session_state["_temp_freq"] = auto_detected['freq']
+            
+            st.sidebar.success("Автоматически определены поля!")
+            # Перезапускаем приложение, чтобы применить временные значения
+            st.rerun()
+        else:
+            st.sidebar.warning("Не удалось автоматически определить поля")
     
     # Статические признаки
     st.sidebar.header("Статические признаки (до 3)")
@@ -171,10 +340,52 @@ def setup_ui():
     
     # ========== (4) Частота (freq) ==========
     st.sidebar.header("4. Частота (freq)")
+    
+    # Получаем список доступных частот
     freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
+    
     if "freq_key" not in st.session_state:
         st.session_state["freq_key"] = "auto (угадать)"
-    st.sidebar.selectbox("freq", freq_options, index=0, key="freq_key")
+    
+    # Проверяем, что значение freq_key есть в списке опций
+    # Если значение не является элементом списка, найдем ближайшее соответствие
+    current_freq = st.session_state["freq_key"]
+    if current_freq not in freq_options:
+        # Пытаемся найти опцию, которая начинается с текущего значения
+        found = False
+        for opt in freq_options:
+            # Извлекаем базовое значение частоты (до пробела)
+            base_freq = opt.split(" ")[0]
+            if current_freq == base_freq:
+                st.session_state["freq_key"] = opt
+                found = True
+                break
+        
+        # Если соответствие не найдено, используем значение по умолчанию
+        if not found:
+            st.session_state["freq_key"] = "auto (угадать)"
+    
+    # Кнопка автоопределения частоты
+    freq_col1, freq_col2 = st.sidebar.columns([3, 1])
+    
+    with freq_col1:
+        freq_selection = st.selectbox("freq", freq_options, index=freq_options.index(st.session_state["freq_key"]), key="freq_key")
+    
+    with freq_col2:
+        if df_current is not None and dt_col != "<нет>" and st.button("🔄", key="auto_detect_freq_btn", help="Автоопределение частоты"):
+            try:
+                freq = detect_frequency(df_current, dt_col, id_col if id_col != "<нет>" else None)
+                # Используем словарь соответствия частот для корректного отображения
+                if freq in FREQ_MAPPING:
+                    st.session_state["freq_key"] = FREQ_MAPPING[freq]
+                    st.sidebar.success(f"Определена частота: {FREQ_MAPPING[freq]}")
+                    st.rerun()
+                else:
+                    st.sidebar.warning(f"Определена неизвестная частота: {freq}, используем 'auto'")
+                    st.session_state["freq_key"] = FREQ_MAPPING['auto']
+                    st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Ошибка при определении частоты: {e}")
     
     # ========== (5) Метрика и модели ==========
     st.sidebar.header("5. Метрика и модели")
@@ -224,7 +435,8 @@ def setup_ui():
                     else:
                         df_plot = df_plot.sample(10000, random_state=42)
                 
-                df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", dayfirst=True)
+                # Правильное преобразование дат с использованием dayfirst=False
+                df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", format=None, dayfirst=False)
                 df_plot = df_plot.dropna(subset=[dt_col])
                 
                 if id_col != "<нет>":
@@ -245,11 +457,37 @@ def setup_ui():
     # ========== (6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")
     st.sidebar.checkbox("Обучение, Прогноз и Сохранение", key="train_predict_save_checkbox")
-    st.sidebar.button("Обучить модель", key="fit_model_btn")
+    
+    # Прямой вызов функции при нажатии на кнопку, без промежуточного session_state
+    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели"):
+        # Нужно импортировать run_training непосредственно здесь, иначе будет циклический импорт
+        from app_training import run_training
+        st.sidebar.success("Кнопка нажата! Запуск обучения из сайдбара...")
+        run_training()
     
     # ========== (7) Прогноз ==========
     st.sidebar.header("7. Прогноз")
-    st.sidebar.button("Сделать прогноз", key="predict_btn")
+    
+    # Проверка, есть ли модель
+    predictor_exists = st.session_state.get("predictor") is not None
+    
+    if predictor_exists:
+        if st.sidebar.button("Сделать прогноз", key="predict_btn"):
+            # Прямой вызов функции прогнозирования
+            from app_prediction import run_prediction
+            st.sidebar.success("Кнопка нажата! Запуск прогнозирования из сайдбара...")
+            run_prediction()
+    else:
+        st.sidebar.warning("Сначала обучите модель")
+    
+    # Логи обучения/прогноза
+    if st.session_state.get("fit_summary") is not None:
+        st.subheader("Результаты обучения")
+        st.json(st.session_state["fit_summary"])
+    
+    if st.session_state.get("leaderboard") is not None:
+        st.subheader("Лидерборд моделей")
+        st.dataframe(st.session_state["leaderboard"])
     
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")

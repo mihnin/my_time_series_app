@@ -1,0 +1,45 @@
+# Функция запуска обучения модели через очередь
+def queue_training_task(training_params, force_run=False):
+    """
+    Добавляет задачу обучения модели в очередь
+    
+    Parameters:
+    -----------
+    training_params : dict
+        Параметры для обучения модели
+    force_run : bool, optional (default=False)
+        Если True, игнорирует проверку ресурсов и принудительно добавляет задачу
+    
+    Returns:
+    --------
+    str or None
+        ID задачи в очереди или None, если задачу не удалось добавить
+    """
+    # Получаем текущий ID сессии
+    session_id = get_current_session_id()
+    
+    # Проверяем, можно ли добавить новую задачу (достаточно ли ресурсов)
+    if not force_run:
+        resource_monitor = get_resource_monitor()
+        if not resource_monitor.can_accept_new_task():
+            st.error("Система в данный момент перегружена. Пожалуйста, повторите попытку позже.")
+            return None
+    
+    # Получаем менеджер очереди
+    queue_manager = get_queue_manager()
+    
+    # Добавляем задачу обучения в очередь с высоким приоритетом
+    task_id = queue_manager.add_task(
+        session_id=session_id,
+        func=_execute_training,
+        training_params=training_params,
+        priority=TaskPriority.HIGH
+    )
+    
+    logging.info(f"Задача обучения добавлена в очередь, ID: {task_id}")
+    
+    # Сохраняем ID задачи в сессии для последующего отслеживания
+    save_to_session('current_training_task_id', task_id)
+    
+    # Возвращаем ID задачи
+    return task_id 
