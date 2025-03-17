@@ -443,9 +443,9 @@ def run_training():
                     st.info("🔄 Запуск прогнозирования...")
                     from app_prediction import run_prediction
                     run_prediction()
-                else:
-                    # Задача завершилась с ошибкой
-                    st.error(f"❌ Ошибка при обучении модели: {result.get('error', 'Неизвестная ошибка')}")
+            else:
+                # Задача завершилась с ошибкой
+                st.error(f"❌ Ошибка при обучении модели: {result.get('error', 'Неизвестная ошибка')}")
         
         except Exception as e:
             st.error(f"❌ Произошла ошибка при обучении модели: {str(e)}")
