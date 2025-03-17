@@ -134,10 +134,6 @@ def main():
         elif page_choice == "Help":
             show_help_page()
             
-        # Обработка действий и кнопок
-        if st.sidebar.button("🚀 Обучить модель", key="sidebar_fit_model_btn", use_container_width=True):
-            run_training()
-        
         # === ОБРАБОТЧИКИ КНОПОК СОХРАНЕНИЯ И ЛОГОВ ===
         
         # Проверяем, есть ли прогнозы для сохранения

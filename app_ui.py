@@ -155,7 +155,7 @@ def setup_ui():
         )
     
     train_file = st.sidebar.file_uploader("Train (обязательно)", type=["csv", "xls", "xlsx"], key="train_file_uploader")
-    if st.sidebar.button("Загрузить данные", key="load_data_btn"):
+    if st.sidebar.button("📂 Загрузить данные", key="load_data_btn"):
         if not train_file:
             st.error("Train-файл обязателен!")
         else:
@@ -450,7 +450,7 @@ def setup_ui():
     st.sidebar.markdown(button_css, unsafe_allow_html=True)
 
     # Красная кнопка на всю ширину
-    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели", type="primary", use_container_width=True):
+    if st.sidebar.button("🚀 Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели", type="primary", use_container_width=True):
         # Нужно импортировать run_training непосредственно здесь, иначе будет циклический импорт
         from app_training import run_training
         st.sidebar.success("Кнопка нажата! Запуск обучения из сайдбара...")
@@ -463,7 +463,7 @@ def setup_ui():
     predictor_exists = st.session_state.get("predictor") is not None
     
     if predictor_exists:
-        if st.sidebar.button("Сделать прогноз", key="predict_btn", use_container_width=True):
+        if st.sidebar.button("📊 Сделать прогноз", key="predict_btn", use_container_width=True):
             # Прямой вызов функции прогнозирования
             from app_prediction import run_prediction
             st.sidebar.success("Кнопка нажата! Запуск прогнозирования из сайдбара...")
@@ -483,17 +483,17 @@ def setup_ui():
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
     # Используем другой ключ для session_state, не совпадающий с ключом виджета
-    st.sidebar.button("Сохранить результаты в Excel", key="save_excel_btn", on_click=lambda: st.session_state.update({"excel_save_clicked": True}), use_container_width=True)
+    st.sidebar.button("💾 Сохранить результаты в Excel", key="save_excel_btn", on_click=lambda: st.session_state.update({"excel_save_clicked": True}), use_container_width=True)
 
     # ========== (9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
     log_col1, log_col2 = st.sidebar.columns(2)
-    log_col1.button("Показать логи", key="show_logs_btn", on_click=lambda: st.session_state.update({"logs_show_clicked": True}), use_container_width=True)
-    log_col2.button("Скачать логи", key="download_logs_btn", on_click=lambda: st.session_state.update({"logs_download_clicked": True}), use_container_width=True)
-    st.sidebar.button("Очистить логи", key="clear_logs_btn", on_click=lambda: st.session_state.update({"logs_clear_clicked": True}), use_container_width=True)
+    log_col1.button("👁️ Показать логи", key="show_logs_btn", on_click=lambda: st.session_state.update({"logs_show_clicked": True}), use_container_width=True)
+    log_col2.button("📥 Скачать логи", key="download_logs_btn", on_click=lambda: st.session_state.update({"logs_download_clicked": True}), use_container_width=True)
+    st.sidebar.button("🧹 Очистить логи", key="clear_logs_btn", on_click=lambda: st.session_state.update({"logs_clear_clicked": True}), use_container_width=True)
 
     # ========== (10) Выгрузка моделей и логов ==========
     st.sidebar.header("10. Выгрузка моделей и логов")
-    st.sidebar.button("Скачать архив (модели + логи)", key="download_model_and_logs", on_click=lambda: st.session_state.update({"model_download_clicked": True}), use_container_width=True)
+    st.sidebar.button("📦 Скачать архив (модели + логи)", key="download_model_and_logs", on_click=lambda: st.session_state.update({"model_download_clicked": True}), use_container_width=True)
     
     return page_choice
