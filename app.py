@@ -146,13 +146,16 @@ def main():
             
             if forecasts_available:
                 try:
-                    # Используем функцию для создания Excel
-                    excel_buffer = generate_excel_buffer(
-                        st.session_state.get('forecasts'),
-                        st.session_state.get('leaderboard'),
-                        None,  # статический датафрейм
-                        None   # информация о моделях ансамбля
-                    )
+                    # Формируем единый словарь результатов для Excel
+                    result = {
+                        'success': True,
+                        'forecasts': st.session_state.get('forecasts'),
+                        'leaderboard': st.session_state.get('leaderboard'),
+                        'predictor': st.session_state.get('predictor')
+                    }
+                    
+                    # Используем функцию для создания Excel с новым форматом
+                    excel_buffer = generate_excel_buffer(result)
                     
                     # Кнопка для скачивания Excel
                     st.sidebar.download_button(

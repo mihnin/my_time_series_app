@@ -12,7 +12,7 @@ from src.features.feature_engineering import add_russian_holiday_feature, fill_m
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.features.drift_detection import detect_concept_drift, display_drift_results
-from src.utils.exporter import generate_excel_buffer
+from src.utils.exporter import generate_excel_buffer, extract_ensemble_weights
 from app_ui import get_base_freq
 
 # Исправляем декоратор с учетом рекомендаций по кешированию Streamlit
@@ -261,15 +261,25 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
             # Попробуем получить лидерборд из предиктора
             try:
                 result['leaderboard'] = predictor.leaderboard()
-            except:
-                logging.info("Не удалось получить лидерборд из предиктора")
+                logging.info("Лидерборд успешно получен из предиктора")
+            except Exception as e:
+                logging.warning(f"Не удалось получить лидерборд из предиктора: {e}")
             
             # Попробуем получить информацию о моделях ансамбля
             try:
-                if hasattr(predictor, 'get_model_weights'):
-                    result['ensemble_info'] = predictor.get_model_weights()
-            except:
-                logging.info("Не удалось получить информацию о весах моделей ансамбля")
+                # Используем нашу расширенную функцию для извлечения информации об ансамбле
+                ensemble_weights, model_details = extract_ensemble_weights(predictor)
+                
+                if ensemble_weights is not None and not ensemble_weights.empty:
+                    result['ensemble_weights'] = ensemble_weights
+                    logging.info(f"Веса ансамбля успешно извлечены: {len(ensemble_weights)} моделей")
+                
+                if model_details is not None and not model_details.empty:
+                    result['model_details'] = model_details
+                    logging.info(f"Детальная информация о моделях успешно извлечена: {len(model_details)} моделей")
+                
+            except Exception as e:
+                logging.warning(f"Ошибка при извлечении информации об ансамбле: {e}")
                 
             return result
         else:

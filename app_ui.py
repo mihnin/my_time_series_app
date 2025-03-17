@@ -479,6 +479,50 @@ def setup_ui():
     if st.session_state.get("leaderboard") is not None:
         with st.expander("Лидерборд моделей", expanded=False):
             st.dataframe(st.session_state["leaderboard"])
+            
+            # Проверяем, является ли лучшая модель ансамблевой
+            if 'leaderboard' in st.session_state and not st.session_state['leaderboard'].empty:
+                best_model_name = st.session_state['leaderboard'].iloc[0]['model']
+                if 'Ensemble' in best_model_name:
+                    st.info("🔄 Лучшая модель - ансамблевая (Weighted Ensemble).")
+                    
+                    # Пробуем получить информацию о составе ансамбля
+                    predictor = st.session_state.get('predictor')
+                    if predictor:
+                        from src.utils.exporter import extract_ensemble_weights
+                        ensemble_weights, model_details = extract_ensemble_weights(predictor)
+                        
+                        if ensemble_weights is not None and not ensemble_weights.empty:
+                            st.subheader("📊 Состав ансамблевой модели")
+                            
+                            # Преобразуем веса в проценты для лучшей читаемости
+                            if 'Вес' in ensemble_weights.columns:
+                                ensemble_weights['Вес (%)'] = (ensemble_weights['Вес'] * 100).round(2)
+                                ensemble_weights = ensemble_weights.sort_values('Вес (%)', ascending=False)
+                            
+                                # Создаем столбчатую диаграмму для визуализации весов
+                                fig = px.bar(
+                                    ensemble_weights, 
+                                    x='Модель', 
+                                    y='Вес (%)', 
+                                    title='Вклад моделей в ансамбль',
+                                    color='Вес (%)',
+                                    color_continuous_scale='Viridis'
+                                )
+                                fig.update_layout(height=400)
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Отображаем таблицу с весами моделей
+                            st.subheader("📋 Таблица весов моделей")
+                            st.dataframe(ensemble_weights)
+                            
+                            # Если есть детальная информация о моделях, отображаем ее
+                            if model_details is not None and not model_details.empty:
+                                with st.expander("Детальная информация о моделях в ансамбле"):
+                                    st.dataframe(model_details)
+                        else:
+                            st.warning("⚠️ Не удалось получить информацию о составе ансамблевой модели.")
+                            st.info("Подробная информация об ансамбле будет доступна в Excel при экспорте результатов.")
     
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
