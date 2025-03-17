@@ -23,15 +23,21 @@ def make_timeseries_dataframe(df, static_features=None, freq='D'):
     from autogluon.timeseries.dataset import TimeSeriesDataFrame
     
     try:
-        # Создаем TimeSeriesDataFrame
-        ts_df = TimeSeriesDataFrame(df, static_features=static_features, freq=freq)
+        # Создаем TimeSeriesDataFrame без указания частоты
+        ts_df = TimeSeriesDataFrame(df, static_features=static_features)
+        
+        # После создания применяем нужную частоту
+        if freq:
+            logging.info(f"Устанавливаем частоту {freq} для TimeSeriesDataFrame")
+            ts_df = ts_df.convert_frequency(freq=freq)
+            
         return ts_df
     except Exception as e:
         logging.error(f"Ошибка при создании TimeSeriesDataFrame: {e}")
         
-        # Пробуем создать без указания частоты, если это вызвало проблему
+        # Пробуем просто создать датафрейм без дополнительных операций
         try:
-            logging.warning(f"Пробуем создать TimeSeriesDataFrame без указания частоты")
+            logging.warning(f"Пробуем создать TimeSeriesDataFrame без изменения частоты")
             ts_df = TimeSeriesDataFrame(df, static_features=static_features)
             return ts_df
         except Exception as e2:

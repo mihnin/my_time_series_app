@@ -125,7 +125,7 @@ def setup_ui():
             if key == "metric_key":
                 st.session_state[key] = metrics_list[0]
             elif key == "presets_key":
-                st.session_state[key] = "medium_quality"
+                st.session_state[key] = "best_quality"
             elif key == "models_key":
                 st.session_state[key] = [all_models_opt]
             else:
@@ -329,14 +329,14 @@ def setup_ui():
     freq_options = ["D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
 
     if "freq_key" not in st.session_state:
-        st.session_state["freq_key"] = "D (день)"  # Меняем значение по умолчанию с 'auto (угадать)' на 'D (день)'
+        st.session_state["freq_key"] = "M (месяц)"  # Меняем значение по умолчанию на 'M (месяц)'
 
     # Проверяем, что значение freq_key есть в списке опций
     current_freq = st.session_state["freq_key"]
     if current_freq not in freq_options:
-        # Если текущее значение - 'auto (угадать)', меняем на 'D (день)'
+        # Если текущее значение - 'auto (угадать)', меняем на 'M (месяц)'
         if current_freq == "auto (угадать)":
-            st.session_state["freq_key"] = "D (день)"
+            st.session_state["freq_key"] = "M (месяц)"
         else:
             # Проверяем базовое значение частоты
             for opt in freq_options:
@@ -346,9 +346,9 @@ def setup_ui():
                     st.session_state["freq_key"] = opt
                     break
             
-            # Если соответствие не найдено, используем D (день) по умолчанию
+            # Если соответствие не найдено, используем M (месяц) по умолчанию
             if current_freq not in freq_options:
-                st.session_state["freq_key"] = "D (день)"
+                st.session_state["freq_key"] = "M (месяц)"
 
     # Выбор частоты (без кнопки автоопределения)
     freq_selection = st.sidebar.selectbox("Частота данных", freq_options, 
@@ -362,14 +362,14 @@ def setup_ui():
     st.sidebar.selectbox("Presets", presets_list, index=presets_list.index(st.session_state["presets_key"]), key="presets_key")
     st.sidebar.number_input(
         "prediction_length", 
-        1, 365, 10, 
+        1, 365, 2, 
         key="prediction_length_key",
         help="Горизонт прогноза (количество точек в будущем). Модель будет обучена предсказывать именно на это количество шагов вперед."
     )
     
     st.sidebar.number_input(
         "time_limit (sec)", 
-        10, 36000, 60, 
+        10, 36000, 600, 
         key="time_limit_key",
         help="Максимальное время (в секундах) для обучения всех моделей. Чем больше времени, тем лучше результат, но медленнее обучение."
     )
@@ -425,9 +425,32 @@ def setup_ui():
     # ========== (6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")
     st.sidebar.checkbox("Обучение, Прогноз и Сохранение", key="train_predict_save_checkbox")
-    
+
+    # Стилизуем кнопки: красная для обучения, голубые для остальных
+    button_css = """
+    <style>
+    /* Общий стиль для всех кнопок - одинаковая ширина */
+    div[data-testid="stButton"] button {
+        width: 100%;
+    }
+
+    /* Стиль для кнопки обучения модели (красная с белым текстом) */
+    div[data-testid="stButton"] button[kind="secondary"][data-testid="fit_model_btn"] {
+        background-color: #E53935;
+        color: white;
+    }
+
+    /* Стиль для всех остальных кнопок (голубые) */
+    div[data-testid="stButton"] button[kind="secondary"]:not([data-testid="fit_model_btn"]) {
+        background-color: #2196F3;
+        color: white;
+    }
+    </style>
+    """
+    st.sidebar.markdown(button_css, unsafe_allow_html=True)
+
     # Прямой вызов функции при нажатии на кнопку, без промежуточного session_state
-    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели"):
+    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели", use_container_width=True):
         # Нужно импортировать run_training непосредственно здесь, иначе будет циклический импорт
         from app_training import run_training
         st.sidebar.success("Кнопка нажата! Запуск обучения из сайдбара...")
@@ -440,7 +463,7 @@ def setup_ui():
     predictor_exists = st.session_state.get("predictor") is not None
     
     if predictor_exists:
-        if st.sidebar.button("Сделать прогноз", key="predict_btn"):
+        if st.sidebar.button("Сделать прогноз", key="predict_btn", use_container_width=True):
             # Прямой вызов функции прогнозирования
             from app_prediction import run_prediction
             st.sidebar.success("Кнопка нажата! Запуск прогнозирования из сайдбара...")
@@ -450,12 +473,12 @@ def setup_ui():
     
     # Логи обучения/прогноза
     if st.session_state.get("fit_summary") is not None:
-        st.subheader("Результаты обучения")
-        st.json(st.session_state["fit_summary"])
-    
+        with st.expander("Результаты обучения", expanded=False):
+            st.json(st.session_state["fit_summary"])
+
     if st.session_state.get("leaderboard") is not None:
-        st.subheader("Лидерборд моделей")
-        st.dataframe(st.session_state["leaderboard"])
+        with st.expander("Лидерборд моделей", expanded=False):
+            st.dataframe(st.session_state["leaderboard"])
     
     # ========== (8) Сохранение результатов ==========
     st.sidebar.header("8. Сохранение результатов прогноза")
