@@ -204,8 +204,7 @@ Thumbs.db
 !/autogluon/chronos-bolt-*/README.md
 
 # Игнорируем конфиденциальные данные и файлы конфигурации
-/config/*.yaml
-!/config/example.yaml
+
 
 # Игнорируем выходные данные и файлы прогнозов
 /output/
