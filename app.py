@@ -99,7 +99,7 @@ def main():
             show_system_resources()
                 
         # В зависимости от выбранной страницы показываем соответствующий контент
-        if page_choice == "Анализ данных":
+    if page_choice == "Анализ данных":
             run_data_analysis()
         elif page_choice == "Help":
             show_help_page()
@@ -131,15 +131,15 @@ def main():
                     # Кнопка для скачивания Excel
                     st.sidebar.download_button(
                         label="📥 Скачать Excel",
-                        data=excel_buffer.getvalue(),
+                            data=excel_buffer.getvalue(),
                         file_name="forecast_results.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                        )
                     st.sidebar.success("Excel готов для скачивания!")
                 except Exception as e:
                     st.sidebar.error(f"Ошибка при создании Excel: {str(e)}")
                     logging.error(f"Ошибка при создании Excel: {str(e)}")
-            else:
+                    else:
                 st.sidebar.warning("Нет данных прогноза для сохранения в Excel")
         
         # Показать логи
@@ -174,7 +174,7 @@ def main():
                         mime="text/plain",
                     )
                     st.sidebar.success("Файл логов готов для скачивания!")
-                else:
+        else:
                     st.sidebar.warning("Файл логов не найден")
             except Exception as e:
                 st.sidebar.error(f"Ошибка при подготовке логов: {str(e)}")
@@ -198,7 +198,7 @@ def main():
                     model_directory = "AutogluonModels/TimeSeriesModel"
                     if os.path.exists(model_directory):
                         for root, dirs, files in os.walk(model_directory):
-                            for file in files:
+                    for file in files:
                                 file_path = os.path.join(root, file)
                                 archive_path = os.path.join("models", os.path.relpath(file_path, model_directory))
                                 zip_file.write(file_path, arcname=archive_path)
@@ -206,8 +206,8 @@ def main():
                 # Создаем кнопку для скачивания архива
                 st.sidebar.download_button(
                     label="📥 Скачать архив",
-                    data=zip_buffer.getvalue(),
-                    file_name="model_and_logs.zip",
+            data=zip_buffer.getvalue(),
+            file_name="model_and_logs.zip",
                     mime="application/zip",
                 )
                 st.sidebar.success("Архив с моделями и логами готов для скачивания!")

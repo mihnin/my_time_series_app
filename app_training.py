@@ -181,12 +181,12 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             },
             "high_quality": {
                 "hyperparameters": None,
-                "hyperparameter_tune_kwargs": {"num_trials": 5},
+                "hyperparameter_tune_kwargs": None,
                 "time_limit": 600
             },
             "best_quality": {
                 "hyperparameters": None,
-                "hyperparameter_tune_kwargs": {"num_trials": 10},
+                "hyperparameter_tune_kwargs": None,
                 "time_limit": 1800
             }
         }
