@@ -12,51 +12,14 @@ from src.features.feature_engineering import add_russian_holiday_feature, fill_m
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe, forecast
 from src.features.drift_detection import detect_concept_drift, display_drift_results
-from src.utils.exporter import generate_excel_buffer  # Добавлен новый импорт
-from app_ui import get_base_freq  # Добавляем импорт функции для преобразования частоты
+from src.utils.exporter import generate_excel_buffer
+from app_ui import get_base_freq
 
-# Новые импорты
-from src.utils.queue_manager import get_queue_manager, TaskPriority
-from src.utils.session_manager import get_current_session_id, save_to_session
-from src.utils.resource_monitor import get_resource_monitor
-from src.components.queue_status import show_queue_status
-
-# Заменить существующий декоратор в начале файла (примерно строка 13)
+# Заменить существующий декоратор в начале файла
 @st.cache_data(ttl=3600)  # Кэш действителен 1 час
 def get_cached_predictions(predictions_data):
     """Кэширует только результаты прогнозирования"""
     return predictions_data
-
-# Функция запуска предсказания через очередь
-def queue_prediction_task(prediction_params):
-    """Добавляет задачу предсказания в очередь"""
-    # Получаем текущий ID сессии
-    session_id = get_current_session_id()
-    
-    # Проверяем, можно ли добавить новую задачу (достаточно ли ресурсов)
-    resource_monitor = get_resource_monitor()
-    if not resource_monitor.can_accept_new_task():
-        st.error("Система в данный момент перегружена. Пожалуйста, повторите попытку позже.")
-        return None
-    
-    # Получаем менеджер очереди
-    queue_manager = get_queue_manager()
-    
-    # Добавляем задачу предсказания в очередь с нормальным приоритетом
-    task_id = queue_manager.add_task(
-        session_id=session_id,
-        func=_execute_prediction,
-        prediction_params=prediction_params,
-        priority=TaskPriority.NORMAL
-    )
-    
-    logging.info(f"Задача предсказания добавлена в очередь, ID: {task_id}")
-    
-    # Сохраняем ID задачи в сессии для последующего отслеживания
-    save_to_session('current_prediction_task_id', task_id)
-    
-    # Возвращаем ID задачи
-    return task_id
 
 # Фактическая реализация предсказания
 def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, use_multi_target=False, 
@@ -248,173 +211,191 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
                         value_cols = [col for col in forecast_df.columns if col not in [date_col, 'item_id'] and pd.api.types.is_numeric_dtype(forecast_df[col])]
                         value_col = "0.5" if "0.5" in value_cols else (value_cols[0] if value_cols else None)
                         
-                        if value_col is not None:
-                            forecast_df = forecast_df[[date_col, value_col]].rename(
+                        if value_col:
+                            forecast_plot = forecast_df[[date_col, value_col]].rename(
                                 columns={date_col: "date", value_col: "value"}
                             )
-                            forecast_df["type"] = "Прогноз"
+                            forecast_plot["type"] = "Прогноз"
                             
-                            # Объединяем в один DataFrame для графика
-                            combined = pd.concat([historical, forecast_df], ignore_index=True)
-                            graphs_data[item_id] = combined
-            
+                            # Создаем датафрейм для графика
+                            plot_df = pd.concat([historical, forecast_plot], ignore_index=True)
+                            
+                            # Добавляем интервалы если они есть
+                            if "0.1" in value_cols and "0.9" in value_cols:
+                                forecast_lower = forecast_df[[date_col, "0.1"]].rename(
+                                    columns={date_col: "date", "0.1": "lower"}
+                                )
+                                forecast_upper = forecast_df[[date_col, "0.9"]].rename(
+                                    columns={date_col: "date", "0.9": "upper"}
+                                )
+                                # Соединяем с основным датафреймом
+                                plot_df = pd.merge(plot_df, forecast_lower, on="date", how="left")
+                                plot_df = pd.merge(plot_df, forecast_upper, on="date", how="left")
+                            
+                            # Сохраняем данные для графика
+                            graphs_data[item_id] = plot_df
+                        else:
+                            logging.warning(f"Не удалось найти колонку со значением прогноза для ID {item_id}")
+                    else:
+                        logging.warning(f"Прогнозов для ID {item_id} не получено")
+                
+                # Сохраняем данные для графиков для текущей целевой переменной
+                all_graphs_data[target_column] = graphs_data
+                
             except Exception as e:
                 logging.error(f"Ошибка при подготовке данных для графиков: {str(e)}")
-                # Создаем пустой график, если произошла ошибка
-                graphs_data = {"error": pd.DataFrame({"date": [], "value": [], "type": []})}
-            
-            all_graphs_data[target_column] = graphs_data
+                all_graphs_data[target_column] = {}
         
-        prediction_time = time.time() - start_time
-        logging.info(f"Предсказание завершено за {prediction_time:.2f} секунд")
-        
-        # Освобождаем память
-        gc.collect()
-        
-        return {
-            'success': True,
-            'all_forecasts': all_forecasts,
-            'all_graphs_data': all_graphs_data,
-            'prediction_time': prediction_time,
-            'active_tgt_cols': active_tgt_cols
-        }
-        
+        # Проверяем успешность выполнения
+        if all_forecasts:
+            logging.info(f"Прогнозирование успешно завершено за {time.time() - start_time:.2f} сек.")
+            return {
+                'success': True,
+                'forecasts': all_forecasts,
+                'graphs_data': all_graphs_data
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'Не удалось сделать прогноз ни для одной колонки.'
+            }
+    
     except Exception as e:
-        logging.exception(f"Ошибка при выполнении предсказания: {str(e)}")
+        logging.exception(f"Ошибка при выполнении прогноза: {str(e)}")
         return {
             'success': False,
             'error': str(e)
         }
 
 def run_prediction():
-    """Запускает процесс прогнозирования модели"""
-    # Проверки входных данных
-    if st.session_state.get("predictor") is None:
-        st.error("❌ Ошибка: Модель не обучена. Пожалуйста, сначала обучите модель.")
-        return
-    
-    # Получаем параметры прогнозирования
-    dt_col = st.session_state.get("dt_col_key")
-    tgt_col = st.session_state.get("tgt_col_key")
-    id_col = st.session_state.get("id_col_key")
-    
-    # Получаем обученный предиктор из сессии
-    predictor = st.session_state.get("predictor")
-    
-    # Отображаем прогресс-бар и сообщение
-    with st.spinner("🔄 Выполнение прогноза..."):
-        try:
-            # Прямой вызов функции прогнозирования
-            result = _execute_prediction(
-                predictor=predictor,
-                dt_col=dt_col,
-                tgt_col=tgt_col,
-                id_col=id_col if id_col != "<нет>" else None,
-            )
+    """Запускает процесс прогнозирования"""
+    try:
+        # Получаем значения из session_state
+        predictor = st.session_state.get("predictor")
+        dt_col = st.session_state.get("dt_col_key")
+        tgt_col = st.session_state.get("tgt_col_key")
+        id_col = st.session_state.get("id_col_key")
+        use_holidays = st.session_state.get("use_holidays_key", False)
+        fill_method = st.session_state.get("fill_method_key", "None")
+        group_cols_for_fill = st.session_state.get("group_cols_for_fill_key", [])
+        freq = st.session_state.get("freq_key")
+        static_feats = st.session_state.get("static_feats_key", [])
+        horizon_val = st.session_state.get("prediction_length_key", 10)
+        
+        # Логируем начало процесса
+        logging.info(f"Запуск прогнозирования с параметрами: dt_col={dt_col}, tgt_col={tgt_col}, id_col={id_col}")
+        
+        # Извлекаем базовую частоту из пользовательского выбора
+        base_freq = get_base_freq(freq)
+        
+        # Проверяем наличие предиктора
+        if predictor is None:
+            st.error("Сначала обучите модель или загрузите существующую")
+            return
+        
+        # Прогресс-бар и текстовый статус
+        progress_text = "Выполнение прогноза..."
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        status_text.text(progress_text)
+        
+        # Запускаем прогнозирование
+        with st.spinner("Прогнозирование..."):
+            # Вызываем функцию напрямую
+            prediction_params = {
+                "predictor": predictor,
+                "dt_col": dt_col,
+                "tgt_col": tgt_col,
+                "id_col": id_col,
+                "use_holidays": use_holidays,
+                "fill_method": fill_method,
+                "group_cols_for_fill": group_cols_for_fill,
+                "freq": base_freq,
+                "static_feats": static_feats,
+                "horizon_val": horizon_val
+            }
             
-            if result['success']:
-                # Получаем результаты
-                all_forecasts = result.get('all_forecasts', {})
-                all_graphs_data = result.get('all_graphs_data', {})
-                active_tgt_cols = result.get('active_tgt_cols', [])
-                
+            # Обновляем прогресс
+            progress_bar.progress(20)
+            status_text.text("Подготовка данных...")
+            
+            # Выполняем прогнозирование
+            result = _execute_prediction(**prediction_params)
+            
+            # Обновляем прогресс
+            progress_bar.progress(80)
+            status_text.text("Формирование результатов...")
+            
+            # Обрабатываем результат
+            if result.get('success'):
                 # Сохраняем результаты в session_state
-                for tgt_col in active_tgt_cols:
-                    if tgt_col in all_forecasts:
-                        forecast_data = all_forecasts[tgt_col]
-                        # Сохраняем предсказания
-                        st.session_state[f'predictions_{tgt_col}'] = forecast_data['predictions']
-                        # Сохраняем флаг дрейфа
-                        st.session_state[f'drift_detected_{tgt_col}'] = forecast_data['drift_detected']
-                        # Сохраняем информацию о дрейфе
-                        st.session_state[f'drift_info_{tgt_col}'] = forecast_data['drift_info']
-                        # Сохраняем данные для графиков
-                        if tgt_col in all_graphs_data:
-                            st.session_state[f'graphs_data_{tgt_col}'] = all_graphs_data[tgt_col]
+                st.session_state["predictions"] = result.get('forecasts')
+                st.session_state["graphs_data"] = result.get('graphs_data')
+                st.session_state["df_forecast"] = get_cached_predictions(result)
                 
-                # Сохраняем список обработанных целевых переменных
-                st.session_state['processed_target_cols'] = active_tgt_cols
+                # Отображаем результаты
+                progress_bar.progress(100)
+                status_text.text("Прогноз выполнен!")
+                st.success("✅ Прогнозирование успешно завершено!")
                 
-                # Показываем успешное сообщение
-                st.success(f"✅ Прогноз успешно выполнен для {len(active_tgt_cols)} переменных!")
-                
-                # Визуализируем результаты
-                st.subheader("📈 Результаты прогноза")
-                
-                for tgt_col in active_tgt_cols:
-                    with st.expander(f"Прогноз для {tgt_col}", expanded=True):
-                        # Показываем предупреждение о дрейфе концепции, если он обнаружен
-                        if st.session_state.get(f'drift_detected_{tgt_col}', False):
-                            st.warning(f"⚠️ Обнаружен дрейф концепции для переменной {tgt_col}!")
-                            
-                            # Показываем детали дрейфа
-                            drift_info = st.session_state.get(f'drift_info_{tgt_col}', {})
-                            if drift_info:
-                                drift_msg = f"""
-                                📊 **Детали дрейфа концепции:**
-                                - p-value: {drift_info.get('p_value', 'N/A'):.6f}
-                                - Статистика: {drift_info.get('statistic', 'N/A'):.6f}
-                                - Порог: {drift_info.get('threshold', 'N/A'):.6f}
-                                """
-                                st.markdown(drift_msg)
+                # Визуализируем прогнозы
+                for target_col, graphs_data in result.get('graphs_data', {}).items():
+                    # Если данных для визуализации нет, пропускаем
+                    if not graphs_data:
+                        st.warning(f"Нет данных для визуализации прогноза для {target_col}")
+                        continue
+                    
+                    st.subheader(f"Визуализация прогноза для колонки: {target_col}")
+                    
+                    # Отображаем графики для каждого ID
+                    for item_id, plot_df in graphs_data.items():
+                        if plot_df.empty:
+                            continue
                         
-                        # Показываем график для первого ID из данных
-                        graphs_data = st.session_state.get(f'graphs_data_{tgt_col}', {})
-                        if graphs_data:
-                            # Получаем список доступных ID
-                            item_ids = list(graphs_data.keys())
-                            
-                            # Выбор ID для отображения
-                            selected_id = st.selectbox(
-                                f"Выберите ID для отображения графика ({tgt_col})",
-                                options=item_ids,
-                                key=f"select_id_{tgt_col}"
-                            )
-                            
-                            # Отображаем график
-                            if selected_id in graphs_data:
-                                import plotly.express as px
-                                combined_data = graphs_data[selected_id]
-                                fig = px.line(
-                                    combined_data,
-                                    x="date",
-                                    y="value",
-                                    color="type",
-                                    title=f"Прогноз для {tgt_col} (ID: {selected_id})",
-                                    labels={"value": "Значение", "date": "Дата", "type": "Тип данных"}
-                                )
-                                # Увеличиваем размер маркеров и толщину линий для лучшей видимости
-                                fig.update_traces(mode="lines+markers", marker=dict(size=8), line=dict(width=2))
-                                # Увеличиваем высоту графика
-                                st.plotly_chart(fig, use_container_width=True, height=600)
-                
-                # Добавляем кнопку для скачивания результатов
-                for tgt_col in active_tgt_cols:
-                    predictions = st.session_state.get(f'predictions_{tgt_col}')
-                    if predictions is not None:
-                        from src.utils.exporter import generate_excel_buffer
-                        excel_buffer = generate_excel_buffer(
-                            predictions,
-                            st.session_state.get('leaderboard'),
-                            None,  # static_df_train
-                            None   # weighted_ensemble_info
-                        )
+                        # Проверяем наличие интервалов
+                        has_intervals = 'lower' in plot_df.columns and 'upper' in plot_df.columns
                         
-                        st.download_button(
-                            label=f"📥 Скачать результаты для {tgt_col} в Excel",
-                            data=excel_buffer.getvalue(),
-                            file_name=f"forecast_results_{tgt_col}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"download_{tgt_col}"
-                        )
+                        # Создаем график
+                        fig = px.line(plot_df, x="date", y="value", color="type", 
+                                     title=f"Прогноз для ID: {item_id}",
+                                     labels={"value": target_col, "date": "Дата", "type": "Тип данных"})
+                        
+                        # Добавляем интервалы если они есть
+                        if has_intervals:
+                            forecast_only = plot_df[plot_df["type"] == "Прогноз"].copy()
+                            fig.add_scatter(x=forecast_only["date"], y=forecast_only["lower"], 
+                                           mode='lines', line=dict(width=0), 
+                                           showlegend=False)
+                            fig.add_scatter(x=forecast_only["date"], y=forecast_only["upper"], 
+                                           mode='lines', line=dict(width=0), 
+                                           fill='tonexty', fillcolor='rgba(0, 176, 246, 0.2)', 
+                                           name='90% интервал')
+                        
+                        fig.update_layout(height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                # Кнопка для сохранения результатов в Excel
+                excel_buffer = generate_excel_buffer(result)
+                if excel_buffer:
+                    st.download_button(
+                        label="📥 Скачать результаты прогноза в Excel",
+                        data=excel_buffer.getvalue(),
+                        file_name=f"forecast_results.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                    
+                # Если включен чекбокс "Обучение, Прогноз и Сохранение", автоматически сохраняем результаты
+                if st.session_state.get('train_predict_save_checkbox', False):
+                    st.info("🔄 Сохранение результатов...")
+                    # Логика для автоматического сохранения результатов
+                    # ...
             else:
                 # Задача завершилась с ошибкой
+                progress_bar.progress(100)
+                status_text.text("Ошибка при выполнении прогноза!")
                 st.error(f"❌ Ошибка при выполнении прогноза: {result.get('error', 'Неизвестная ошибка')}")
-        
-        except Exception as e:
-            st.error(f"❌ Произошла ошибка при выполнении прогноза: {str(e)}")
-            logging.exception(f"Ошибка при выполнении прогноза: {e}")
-            return
-
-
-
+    
+    except Exception as e:
+        st.error(f"❌ Произошла ошибка при прогнозировании: {str(e)}")
+        logging.exception(f"Ошибка при прогнозировании: {e}")
+        return 
