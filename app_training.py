@@ -277,7 +277,21 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         
         # Получаем и сохраняем результаты
         leaderboard = predictor.leaderboard(silent=True)
-        fit_summary = predictor.fit_summary()
+        
+        # Пытаемся получить fit_summary, но обрабатываем возможные ошибки
+        fit_summary = None
+        try:
+            fit_summary = predictor.fit_summary()
+        except ValueError as ve:
+            # Проверяем наличие специфической ошибки с day_of_week
+            if "Cannot locate autogluon.timeseries.utils" in str(ve):
+                logging.warning(f"Не удалось получить fit_summary из-за проблемы с модулем: {str(ve)}")
+                logging.info("Продолжаем работу без fit_summary")
+            else:
+                # Для других ошибок ValueError пробрасываем исключение
+                raise
+        except Exception as e:
+            logging.warning(f"Не удалось получить fit_summary: {str(e)}")
         
         # Сохраняем метаданные модели
         model_metadata = {
@@ -310,16 +324,16 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         save_model_metadata(model_metadata)
         
         # Формируем результат выполнения задачи
-        training_result.update({
+        training_result = {
             "success": True,
             "predictor": predictor,
             "leaderboard": leaderboard,
-            "fit_summary": fit_summary,
+            "fit_summary": fit_summary,  # Может быть None, если возникла ошибка
             "training_time": training_time,
             "best_model_name": best_model_name,
             "best_model_score": best_model_score,
             "model_metadata": model_metadata
-        })
+        }
         
         # Очищаем память
         gc.collect()
