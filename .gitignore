@@ -170,6 +170,30 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Проектные файлы для игнорирования
 AutogluonModels/
 /results.xlsx
 results.xlsx
+
+# Игнорируем все лог-файлы
+/logs/
+logs/*.log
+logs/archive/
+
+# Игнорируем файлы сессий
+/data/sessions/
+data/sessions/*.pkl
+
+# Игнорируем резервные копии файлов
+*.bak
+
+# Игнорируем временные файлы
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Игнорируем большие текстовые файлы с результатами тестов или документацией
+*.txt
+!requirements.txt
+!LICENSE.txt
