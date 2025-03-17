@@ -1,10 +1,23 @@
 # src/utils/exporter.py
 import io
 import pandas as pd
-from openpyxl.styles import PatternFill
 import logging
 import os
 from pathlib import Path
+
+# Пытаемся импортировать openpyxl.styles, если не удается, используем заглушку
+try:
+    from openpyxl.styles import PatternFill
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    logging.warning("openpyxl.styles не установлен, подсветка ячеек в Excel не будет работать")
+    # Создаем заглушку для PatternFill
+    class PatternFill:
+        def __init__(self, start_color=None, end_color=None, fill_type=None):
+            self.start_color = start_color
+            self.end_color = end_color
+            self.fill_type = fill_type
+    OPENPYXL_AVAILABLE = False
 
 # Словарь соответствия названий моделей и их локальных путей
 CHRONOS_MODELS_MAPPING = {
@@ -157,13 +170,14 @@ def generate_excel_buffer(result):
                     
                     # Подсвечиваем лучшую модель
                     try:
-                        sheet_lb = writer.sheets["Лидерборд"]
-                        best_idx = 0  # первая строка - лучшая модель
-                        fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                        row_excel = best_idx + 2  # +2 из-за заголовка и 1-индексации в Excel
-                        for col_idx in range(1, leaderboard_df.shape[1] + 1):
-                            cell = sheet_lb.cell(row=row_excel, column=col_idx)
-                            cell.fill = fill_green
+                        if OPENPYXL_AVAILABLE:
+                            sheet_lb = writer.sheets["Лидерборд"]
+                            best_idx = 0  # первая строка - лучшая модель
+                            fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                            row_excel = best_idx + 2  # +2 из-за заголовка и 1-индексации в Excel
+                            for col_idx in range(1, leaderboard_df.shape[1] + 1):
+                                cell = sheet_lb.cell(row=row_excel, column=col_idx)
+                                cell.fill = fill_green
                     except Exception as e:
                         logging.warning(f"Не удалось подсветить лучшую модель в лидерборде: {e}")
                     
@@ -204,25 +218,32 @@ def generate_excel_buffer(result):
                     pd.DataFrame([{"Ошибка": f"Ошибка при отображении информации об ансамбле: {str(e)}"}]).to_excel(
                         writer, sheet_name="Ансамбль_ошибка", index=False)
             
-            # Добавляем детальную информацию о моделях, если она присутствует
-            model_details_df = None
-            if 'model_details' in result and isinstance(result['model_details'], pd.DataFrame) and not result['model_details'].empty:
-                model_details_df = result['model_details'].copy()
-                logging.info("Найдена детальная информация о моделях в результате")
-            
-            if model_details_df is not None and not model_details_df.empty:
-                try:
-                    # Пробуем красиво отформатировать параметры моделей
-                    if 'Параметры' in model_details_df.columns:
-                        model_details_df['Параметры'] = model_details_df['Параметры'].apply(
-                            lambda x: str(x).replace('{', '\n{').replace(', ', ',\n ')
-                        )
-                    
-                    model_details_df.to_excel(writer, sheet_name="Детали моделей", index=False)
-                    sheets_created += 1
-                    logging.info("Добавлена детальная информация о моделях")
-                except Exception as e:
-                    logging.error(f"Ошибка при сохранении деталей моделей: {e}")
+            # Добавляем детальную информацию о моделях
+            if model_details is not None:
+                # Преобразуем model_details в DataFrame, если это список словарей
+                model_details_df = None
+                if isinstance(model_details, list) and len(model_details) > 0:
+                    model_details_df = pd.DataFrame(model_details)
+                    logging.info(f"Преобразовали список словарей в DataFrame, строк: {len(model_details_df)}")
+                elif isinstance(model_details, pd.DataFrame):
+                    model_details_df = model_details
+                    logging.info(f"model_details уже является DataFrame, строк: {len(model_details_df)}")
+                else:
+                    logging.warning(f"model_details имеет неподдерживаемый тип: {type(model_details)}")
+                
+                if model_details_df is not None and not model_details_df.empty:
+                    try:
+                        # Пробуем красиво отформатировать параметры моделей
+                        if 'Параметры' in model_details_df.columns:
+                            model_details_df['Параметры'] = model_details_df['Параметры'].apply(
+                                lambda x: str(x).replace('{', '\n{').replace(', ', ',\n ')
+                            )
+                        
+                        model_details_df.to_excel(writer, sheet_name="Детали моделей", index=False)
+                        sheets_created += 1
+                        logging.info("Добавлена детальная информация о моделях в ансамбле")
+                    except Exception as e:
+                        logging.error(f"Ошибка при сохранении деталей моделей: {e}")
             
             # Добавляем информацию о модели-ансамбле, если она присутствует
             # Дополнительный извлечение весов моделей, если их нет в result
@@ -245,15 +266,16 @@ def generate_excel_buffer(result):
                     
                     # Подсвечиваем модели с наибольшим весом
                     try:
-                        sheet = writer.sheets["Веса ансамбля"]
-                        fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                        # Подсвечиваем модели с весом выше среднего
-                        mean_weight = ensemble_weights['Вес (%)'].mean()
-                        for idx, row in enumerate(ensemble_weights.itertuples(), start=2):  # start=2 из-за заголовка
-                            if row._3 > mean_weight:  # _3 - индекс столбца 'Вес (%)'
-                                for col in range(1, len(ensemble_weights.columns) + 1):
-                                    cell = sheet.cell(row=idx, column=col)
-                                    cell.fill = fill_green
+                        if OPENPYXL_AVAILABLE:
+                            sheet = writer.sheets["Веса ансамбля"]
+                            fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                            # Подсвечиваем модели с весом выше среднего
+                            mean_weight = ensemble_weights['Вес (%)'].mean()
+                            for idx, row in enumerate(ensemble_weights.itertuples(), start=2):  # start=2 из-за заголовка
+                                if row._3 > mean_weight:  # _3 - индекс столбца 'Вес (%)'
+                                    for col in range(1, len(ensemble_weights.columns) + 1):
+                                        cell = sheet.cell(row=idx, column=col)
+                                        cell.fill = fill_green
                     except Exception as e:
                         logging.warning(f"Не удалось подсветить важные модели в ансамбле: {e}")
                 except Exception as e:
@@ -575,13 +597,14 @@ def generate_excel_buffer_legacy(preds, leaderboard, static_train, ensemble_info
         if leaderboard is not None:
             leaderboard.to_excel(writer, sheet_name="Leaderboard", index=False)
             try:
-                sheet_lb = writer.sheets["Leaderboard"]
-                best_idx = leaderboard.iloc[0].name  # индекс строки лучшей модели
-                fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                row_excel = best_idx + 2  # +2 из-за заголовка
-                for col_idx in range(1, leaderboard.shape[1] + 1):
-                    cell = sheet_lb.cell(row=row_excel, column=col_idx)
-                    cell.fill = fill_green
+                if OPENPYXL_AVAILABLE:
+                    sheet_lb = writer.sheets["Leaderboard"]
+                    best_idx = leaderboard.iloc[0].name  # индекс строки лучшей модели
+                    fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    row_excel = best_idx + 2  # +2 из-за заголовка
+                    for col_idx in range(1, leaderboard.shape[1] + 1):
+                        cell = sheet_lb.cell(row=row_excel, column=col_idx)
+                        cell.fill = fill_green
             except Exception as e:
                 print(f"Ошибка при подсветке лучшей модели в Leaderboard: {e}")
         # Лист со статическими признаками
