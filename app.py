@@ -39,8 +39,8 @@ def clear_logs():
             shutil.copy2(LOG_FILE, archive_path)
             
             # Теперь очищаем текущий лог
-            with open(LOG_FILE, 'w') as f:
-                f.write(f"# Логи очищены {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            with open(LOG_FILE, 'w', encoding='utf-8') as f:
+                f.write(f"# Логи очищены {datetime.datetime.now().strftime('%Y-%м-%d %H:%M:%S')}\n")
                 
             return True, f"Логи успешно очищены. Предыдущая версия сохранена как {archive_filename}"
         else:
@@ -191,16 +191,19 @@ def main():
             
             try:
                 if os.path.exists(LOG_FILE):
-                    with open(LOG_FILE, "r", encoding="utf-8") as log_file:
-                        logs_content = log_file.read()
+                    # Используем нашу улучшенную функцию read_logs вместо прямого чтения файла
+                    logs_content = read_logs()
                     
-                    st.sidebar.download_button(
-                        label="📥 Скачать файл логов",
-                        data=logs_content,
-                        file_name="app_logs.log",
-                        mime="text/plain",
-                    )
-                    st.sidebar.success("Файл логов готов для скачивания!")
+                    if logs_content:
+                        st.sidebar.download_button(
+                            label="📥 Скачать файл логов",
+                            data=logs_content,
+                            file_name="app_logs.log",
+                            mime="text/plain",
+                        )
+                        st.sidebar.success("Файл логов готов для скачивания!")
+                    else:
+                        st.sidebar.warning("Не удалось прочитать содержимое лог-файла")
                 else:
                     st.sidebar.warning("Файл логов не найден")
             except Exception as e:
@@ -230,7 +233,19 @@ def main():
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     # Добавляем логи в архив
                     if os.path.exists(LOG_FILE):
-                        zip_file.write(LOG_FILE, arcname="logs/app_logs.log")
+                        # Чтение логов с использованием улучшенной функции
+                        log_content = read_logs()
+                        
+                        # Создаем временный файл для логов с правильной кодировкой
+                        temp_log_path = os.path.join(LOGS_DIR, "temp_logs_utf8.log")
+                        with open(temp_log_path, 'w', encoding='utf-8') as temp_log:
+                            temp_log.write(log_content)
+                        
+                        # Добавляем в архив временный файл с правильной кодировкой
+                        zip_file.write(temp_log_path, arcname="logs/app_logs.log")
+                        
+                        # Удаляем временный файл
+                        os.remove(temp_log_path)
                     
                     # Добавляем архивные логи если они есть
                     archive_dir = os.path.join(LOGS_DIR, "archive")

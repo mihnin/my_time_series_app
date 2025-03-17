@@ -139,6 +139,18 @@ def generate_excel_buffer(result):
                     pd.DataFrame([{"Ошибка": f"Ошибка при отображении лидерборда: {str(e)}"}]).to_excel(
                         writer, sheet_name="Лидерборд_ошибка", index=False)
             
+            # Добавляем информацию о модели-ансамбле, если она присутствует
+            if 'ensemble_info' in result and isinstance(result['ensemble_info'], pd.DataFrame) and not result['ensemble_info'].empty:
+                try:
+                    ensemble_df = result['ensemble_info'].copy()
+                    ensemble_df.to_excel(writer, sheet_name="WeightedEnsembleInfo", index=False)
+                    sheets_created += 1
+                    logging.info("Добавлена информация о модели типа ансамбль")
+                except Exception as e:
+                    logging.error(f"Ошибка при сохранении информации об ансамбле: {e}")
+                    pd.DataFrame([{"Ошибка": f"Ошибка при отображении информации об ансамбле: {str(e)}"}]).to_excel(
+                        writer, sheet_name="Ансамбль_ошибка", index=False)
+            
             # Если не создано ни одной страницы, создаем информационную страницу
             if sheets_created == 0:
                 pd.DataFrame([{
