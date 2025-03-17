@@ -435,13 +435,13 @@ def setup_ui():
     }
 
     /* Стиль для кнопки обучения модели (красная с белым текстом) */
-    div[data-testid="stButton"] button[kind="secondary"][data-testid="fit_model_btn"] {
+    div[data-testid="stButton"] button[kind="secondary"][data-testid="StyledFullScreenButton"] {
         background-color: #E53935;
         color: white;
     }
 
     /* Стиль для всех остальных кнопок (голубые) */
-    div[data-testid="stButton"] button[kind="secondary"]:not([data-testid="fit_model_btn"]) {
+    div[data-testid="stButton"] button[kind="secondary"]:not([data-testid="StyledFullScreenButton"]) {
         background-color: #2196F3;
         color: white;
     }
@@ -449,8 +449,8 @@ def setup_ui():
     """
     st.sidebar.markdown(button_css, unsafe_allow_html=True)
 
-    # Прямой вызов функции при нажатии на кнопку, без промежуточного session_state
-    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели", use_container_width=True):
+    # Красная кнопка на всю ширину
+    if st.sidebar.button("Обучить модель", key="fit_model_btn", help="Нажмите для запуска обучения модели", type="primary", use_container_width=True):
         # Нужно импортировать run_training непосредственно здесь, иначе будет циклический импорт
         from app_training import run_training
         st.sidebar.success("Кнопка нажата! Запуск обучения из сайдбара...")
@@ -487,8 +487,10 @@ def setup_ui():
 
     # ========== (9) Логи приложения ==========
     st.sidebar.header("9. Логи приложения")
-    st.sidebar.button("Показать логи", key="show_logs_btn", on_click=lambda: st.session_state.update({"logs_show_clicked": True}), use_container_width=True)
-    st.sidebar.button("Скачать логи", key="download_logs_btn", on_click=lambda: st.session_state.update({"logs_download_clicked": True}), use_container_width=True)
+    log_col1, log_col2 = st.sidebar.columns(2)
+    log_col1.button("Показать логи", key="show_logs_btn", on_click=lambda: st.session_state.update({"logs_show_clicked": True}), use_container_width=True)
+    log_col2.button("Скачать логи", key="download_logs_btn", on_click=lambda: st.session_state.update({"logs_download_clicked": True}), use_container_width=True)
+    st.sidebar.button("Очистить логи", key="clear_logs_btn", on_click=lambda: st.session_state.update({"logs_clear_clicked": True}), use_container_width=True)
 
     # ========== (10) Выгрузка моделей и логов ==========
     st.sidebar.header("10. Выгрузка моделей и логов")

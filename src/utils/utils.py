@@ -5,11 +5,13 @@ from logging.handlers import RotatingFileHandler
 import sys
 import chardet
 
-LOG_FILE = "logs/app.log"
+# Константы для работы с логами
+LOGS_DIR = "logs"
+LOG_FILE = os.path.join(LOGS_DIR, "app.log")
 
 def setup_logger():
-    if not os.path.exists("logs"):
-        os.makedirs("logs")
+    if not os.path.exists(LOGS_DIR):
+        os.makedirs(LOGS_DIR)
     logger = logging.getLogger()
     logger.handlers = []
     formatter = logging.Formatter(

@@ -9,15 +9,45 @@ import psutil
 from openpyxl.styles import PatternFill
 import time
 import threading
-
+import shutil
+import datetime
 from app_ui import setup_ui
 from app_training import run_training
 from app_prediction import run_prediction
 from app_saving import try_load_existing_model, save_model_metadata, load_model_metadata
-from src.utils.utils import setup_logger, read_logs, LOG_FILE
+from src.utils.utils import setup_logger, read_logs, LOG_FILE, LOGS_DIR
 from src.help_page import show_help_page
 from src.utils.exporter import generate_excel_buffer
 from data_analysis import run_data_analysis
+
+# Функция для удаления логов
+def clear_logs():
+    """Очищает текущие логи и архивирует старые"""
+    try:
+        # Проверяем существование директории для архивов
+        archive_dir = os.path.join(LOGS_DIR, "archive")
+        os.makedirs(archive_dir, exist_ok=True)
+        
+        # Если существует файл логов
+        if os.path.exists(LOG_FILE):
+            # Сначала архивируем текущий лог
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_filename = f"app_log_{timestamp}.log"
+            archive_path = os.path.join(archive_dir, archive_filename)
+            
+            # Копируем текущий лог в архив
+            shutil.copy2(LOG_FILE, archive_path)
+            
+            # Теперь очищаем текущий лог
+            with open(LOG_FILE, 'w') as f:
+                f.write(f"# Логи очищены {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                
+            return True, f"Логи успешно очищены. Предыдущая версия сохранена как {archive_filename}"
+        else:
+            return False, "Файл логов не найден"
+    except Exception as e:
+        logging.error(f"Ошибка при очистке логов: {str(e)}")
+        return False, f"Ошибка при очистке логов: {str(e)}"
 
 # Функция для отображения системных ресурсов
 def show_system_resources():
@@ -181,6 +211,17 @@ def main():
                 st.sidebar.error(f"Ошибка при подготовке логов: {str(e)}")
                 logging.error(f"Ошибка при подготовке логов: {str(e)}")
         
+        # Очистить логи
+        if st.session_state.get('logs_clear_clicked', False):
+            # После обработки сбрасываем флаг
+            st.session_state['logs_clear_clicked'] = False
+            
+            success, message = clear_logs()
+            if success:
+                st.sidebar.success(message)
+            else:
+                st.sidebar.error(message)
+        
         # Скачать архив с моделями и логами
         if st.session_state.get('model_download_clicked', False):
             # После обработки сбрасываем флаг
@@ -194,6 +235,15 @@ def main():
                     # Добавляем логи в архив
                     if os.path.exists(LOG_FILE):
                         zip_file.write(LOG_FILE, arcname="logs/app_logs.log")
+                    
+                    # Добавляем архивные логи если они есть
+                    archive_dir = os.path.join(LOGS_DIR, "archive")
+                    if os.path.exists(archive_dir):
+                        for root, dirs, files in os.walk(archive_dir):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                archive_path = os.path.join("logs/archive", file)
+                                zip_file.write(file_path, arcname=archive_path)
                     
                     # Добавляем файлы модели в архив
                     model_directory = "AutogluonModels/TimeSeriesModel"
