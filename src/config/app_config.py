@@ -224,6 +224,15 @@ def create_config() -> AppConfig:
     # Копируем настройки автоопределения полей
     if 'auto_detection' in config_data:
         app_config.auto_detection = config_data['auto_detection']
+        # Явно отключаем определение частоты, даже если в конфигурации указано иначе
+        if 'frequency_enabled' in app_config.auto_detection:
+            app_config.auto_detection['frequency_enabled'] = False
+    else:
+        # Если секции auto_detection нет, создаем ее с отключенным определением частоты
+        app_config.auto_detection = {
+            'fields_enabled': True,
+            'frequency_enabled': False
+        }
     
     # Копируем словари метрик и моделей
     if 'metrics_dict' in config_data:

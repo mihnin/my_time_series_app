@@ -2,7 +2,6 @@
 # src/features/feature_engineering.py
 import pandas as pd
 import streamlit as st
-import holidays
 import logging
 import numpy as np
 from typing import List, Optional, Union, Dict, Any
@@ -72,22 +71,61 @@ def fill_missing_values(df: pd.DataFrame, method: str = "None", group_cols=None)
     
     return df
 
-def add_russian_holiday_feature(df: pd.DataFrame, date_col="timestamp", holiday_col="russian_holiday") -> pd.DataFrame:
+def add_russian_holiday_feature(df, date_col):
     """
-    Добавляет колонку с индикатором праздников РФ.
+    Добавляет признак, указывающий, является ли дата российским праздником.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Датафрейм с данными
+    date_col : str
+        Название колонки с датой
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        Датафрейм с добавленным признаком is_holiday
     """
-    if date_col not in df.columns:
-        st.warning("Колонка даты не найдена, не можем добавить признак праздника.")
+    try:
+        import holidays
+        
+        # Проверяем, что колонка с датой существует
+        if date_col not in df.columns:
+            logging.warning(f"Колонка {date_col} не найдена в датафрейме")
+            return df
+            
+        # Копируем датафрейм для изменений
+        df_result = df.copy()
+        
+        # Преобразуем колонку с датой в формат datetime, если нужно
+        if not pd.api.types.is_datetime64_dtype(df_result[date_col]):
+            try:
+                df_result[date_col] = pd.to_datetime(df_result[date_col])
+            except Exception as e:
+                logging.error(f"Ошибка при преобразовании {date_col} в дату: {str(e)}")
+                return df
+        
+        # Получаем список российских праздников
+        ru_holidays = holidays.Russia()
+        
+        # Создаем функцию для проверки, является ли дата праздником
+        def is_holiday(date):
+            return 1 if date in ru_holidays else 0
+            
+        # Добавляем признак is_holiday
+        df_result['is_holiday'] = df_result[date_col].apply(is_holiday)
+        
+        return df_result
+    except ImportError:
+        logging.warning("Модуль holidays не установлен. Признак праздников не будет добавлен.")
+        logging.info("Установите модуль holidays: pip install holidays")
+        # Просто возвращаем исходный датафрейм без изменений
         return df
-    if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-    min_year = df[date_col].dt.year.min()
-    max_year = df[date_col].dt.year.max()
-    ru_holidays = holidays.country_holidays(country="RU", years=range(min_year, max_year + 1))
-    def is_holiday(dt):
-        return 1.0 if dt.date() in ru_holidays else 0.0
-    df[holiday_col] = df[date_col].apply(is_holiday).astype(float)
-    return df
+    except Exception as e:
+        logging.error(f"Ошибка при добавлении признака праздников: {str(e)}")
+        # В случае других ошибок также возвращаем исходный датафрейм
+        return df
 
 def add_time_features(df: pd.DataFrame, 
                      date_col: str, 

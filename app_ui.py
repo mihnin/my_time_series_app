@@ -96,24 +96,8 @@ def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
                     logging.warning(f"Поле {key} содержит множество значений, берем первое")
                     detected_fields[key] = detected_fields[key].iloc[0] if not detected_fields[key].empty else None
         
-        # Определяем частоту, если есть колонка с датой
-        if detected_fields.get('dt_col') is not None and detected_fields['dt_col'] in df.columns:
-            try:
-                freq = detect_frequency(
-                    df, 
-                    date_col=detected_fields['dt_col'], 
-                    id_col=detected_fields.get('id_col')
-                )
-                # Преобразуем базовое значение частоты в полное описание
-                if freq in FREQ_MAPPING:
-                    detected_fields['freq'] = FREQ_MAPPING[freq]
-                else:
-                    detected_fields['freq'] = FREQ_MAPPING['auto']
-                    logging.warning(f"Определена неизвестная частота: {freq}, используем 'auto'")
-                
-            except Exception as e:
-                logging.error(f"Ошибка при определении частоты: {e}")
-                detected_fields['freq'] = FREQ_MAPPING['auto']
+        # Устанавливаем значение частоты по умолчанию - 'D (день)'
+        detected_fields['freq'] = "D (день)"
         
         logging.info(f"Автоматически определены поля: {detected_fields}")
         return detected_fields
@@ -341,51 +325,35 @@ def setup_ui():
     # ========== (4) Частота (freq) ==========
     st.sidebar.header("4. Частота (freq)")
     
-    # Получаем список доступных частот
-    freq_options = ["auto (угадать)", "D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
-    
+    # Получаем список доступных частот без авто-определения
+    freq_options = ["D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
+
     if "freq_key" not in st.session_state:
-        st.session_state["freq_key"] = "auto (угадать)"
-    
+        st.session_state["freq_key"] = "D (день)"  # Меняем значение по умолчанию с 'auto (угадать)' на 'D (день)'
+
     # Проверяем, что значение freq_key есть в списке опций
-    # Если значение не является элементом списка, найдем ближайшее соответствие
     current_freq = st.session_state["freq_key"]
     if current_freq not in freq_options:
-        # Пытаемся найти опцию, которая начинается с текущего значения
-        found = False
-        for opt in freq_options:
-            # Извлекаем базовое значение частоты (до пробела)
-            base_freq = opt.split(" ")[0]
-            if current_freq == base_freq:
-                st.session_state["freq_key"] = opt
-                found = True
-                break
-        
-        # Если соответствие не найдено, используем значение по умолчанию
-        if not found:
-            st.session_state["freq_key"] = "auto (угадать)"
-    
-    # Кнопка автоопределения частоты
-    freq_col1, freq_col2 = st.sidebar.columns([3, 1])
-    
-    with freq_col1:
-        freq_selection = st.selectbox("freq", freq_options, index=freq_options.index(st.session_state["freq_key"]), key="freq_key")
-    
-    with freq_col2:
-        if df_current is not None and dt_col != "<нет>" and st.button("🔄", key="auto_detect_freq_btn", help="Автоопределение частоты"):
-            try:
-                freq = detect_frequency(df_current, dt_col, id_col if id_col != "<нет>" else None)
-                # Используем словарь соответствия частот для корректного отображения
-                if freq in FREQ_MAPPING:
-                    st.session_state["freq_key"] = FREQ_MAPPING[freq]
-                    st.sidebar.success(f"Определена частота: {FREQ_MAPPING[freq]}")
-                    st.rerun()
-                else:
-                    st.sidebar.warning(f"Определена неизвестная частота: {freq}, используем 'auto'")
-                    st.session_state["freq_key"] = FREQ_MAPPING['auto']
-                    st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Ошибка при определении частоты: {e}")
+        # Если текущее значение - 'auto (угадать)', меняем на 'D (день)'
+        if current_freq == "auto (угадать)":
+            st.session_state["freq_key"] = "D (день)"
+        else:
+            # Проверяем базовое значение частоты
+            for opt in freq_options:
+                # Извлекаем базовое значение частоты (до пробела)
+                base_freq = opt.split(" ")[0]
+                if current_freq == base_freq or current_freq.startswith(base_freq):
+                    st.session_state["freq_key"] = opt
+                    break
+            
+            # Если соответствие не найдено, используем D (день) по умолчанию
+            if current_freq not in freq_options:
+                st.session_state["freq_key"] = "D (день)"
+
+    # Выбор частоты (без кнопки автоопределения)
+    freq_selection = st.sidebar.selectbox("Частота данных", freq_options, 
+                                       index=freq_options.index(st.session_state["freq_key"]), 
+                                       key="freq_key")
     
     # ========== (5) Метрика и модели ==========
     st.sidebar.header("5. Метрика и модели")

@@ -133,72 +133,28 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
                 static_df.set_index("item_id", inplace=True)
                 logging.info(f"Создан DataFrame статических признаков с колонками: {list(static_df.columns)}")
 
-        # Преобразуем данные в TimeSeriesDataFrame
-        ts_df = make_timeseries_dataframe(df_formatted, static_df)
+        # Изменяем как преобразуется частота из пользовательского интерфейса
+        base_freq = get_base_freq(freq)
+        logging.info(f"Используется частота: {base_freq}")
+
+        # Если это 'auto', заменяем на 'D' для надежности
+        if base_freq == 'auto':
+            logging.warning("Автоматическое определение частоты отключено, используется 'D' (день)")
+            base_freq = 'D'
         
-        # AutoGluon автоматически определит частоту
-        actual_freq = freq if freq != "auto" else "auto"
-        
-        # Если частота 'auto', попробуем установить стандартное значение D (daily)
-        if actual_freq == "auto":
-            logging.warning("Автоматическое определение частоты заменено на фиксированное значение 'D' (ежедневно)")
-            try:
-                # Проверим первые строки, чтобы определить вероятную частоту
-                item_ids = ts_df.index.get_level_values("item_id").unique()
-                if len(item_ids) > 0:
-                    first_item = item_ids[0]
-                    sample = ts_df.loc[first_item]
-                    dates = pd.to_datetime(sample.index)
-                    
-                    # Если даты имеют час, минуту и секунду = 0, вероятно, это дневные данные
-                    if (dates.hour == 0).all() and (dates.minute == 0).all() and (dates.second == 0).all():
-                        if (dates.day == 1).all() and (dates.day_of_week == 0).all():
-                            logging.info("Обнаружены ежемесячные данные")
-                            actual_freq = 'M'  # месячная частота
-                        else:
-                            logging.info("Обнаружены ежедневные данные")
-                            actual_freq = 'D'  # дневная частота
-                    else:
-                        time_diff = (dates[1:] - dates[:-1]).mode()[0]
-                        if time_diff.seconds == 3600:
-                            logging.info("Обнаружены часовые данные")
-                            actual_freq = 'H'  # часовая частота
-                        else:
-                            logging.info("Установлена дневная частота по умолчанию")
-                            actual_freq = 'D'  # дневная частота по умолчанию
-                else:
-                    logging.warning("Невозможно определить частоту, устанавливаем 'D' (ежедневно) по умолчанию")
-                    actual_freq = 'D'
-                
-                # Устанавливаем частоту
-                logging.info(f"Устанавливаем явную частоту данных: {actual_freq}")
-                ts_df = ts_df.convert_frequency(freq=actual_freq)
-                logging.info(f"Частота данных успешно установлена: {actual_freq}")
-            except Exception as e:
-                logging.error(f"Ошибка при определении и установке частоты: {str(e)}")
-                logging.warning("Используем 'D' (ежедневно) как последнюю попытку")
-                try:
-                    actual_freq = 'D'
-                    ts_df = ts_df.convert_frequency(freq=actual_freq)
-                    logging.info("Успешно установлена частота 'D' (ежедневно)")
-                except Exception as e2:
-                    logging.error(f"Окончательная ошибка при установке частоты: {str(e2)}")
-                    raise ValueError(f"Не удалось установить частоту: {str(e2)}")
-        elif actual_freq != "auto":
-            try:
-                logging.info(f"Устанавливаем явную частоту данных: {actual_freq}")
-                ts_df = ts_df.convert_frequency(freq=actual_freq)
-                logging.info(f"Частота данных успешно установлена: {actual_freq}")
-            except Exception as e:
-                logging.error(f"Ошибка при установке частоты {actual_freq}: {str(e)}")
-                raise ValueError(f"Не удалось установить частоту {actual_freq}: {str(e)}")
+        # Используем теперь base_freq вместо auto-detect при создании TimeSeriesDataFrame
+        ts_df = make_timeseries_dataframe(
+            df_formatted,
+            static_features=static_df,
+            freq=base_freq  # Явно указываем частоту
+        )
         
         # Сохраняем вычисленную частоту для дальнейшего использования
-        training_result = {'actual_freq': actual_freq}
+        training_result = {'actual_freq': base_freq}
         
         # Детальное логирование информации о частоте
-        logging.info(f"Используемая частота данных: {actual_freq}")
-        if actual_freq == "auto":
+        logging.info(f"Используемая частота данных: {base_freq}")
+        if base_freq == "auto":
             logging.warning("Автоматическое определение частоты может вызвать ошибку. Рекомендуется явно указать частоту.")
         
         # Настраиваем параметры обучения
@@ -300,7 +256,7 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             target="target",
             eval_metric=short_metric,
             path=model_path,
-            freq=actual_freq if actual_freq != "auto" else None
+            freq=base_freq if base_freq != "auto" else None
         )
         
         # Обучаем модель
@@ -330,7 +286,7 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             "dt_col": dt_col,
             "tgt_col": tgt_col,
             "id_col": id_col,
-            "freq": actual_freq,
+            "freq": base_freq,
             "horizon": prediction_length,
             "use_holidays": use_holidays,
             "static_features": static_feats,
