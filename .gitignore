@@ -203,6 +203,9 @@ Thumbs.db
 # При необходимости можно добавить исключение для README файлов моделей
 !/autogluon/chronos-bolt-*/README.md
 
+# Large model files
+autogluon/chronos-bolt-*/model.safetensors
+
 # Игнорируем конфиденциальные данные и файлы конфигурации
 
 
