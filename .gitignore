@@ -197,3 +197,33 @@ Thumbs.db
 *.txt
 !requirements.txt
 !LICENSE.txt
+
+# Игнорируем локальные модели Chronos-Bolt (чтобы не хранить большие файлы моделей в Git)
+/autogluon/chronos-bolt-*/
+# При необходимости можно добавить исключение для README файлов моделей
+!/autogluon/chronos-bolt-*/README.md
+
+# Игнорируем конфиденциальные данные и файлы конфигурации
+/config/*.yaml
+!/config/example.yaml
+
+# Игнорируем выходные данные и файлы прогнозов
+/output/
+*.xlsx
+!train_data.xlsx
+!test_data.xlsx
+
+# Игнорируем временные файлы Docker
+.dockerignore
+**/docker-compose*.yml
+**/docker-compose*.yaml
+
+# Игнорируем файлы кэширования моделей
+.model_cache/
+
+# Игнорируем сохраненные предсказания
+**/*predictions*.csv
+
+# Системные и IDE файлы
+.vscode/
+.idea/

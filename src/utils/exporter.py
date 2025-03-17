@@ -3,6 +3,40 @@ import io
 import pandas as pd
 from openpyxl.styles import PatternFill
 import logging
+import os
+from pathlib import Path
+
+# Словарь соответствия названий моделей и их локальных путей
+CHRONOS_MODELS_MAPPING = {
+    "bolt_tiny": "chronos-bolt-tiny",
+    "bolt_small": "chronos-bolt-small", 
+    "bolt_base": "chronos-bolt-base",
+    "autogluon/chronos-bolt-tiny": "chronos-bolt-tiny",
+    "autogluon/chronos-bolt-small": "chronos-bolt-small",
+    "autogluon/chronos-bolt-base": "chronos-bolt-base"
+}
+
+def get_local_model_path(model_name):
+    """
+    Возвращает локальный путь к модели Chronos, если она доступна
+    
+    Аргументы:
+        model_name (str): Имя модели
+    
+    Возвращает:
+        str: Абсолютный путь к локальной модели или исходное имя модели
+    """
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    chronos_dir = os.path.join(base_dir, "autogluon")
+    
+    if (model_name in CHRONOS_MODELS_MAPPING):
+        model_dir = os.path.join(chronos_dir, CHRONOS_MODELS_MAPPING[model_name])
+        if os.path.exists(model_dir):
+            logging.info(f"Используется локальная модель Chronos: {model_dir}")
+            return model_dir
+    
+    logging.info(f"Локальная модель не найдена для {model_name}, будет использован Hugging Face")
+    return model_name
 
 def generate_excel_buffer(result):
     """
