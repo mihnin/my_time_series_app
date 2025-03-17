@@ -177,26 +177,11 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
             
             # Проверяем наличие дрейфа концепции
             try:
-                # Получаем данные из обученной модели
-                train_data = predictor.train_data
-                
+                # В текущей версии AutoGluon TimeSeriesPredictor не хранит train_data напрямую
+                # Отключаем проверку дрейфа концепции
+                logging.info(f"Проверка дрейфа концепции отключена")
                 drift_detected = False
-                drift_info = {}
-                
-                # Выполняем проверку дрейфа
-                if train_data is not None:
-                    logging.info(f"Проверка дрейфа концепции для {target_column}")
-                    drift_detected, drift_info = detect_concept_drift(
-                        historical_df=train_data,
-                        new_df=ts_df,
-                        target_col='target',
-                        date_col='timestamp'
-                    )
-                    
-                    if drift_detected:
-                        logging.warning(f"Обнаружен дрейф концепции для {target_column}!")
-                else:
-                    logging.warning("Невозможно проверить дрейф концепции: нет тренировочных данных в предикторе")
+                drift_info = {"message": "Проверка дрейфа отключена, модель не хранит тренировочные данные"}
             except Exception as e:
                 logging.error(f"Ошибка при проверке дрейфа концепции: {str(e)}")
                 drift_detected = False
@@ -210,29 +195,73 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
             }
             
             # Подготавливаем данные для графиков
-            unique_ids = df_formatted["item_id"].unique()
             graphs_data = {}
             
-            for item_id in unique_ids:
-                item_data = df_formatted[df_formatted["item_id"] == item_id]
-                item_forecast = forecast_result[forecast_result["item_id"] == item_id]
+            try:
+                # Получаем список уникальных идентификаторов из исходных данных
+                unique_ids = df_formatted["item_id"].unique()
                 
-                if not item_forecast.empty:
-                    # Объединяем исторические данные и прогноз для графика
-                    historical = item_data.reset_index()[["timestamp", "target"]].rename(
-                        columns={"timestamp": "date", "target": "value"}
-                    )
-                    historical["type"] = "Исторические"
+                # Проверяем структуру результата прогноза
+                forecast_columns = forecast_result.columns.tolist()
+                logging.info(f"Колонки в результатах прогноза: {forecast_columns}")
+                
+                for item_id in unique_ids:
+                    # Получаем исторические данные для текущего ID
+                    item_data = df_formatted[df_formatted["item_id"] == item_id]
                     
-                    forecast_df = item_forecast.reset_index()
-                    forecast_df = forecast_df[["timestamp", "0.5"]].rename(
-                        columns={"timestamp": "date", "0.5": "value"}
-                    )
-                    forecast_df["type"] = "Прогноз"
+                    # Проверяем наличие колонки 'item_id' в результатах прогноза
+                    if 'item_id' in forecast_result.index.names:
+                        # Если item_id в мультииндексе, получаем данные по нему
+                        try:
+                            item_forecast = forecast_result.xs(item_id, level='item_id')
+                            has_forecast = True
+                        except KeyError:
+                            logging.warning(f"ID {item_id} отсутствует в результатах прогноза")
+                            has_forecast = False
+                    elif isinstance(forecast_result.index, pd.MultiIndex) and len(forecast_result.index.names) > 1:
+                        # Предполагаем, что первый уровень индекса - это item_id
+                        try:
+                            item_forecast = forecast_result.xs(item_id, level=0)
+                            has_forecast = True
+                        except KeyError:
+                            logging.warning(f"ID {item_id} отсутствует в результатах прогноза")
+                            has_forecast = False
+                    else:
+                        # Если структура прогноза другая, берем весь прогноз для отображения
+                        logging.warning(f"Структура прогноза не содержит item_id, использую все результаты")
+                        item_forecast = forecast_result
+                        has_forecast = True
                     
-                    # Объединяем в один DataFrame для графика
-                    combined = pd.concat([historical, forecast_df], ignore_index=True)
-                    graphs_data[item_id] = combined
+                    if has_forecast and not item_forecast.empty:
+                        # Объединяем исторические данные и прогноз для графика
+                        historical = item_data.reset_index()[["timestamp", "target"]].rename(
+                            columns={"timestamp": "date", "target": "value"}
+                        )
+                        historical["type"] = "Исторические"
+                        
+                        # Подготавливаем данные прогноза
+                        forecast_df = item_forecast.reset_index()
+                        
+                        # Определяем колонки для значений и дат в прогнозе
+                        date_col = "timestamp" if "timestamp" in forecast_df.columns else forecast_df.columns[0]
+                        # Используем медианный прогноз (0.5 квантиль) или первую числовую колонку
+                        value_cols = [col for col in forecast_df.columns if col not in [date_col, 'item_id'] and pd.api.types.is_numeric_dtype(forecast_df[col])]
+                        value_col = "0.5" if "0.5" in value_cols else (value_cols[0] if value_cols else None)
+                        
+                        if value_col is not None:
+                            forecast_df = forecast_df[[date_col, value_col]].rename(
+                                columns={date_col: "date", value_col: "value"}
+                            )
+                            forecast_df["type"] = "Прогноз"
+                            
+                            # Объединяем в один DataFrame для графика
+                            combined = pd.concat([historical, forecast_df], ignore_index=True)
+                            graphs_data[item_id] = combined
+            
+            except Exception as e:
+                logging.error(f"Ошибка при подготовке данных для графиков: {str(e)}")
+                # Создаем пустой график, если произошла ошибка
+                graphs_data = {"error": pd.DataFrame({"date": [], "value": [], "type": []})}
             
             all_graphs_data[target_column] = graphs_data
         
