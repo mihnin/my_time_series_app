@@ -285,13 +285,20 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         except ValueError as ve:
             # Проверяем наличие специфической ошибки с day_of_week
             if "Cannot locate autogluon.timeseries.utils" in str(ve):
-                logging.warning(f"Не удалось получить fit_summary из-за проблемы с модулем: {str(ve)}")
+                error_msg = f"Не удалось получить fit_summary из-за проблемы с модулем: {str(ve)}"
+                logging.warning(error_msg)
                 logging.info("Продолжаем работу без fit_summary")
+                # Сохраняем информацию об ошибке в результат
+                training_result['module_error'] = error_msg
             else:
-                # Для других ошибок ValueError пробрасываем исключение
-                raise
+                # Для других ошибок ValueError логируем, но не прерываем работу
+                error_msg = f"Ошибка при получении fit_summary: {str(ve)}"
+                logging.warning(error_msg)
+                training_result['module_error'] = error_msg
         except Exception as e:
-            logging.warning(f"Не удалось получить fit_summary: {str(e)}")
+            error_msg = f"Не удалось получить fit_summary: {str(e)}"
+            logging.warning(error_msg)
+            training_result['module_error'] = error_msg
         
         # Сохраняем метаданные модели
         model_metadata = {
@@ -447,6 +454,24 @@ def run_training():
                 # Добавляем лидерборд в данные для Excel
                 if 'leaderboard' in result:
                     excel_result['leaderboard'] = result['leaderboard']
+                
+                # Добавляем информацию об ошибках модуля, если они есть
+                if 'module_error' in result:
+                    excel_result['module_error'] = result['module_error']
+                
+                # Извлекаем и добавляем информацию о составе ансамблевой модели, если лучшая модель - ансамбль
+                from src.utils.exporter import extract_ensemble_weights
+                
+                if 'predictor' in result and result['predictor'] is not None:
+                    best_model = result.get('best_model_name', '')
+                    if 'Ensemble' in best_model:
+                        try:
+                            ensemble_info = extract_ensemble_weights(result['predictor'])
+                            if ensemble_info is not None:
+                                excel_result['ensemble_info'] = ensemble_info
+                                st.info("📊 Добавлена подробная информация о составе ансамблевой модели")
+                        except Exception as e:
+                            logging.warning(f"Не удалось извлечь информацию об ансамбле: {e}")
                 
                 # Создаем буфер с Excel-файлом
                 excel_buffer = generate_excel_buffer(excel_result)
