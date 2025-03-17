@@ -260,7 +260,7 @@ def main():
                     model_directory = "AutogluonModels/TimeSeriesModel"
                     if os.path.exists(model_directory):
                         for root, dirs, files in os.walk(model_directory):
-                            for file in files:
+                    for file in files:
                                 file_path = os.path.join(root, file)
                                 archive_path = os.path.join("models", os.path.relpath(file_path, model_directory))
                                 zip_file.write(file_path, arcname=archive_path)
@@ -268,8 +268,8 @@ def main():
                 # Создаем кнопку для скачивания архива
                 st.sidebar.download_button(
                     label="📥 Скачать архив",
-                    data=zip_buffer.getvalue(),
-                    file_name="model_and_logs.zip",
+            data=zip_buffer.getvalue(),
+            file_name="model_and_logs.zip",
                     mime="application/zip",
                 )
                 st.sidebar.success("Архив с моделями и логами готов для скачивания!")
