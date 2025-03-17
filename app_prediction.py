@@ -15,11 +15,11 @@ from src.features.drift_detection import detect_concept_drift, display_drift_res
 from src.utils.exporter import generate_excel_buffer
 from app_ui import get_base_freq
 
-# Заменить существующий декоратор в начале файла
+# Исправляем декоратор с учетом рекомендаций по кешированию Streamlit
 @st.cache_data(ttl=3600)  # Кэш действителен 1 час
-def get_cached_predictions(predictions_data):
+def get_cached_predictions(_predictions_data):
     """Кэширует только результаты прогнозирования"""
-    return predictions_data
+    return _predictions_data
 
 # Фактическая реализация предсказания
 def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, use_multi_target=False, 
@@ -398,4 +398,4 @@ def run_prediction():
     except Exception as e:
         st.error(f"❌ Произошла ошибка при прогнозировании: {str(e)}")
         logging.exception(f"Ошибка при прогнозировании: {e}")
-        return 
+        return
