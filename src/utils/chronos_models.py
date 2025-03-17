@@ -5,6 +5,8 @@
 import os
 import logging
 from pathlib import Path
+import time
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -22,96 +24,258 @@ def get_base_dir():
     """Возвращает базовый каталог приложения"""
     return Path(os.environ.get("APP_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-def get_local_model_path(model_name):
+def get_local_model_path(model_name, use_bolt=False, allow_download=True):
     """
-    Возвращает локальный путь к модели Chronos, если она доступна
+    Получение пути к локальной модели Chronos
     
     Аргументы:
-        model_name (str): Имя модели (например, "bolt_tiny", "bolt_small", "bolt_base")
-    
-    Возвращает:
-        str: Абсолютный путь к локальной модели или исходное имя модели
-    """
-    base_dir = get_base_dir()
-    chronos_dir = base_dir / "autogluon"
-    
-    if model_name in CHRONOS_MODELS_MAPPING:
-        model_dir = chronos_dir / CHRONOS_MODELS_MAPPING[model_name]
-        if model_dir.exists():
-            logger.info(f"Используется локальная модель Chronos: {model_dir}")
-            return str(model_dir)
-    
-    logger.info(f"Локальная модель не найдена для {model_name}, будет использован Hugging Face")
-    return model_name
-
-def modify_chronos_hyperparams(hyperparams):
-    """
-    Модифицирует гиперпараметры для использования локальных моделей Chronos
-    
-    Аргументы:
-        hyperparams (dict): Словарь гиперпараметров для TimeSeriesPredictor
-    
-    Возвращает:
-        dict: Модифицированные гиперпараметры
-    """
-    if hyperparams is None:
-        return hyperparams
+        model_name (str): Имя или путь к модели Chronos
+        use_bolt (bool): Использовать облегченную версию модели (bolt)
+        allow_download (bool): Разрешить загрузку модели с Hugging Face
         
-    # Создаем копию для избежания изменения исходного словаря
-    modified_hyperparams = hyperparams.copy()
-    
-    # Если указаны конфигурации для Chronos
-    if "Chronos" in modified_hyperparams:
-        chronos_configs = modified_hyperparams["Chronos"]
-        
-        # Если это список конфигураций
-        if isinstance(chronos_configs, list):
-            for i, config in enumerate(chronos_configs):
-                if "model_path" in config:
-                    modified_hyperparams["Chronos"][i]["model_path"] = get_local_model_path(config["model_path"])
-        # Если это словарь (одна конфигурация)
-        elif isinstance(chronos_configs, dict) and "model_path" in chronos_configs:
-            modified_hyperparams["Chronos"]["model_path"] = get_local_model_path(chronos_configs["model_path"])
-    
-    return modified_hyperparams
-
-def create_chronos_predictor(prediction_length, train_data, hyperparams=None, **kwargs):
-    """
-    Создает и обучает TimeSeriesPredictor с настроенным использованием локальных моделей Chronos
-    
-    Аргументы:
-        prediction_length (int): Длина прогноза
-        train_data (TimeSeriesDataFrame): Тренировочные данные
-        hyperparams (dict, optional): Гиперпараметры
-        **kwargs: Дополнительные аргументы для TimeSeriesPredictor.fit()
-    
     Возвращает:
-        TimeSeriesPredictor: Обученный предиктор
+        str: Локальный путь к модели
+        
+    Вызывает:
+        ValueError: Если модель не найдена или не может быть загружена
     """
+    # Получаем директорию для моделей из конфигурации
     try:
-        from autogluon.timeseries import TimeSeriesPredictor
+        from src.utils.config import CHRONOS_MODELS_DIR, HF_CACHE_DIR
+        models_dir = CHRONOS_MODELS_DIR
+        hf_cache_dir = HF_CACHE_DIR
     except ImportError:
-        logger.error("Не удалось импортировать AutoGluon TimeSeriesPredictor. Убедитесь, что пакет установлен.")
-        raise
+        # Если конфигурация не доступна, используем значения по умолчанию
+        models_dir = Path(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                 "models", "chronos"))
+        hf_cache_dir = Path(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                 "models", "hf_cache"))
     
-    # Если гиперпараметры не указаны, используем Chronos-Bolt (Small) по умолчанию
-    if hyperparams is None:
-        hyperparams = {
-            "Chronos": {"model_path": "bolt_small"}
-        }
+    # Убеждаемся, что директории существуют
+    models_dir.mkdir(parents=True, exist_ok=True)
+    hf_cache_dir.mkdir(parents=True, exist_ok=True)
     
-    # Модифицируем гиперпараметры для использования локальных моделей
-    modified_hyperparams = modify_chronos_hyperparams(hyperparams)
+    # Логгер для сбора диагностических сообщений
+    log_messages = []
+    log_messages.append(f"Поиск модели: {model_name}, bolt: {use_bolt}, allow_download: {allow_download}")
+    log_messages.append(f"Директория моделей: {models_dir}")
+    log_messages.append(f"Директория кэша HF: {hf_cache_dir}")
     
-    # Создаем и обучаем предиктор
-    predictor = TimeSeriesPredictor(prediction_length=prediction_length)
-    predictor.fit(
-        train_data=train_data,
-        hyperparameters=modified_hyperparams,
-        **kwargs
-    )
+    # Конвертируем model_name в путь если это уже полный путь
+    if os.path.exists(model_name):
+        log_messages.append(f"Найден прямой путь к модели: {model_name}")
+        return model_name, "\n".join(log_messages)
     
-    return predictor
+    # Определяем суффикс модели
+    model_suffix = "-bolt" if use_bolt else ""
+    
+    # Проверяем разные варианты локальных путей
+    local_paths = [
+        # 1. Прямое имя модели в директории моделей
+        os.path.join(models_dir, f"{model_name}{model_suffix}"),
+        # 2. Имя модели с префиксом как поддиректория
+        os.path.join(models_dir, model_name, f"{model_name}{model_suffix}"),
+        # 3. Только имя модели как поддиректория
+        os.path.join(models_dir, model_name),
+        # 4. Путь к кэшу HF
+        os.path.join(hf_cache_dir, model_name)
+    ]
+    
+    # Ищем модель в возможных локальных путях
+    for path in local_paths:
+        if os.path.exists(path):
+            log_messages.append(f"Найдена локальная модель по пути: {path}")
+            return path, "\n".join(log_messages)
+        else:
+            log_messages.append(f"Путь не существует: {path}")
+    
+    # Если локальная модель не найдена, пробуем получить из репозитория HF
+    if allow_download:
+        log_messages.append("Локальная модель не найдена, попытка загрузки с Hugging Face...")
+        
+        # Пытаемся импортировать модуль для получения моделей из HF
+        try:
+            from src.utils.config import CHRONOS_MODELS_MAPPING, DEFAULT_HF_MODEL_REPO
+            
+            # Преобразуем имя модели в имя репозитория HF, если оно есть в маппинге
+            if model_name in CHRONOS_MODELS_MAPPING:
+                repo_id = CHRONOS_MODELS_MAPPING[model_name]
+                log_messages.append(f"Найдено соответствие в маппинге: {model_name} -> {repo_id}")
+            else:
+                # Если модель не найдена в маппинге, используем её как репозиторий HF напрямую или используем дефолтный
+                repo_id = model_name if "/" in model_name else DEFAULT_HF_MODEL_REPO
+                log_messages.append(f"Используем как репозиторий HF или стандартный: {repo_id}")
+            
+            # Пытаемся загрузить модель из репозитория HF
+            try:
+                # Проверка наличия токена HF
+                hf_token = os.environ.get("HF_TOKEN", None)
+                if hf_token:
+                    log_messages.append("Найден токен HF в переменных окружения")
+                else:
+                    log_messages.append("Токен HF не найден, загрузка в анонимном режиме")
+                
+                # Проверяем интернет-соединение
+                import socket
+                try:
+                    socket.create_connection(("huggingface.co", 443), timeout=3)
+                    log_messages.append("Соединение с huggingface.co доступно")
+                except OSError:
+                    error_msg = "Нет доступа к huggingface.co, проверьте подключение к интернету"
+                    log_messages.append(error_msg)
+                    raise ValueError(error_msg)
+                
+                # Пытаемся загрузить библиотеку transformers
+                try:
+                    import transformers
+                    log_messages.append(f"Библиотека transformers загружена, версия: {transformers.__version__}")
+                except ImportError:
+                    error_msg = "Не удалось импортировать библиотеку transformers. Установите её: pip install transformers"
+                    log_messages.append(error_msg)
+                    raise ValueError(error_msg)
+                
+                # Загружаем модель с HF
+                from transformers import AutoModelForPrediction
+                
+                # Определяем путь сохранения модели
+                local_model_path = os.path.join(models_dir, model_name)
+                log_messages.append(f"Пытаемся загрузить модель из {repo_id} в {local_model_path}")
+                
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Пытаемся загрузить модель
+                    model = AutoModelForPrediction.from_pretrained(
+                        repo_id,
+                        cache_dir=hf_cache_dir,
+                        token=hf_token
+                    )
+                    log_messages.append(f"Модель успешно загружена из {repo_id}")
+                    
+                    # Сохраняем модель локально
+                    model.save_pretrained(local_model_path)
+                    log_messages.append(f"Модель сохранена локально в {local_model_path}")
+                    
+                    return local_model_path, "\n".join(log_messages)
+                    
+            except Exception as e:
+                error_msg = f"Не удалось загрузить модель с Hugging Face: {str(e)}"
+                log_messages.append(error_msg)
+                raise ValueError(error_msg)
+                
+        except ImportError as e:
+            error_msg = f"Не удалось импортировать необходимые модули для загрузки с HF: {str(e)}"
+            log_messages.append(error_msg)
+            raise ValueError(error_msg)
+    else:
+        log_messages.append("Загрузка с Hugging Face отключена параметром allow_download=False")
+    
+    # Если все попытки неудачны, возвращаем ошибку
+    error_message = f"Модель '{model_name}' не найдена локально"
+    error_message += " и не может быть загружена с Hugging Face" if allow_download else ""
+    error_message += f". Попробуйте установить модель вручную в директорию: {models_dir}"
+    
+    log_messages.append(f"ОШИБКА: {error_message}")
+    full_log = "\n".join(log_messages)
+    
+    logging.error(full_log)
+    raise ValueError(f"{error_message}\n\nДиагностика:\n{full_log}")
+
+def modify_chronos_hyperparams(model_name, hyperparameters=None):
+    """
+    Модифицирует гиперпараметры для моделей Chronos
+    
+    Аргументы:
+        model_name (str): Имя модели
+        hyperparameters (dict): Словарь гиперпараметров
+        
+    Возвращает:
+        dict: Обновленный словарь гиперпараметров
+    """
+    import logging
+    
+    if hyperparameters is None:
+        hyperparameters = {}
+    
+    # Создаем глубокую копию словаря, чтобы не изменять оригинал
+    import copy
+    chronos_params = copy.deepcopy(hyperparameters)
+    
+    logging.info(f"Модификация гиперпараметров для модели Chronos: {model_name}")
+    
+    # Общие параметры для всех моделей Chronos
+    chronos_params.update({
+        'learning_rate': chronos_params.get('learning_rate', 1e-4),
+        'num_epochs': chronos_params.get('num_epochs', 5),
+        'batch_size': chronos_params.get('batch_size', 32),
+        'use_gpu': chronos_params.get('use_gpu', True),
+        'scaler_type': chronos_params.get('scaler_type', 'robust'),
+    })
+    
+    # Специфичные параметры в зависимости от типа модели
+    if 'timeseries-transformer' in model_name.lower():
+        # Трансформеры обычно требуют особых настроек
+        chronos_params.update({
+            'patience': chronos_params.get('patience', 3),
+            'gradient_clip_val': chronos_params.get('gradient_clip_val', 1.0),
+            'weight_decay': chronos_params.get('weight_decay', 1e-5),
+        })
+    
+    if 'bolt' in model_name.lower():
+        # Облегченные модели Bolt требуют меньше ресурсов
+        chronos_params.update({
+            'batch_size': chronos_params.get('batch_size', 64),
+            'use_gpu': chronos_params.get('use_gpu', False),  # По умолчанию используем CPU для bolt моделей
+        })
+    
+    # Логируем обновленные параметры
+    logging.info(f"Обновленные гиперпараметры для Chronos: {chronos_params}")
+    
+    return chronos_params
+
+def create_chronos_predictor(model_name, use_bolt=False, allow_download=True, **kwargs):
+    """
+    Создаёт предиктор на основе Chronos модели
+    
+    Аргументы:
+        model_name (str): Имя или путь к модели Chronos
+        use_bolt (bool): Использовать облегченную версию модели (bolt)
+        allow_download (bool): Разрешить загрузку модели с Hugging Face
+        **kwargs: Дополнительные параметры для предиктора
+        
+    Возвращает:
+        ChronosPredictor: Предиктор на основе Chronos модели
+        
+    Вызывает:
+        ValueError: Если модель не найдена или не может быть загружена
+    """
+    import logging
+    
+    try:
+        # Получаем путь к локальной модели
+        model_path, diagnostics = get_local_model_path(model_name, use_bolt, allow_download)
+        logging.info(f"Получен путь к модели Chronos: {model_path}")
+        logging.debug(f"Диагностика поиска модели:\n{diagnostics}")
+        
+        # Импортируем класс ChronosPredictor
+        try:
+            from autogluon.timeseries.models.chronos.predictor import ChronosPredictor
+            logging.info("Успешно импортирован класс ChronosPredictor")
+        except ImportError as e:
+            error_msg = f"Не удалось импортировать ChronosPredictor: {str(e)}"
+            logging.error(error_msg)
+            logging.error("Проверьте, что установлен пакет autogluon-timeseries с поддержкой моделей Chronos")
+            raise ValueError(error_msg)
+        
+        # Создаём предиктор
+        predictor = ChronosPredictor(model_path=model_path, **kwargs)
+        logging.info(f"Предиктор Chronos успешно создан с моделью: {model_name}")
+        
+        return predictor
+        
+    except Exception as e:
+        error_msg = f"Ошибка при создании предиктора Chronos: {str(e)}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
 
 def example_usage():
     """Пример использования функционала"""
@@ -122,11 +286,9 @@ def example_usage():
     
     # Создание и обучение предиктора с использованием локальной модели Chronos-Bolt
     predictor = create_chronos_predictor(
-        prediction_length=48,
-        train_data=df,
-        hyperparams={
-            "Chronos": {"model_path": "bolt_base"}  # Используем локальную модель bolt_base
-        },
+        model_name="bolt_base",
+        use_bolt=True,
+        allow_download=True,
         time_limit=60  # Ограничение времени в секундах
     )
     

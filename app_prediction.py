@@ -281,6 +281,76 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
             except Exception as e:
                 logging.warning(f"Ошибка при извлечении информации об ансамбле: {e}")
                 
+            # Сохраняем результаты в session_state
+            st.session_state["predictions"] = result.get('forecasts')
+            st.session_state["graphs_data"] = result.get('graphs_data')
+            st.session_state["df_forecast"] = get_cached_predictions(result)
+            
+            # Освобождаем память от временных данных, которые больше не нужны
+            if 'raw_predictions' in result:
+                del result['raw_predictions']
+            if 'temp_data' in result:
+                del result['temp_data']
+            
+            # Отображаем результаты
+            progress_bar.progress(100)
+            status_text.text("Прогноз выполнен!")
+            st.success("✅ Прогнозирование успешно завершено!")
+            
+            # Визуализируем прогнозы
+            for target_col, graphs_data in result.get('graphs_data', {}).items():
+                # Если данных для визуализации нет, пропускаем
+                if not graphs_data:
+                    st.warning(f"Нет данных для визуализации прогноза для {target_col}")
+                    continue
+                
+                st.subheader(f"Визуализация прогноза для колонки: {target_col}")
+                
+                # Отображаем графики для каждого ID
+                for item_id, plot_df in graphs_data.items():
+                    if plot_df.empty:
+                        continue
+                    
+                    # Проверяем наличие интервалов
+                    has_intervals = 'lower' in plot_df.columns and 'upper' in plot_df.columns
+                    
+                    # Создаем график
+                    fig = px.line(plot_df, x="date", y="value", color="type", 
+                                 title=f"Прогноз для ID: {item_id}",
+                                 labels={"value": target_col, "date": "Дата", "type": "Тип данных"})
+                    
+                    # Добавляем интервалы если они есть
+                    if has_intervals:
+                        forecast_only = plot_df[plot_df["type"] == "Прогноз"].copy()
+                        fig.add_scatter(x=forecast_only["date"], y=forecast_only["lower"], 
+                                       mode='lines', line=dict(width=0), 
+                                       showlegend=False)
+                        fig.add_scatter(x=forecast_only["date"], y=forecast_only["upper"], 
+                                       mode='lines', line=dict(width=0), 
+                                       fill='tonexty', fillcolor='rgba(0, 176, 246, 0.2)', 
+                                       name='90% интервал')
+                    
+                    fig.update_layout(height=400)
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            # Кнопка для сохранения результатов в Excel
+            excel_buffer = generate_excel_buffer(result)
+            if excel_buffer:
+                st.download_button(
+                    label="📥 Скачать результаты прогноза в Excel",
+                    data=excel_buffer.getvalue(),
+                    file_name=f"forecast_results.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                
+            # Если включен чекбокс "Обучение, Прогноз и Сохранение", автоматически сохраняем результаты
+            if st.session_state.get('train_predict_save_checkbox', False):
+                st.info("🔄 Сохранение результатов...")
+                # Логика для автоматического сохранения результатов
+                # ...
+            
+            # После завершения прогнозирования чистим память
+            gc.collect()
             return result
         else:
             return {
@@ -298,6 +368,9 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
 def run_prediction():
     """Запускает процесс прогнозирования"""
     try:
+        # Импортируем gc для управления памятью
+        import gc
+        
         # Получаем значения из session_state
         predictor = st.session_state.get("predictor")
         dt_col = st.session_state.get("dt_col_key")
@@ -361,6 +434,12 @@ def run_prediction():
                 st.session_state["graphs_data"] = result.get('graphs_data')
                 st.session_state["df_forecast"] = get_cached_predictions(result)
                 
+                # Освобождаем память от временных данных, которые больше не нужны
+                if 'raw_predictions' in result:
+                    del result['raw_predictions']
+                if 'temp_data' in result:
+                    del result['temp_data']
+                
                 # Отображаем результаты
                 progress_bar.progress(100)
                 status_text.text("Прогноз выполнен!")
@@ -422,8 +501,21 @@ def run_prediction():
                 progress_bar.progress(100)
                 status_text.text("Ошибка при выполнении прогноза!")
                 st.error(f"❌ Ошибка при выполнении прогноза: {result.get('error', 'Неизвестная ошибка')}")
-    
+            
+            # Очищаем память после завершения
+            gc.collect()
+            
+        # Показываем результаты прогнозирования
+        container.write("")
+        
+        # Освобождаем память от больших объектов
+        if '_df_forecast_temp' in locals():
+            del _df_forecast_temp
+        gc.collect()
+        
     except Exception as e:
-        st.error(f"❌ Произошла ошибка при прогнозировании: {str(e)}")
-        logging.exception(f"Ошибка при прогнозировании: {e}")
-        return
+        st.error(f"❌ Ошибка при выполнении прогноза: {e}")
+        logging.exception("Ошибка при прогнозировании")
+        
+        # Освобождаем память после ошибки
+        gc.collect()

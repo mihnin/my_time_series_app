@@ -141,8 +141,18 @@ def try_load_existing_model():
             st.session_state["models_key"] = meta.get("chosen_models", ["* (все)"])
             st.session_state["mean_only_key"] = meta.get("mean_only", False)
             
+            # Сохраняем важные данные, которые могут потеряться при перезагрузке
+            if "use_holidays_key" in st.session_state:
+                st.session_state["_saved_use_holidays"] = st.session_state["use_holidays_key"]
+                
+            if "static_feats_key" in st.session_state:
+                st.session_state["_saved_static_feats"] = st.session_state["static_feats_key"]
+                
+            if "page_choice" in st.session_state:
+                st.session_state["_saved_page"] = st.session_state["page_choice"]
+            
             st.info("Настройки из model_info.json восстановлены.")
-            # Перезапускаем приложение, чтобы применить временные значения
+            # Перезапускаем приложение с сохраненными данными
             st.rerun()
     
     except Exception as e:

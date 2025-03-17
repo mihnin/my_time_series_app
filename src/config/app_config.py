@@ -53,6 +53,19 @@ class UIConfig:
     max_graphs_per_page: int = 5  # Максимальное количество графиков на странице
 
 @dataclass
+class ModelsConfig:
+    """Конфигурация моделей"""
+    chronos_paths: List[str] = field(default_factory=lambda: [
+        "autogluon/chronos-bolt-tiny",
+        "autogluon/chronos-bolt-small", 
+        "autogluon/chronos-bolt-base",
+        "models/chronos/chronos-bolt-tiny",
+        "models/chronos/chronos-bolt-small",
+        "models/chronos/chronos-bolt-base"
+    ])
+    model_info_file: str = "model_info.json"
+
+@dataclass
 class AppConfig:
     """Основная конфигурация приложения"""
     app_name: str = "Бизнес-приложение для прогнозирования временных рядов"
@@ -67,6 +80,7 @@ class AppConfig:
     resource: ResourceConfig = field(default_factory=ResourceConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    models: ModelsConfig = field(default_factory=ModelsConfig)
     
     # Словари из конфигурационного файла
     auto_detection: Dict[str, Any] = field(default_factory=dict)
@@ -102,7 +116,7 @@ class AppConfig:
             return self.ag_models[key]
         
         # Проверяем вложенные конфигурации
-        for config_obj_name in ['queue', 'session', 'resource', 'logging', 'ui']:
+        for config_obj_name in ['queue', 'session', 'resource', 'logging', 'ui', 'models']:
             config_obj = getattr(self, config_obj_name)
             if hasattr(config_obj, key):
                 return getattr(config_obj, key)
@@ -241,6 +255,14 @@ def create_config() -> AppConfig:
     if 'ag_models' in config_data:
         app_config.ag_models = config_data['ag_models']
     
+    # Копируем настройки моделей
+    if 'models' in config_data:
+        models_config = config_data['models']
+        app_config.models = ModelsConfig(
+            chronos_paths=models_config.get('chronos_paths', app_config.models.chronos_paths),
+            model_info_file=models_config.get('model_info_file', app_config.models.model_info_file)
+        )
+    
     return app_config
 
 # Инициализируем глобальный экземпляр конфигурации
@@ -269,9 +291,11 @@ def get_config(field_name=None) -> Any:
     if field_name == "MODEL_DIR":
         return app_config.model_dir
     elif field_name == "MODEL_INFO_FILE":
-        return "model_info.json"
+        return app_config.models.model_info_file
     elif field_name == "DATA_DIR":
         return app_config.data_dir
+    elif field_name == "CHRONOS_PATHS":
+        return app_config.models.chronos_paths
     
     # Пытаемся получить поле из основной конфигурации
     if hasattr(app_config, field_name):

@@ -58,15 +58,24 @@ def get_local_model_path(model_name):
 
 def generate_excel_buffer(result):
     """
-    Формирует Excel-файл в памяти с результатами прогнозирования
+    Формирует Excel-файл в памяти с результатами прогнозирования или обучения
     
     Аргументы:
-        result (dict): Результат прогнозирования, содержащий forecasts и другие данные
+        result (dict): Результат прогнозирования/обучения, содержащий различные данные:
+            - forecasts: словарь прогнозов для разных целевых переменных
+            - leaderboard: таблица с результатами обучения моделей
+            - ensemble_info: информация о весах моделей в ансамбле
+            - module_error: информация об ошибках модулей
+            - summary_data: сводная информация о результатах
     
     Возвращает:
-        BytesIO: Объект BytesIO с Excel-файлом
+        BytesIO: Объект BytesIO с Excel-файлом или None в случае ошибки
     """
+    # Инициализируем буфер для Excel
     excel_buffer = io.BytesIO()
+    
+    # Флаг успешной записи в Excel
+    excel_written = False
     
     try:
         with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
@@ -75,261 +84,135 @@ def generate_excel_buffer(result):
                 # Создаем лист с ошибкой
                 pd.DataFrame([{"Ошибка": result.get('error', 'Неизвестная ошибка')}]).to_excel(
                     writer, sheet_name="Ошибка", index=False)
+                excel_written = True
                 return excel_buffer
             
             # Счетчик созданных листов
             sheets_created = 0
             
-            # Лист с прогнозами для каждой целевой переменной
-            sheet_idx = 0
-            
-            for target_col, forecast_data in result.get('forecasts', {}).items():
-                predictions = forecast_data.get('predictions')
-                if predictions is not None and not predictions.empty:
-                    sheet_name = f"Прогноз_{target_col}"
-                    if len(sheet_name) > 31:  # Ограничение Excel на длину имени листа
-                        sheet_name = f"Прогноз_{sheet_idx}"
-                        sheet_idx += 1
-                    
-                    # Сбрасываем индекс для экспорта в Excel
-                    try:
+            # ===== 1. Обработка прогнозов =====
+            if 'forecasts' in result and isinstance(result['forecasts'], dict):
+                sheet_idx = 0  # Индекс для именования листов при длинных именах
+                
+                for target_col, forecast_data in result['forecasts'].items():
+                    predictions = forecast_data.get('predictions')
+                    if predictions is not None and not predictions.empty:
+                        sheet_name = f"Прогноз_{target_col}"
+                        if len(sheet_name) > 31:  # Ограничение Excel на длину имени листа
+                            sheet_name = f"Прогноз_{sheet_idx}"
+                            sheet_idx += 1
+                        
+                        # Сбрасываем индекс для экспорта в Excel
                         predictions.reset_index().to_excel(writer, sheet_name=sheet_name, index=False)
                         sheets_created += 1
-                    except Exception as e:
-                        logging.error(f"Ошибка при сохранении прогноза для {target_col}: {e}")
-                        pd.DataFrame([{"Ошибка": str(e)}]).to_excel(writer, sheet_name=sheet_name, index=False)
-                else:
-                    # Создаем пустую страницу с уведомлением
-                    sheet_name = f"Прогноз_{target_col}_пусто"
-                    if len(sheet_name) > 31:
-                        sheet_name = f"Прогноз_{sheet_idx}_пусто"
-                        sheet_idx += 1
-                    
-                    pd.DataFrame([{"Уведомление": f"Нет данных прогноза для {target_col}"}]).to_excel(
-                        writer, sheet_name=sheet_name, index=False)
-                    sheets_created += 1
-                    logging.info(f"Создана пустая страница для {target_col}, т.к. данные отсутствуют")
+                        excel_written = True
+                        logging.info(f"Лист с прогнозом для {target_col} успешно создан")
             
-            # Добавляем сводную информацию
-            summary_data = []
-            for target_col, forecast_data in result.get('forecasts', {}).items():
-                summary_data.append({
-                    "Целевая переменная": target_col,
-                    "Дрейф концепции": "Обнаружен" if forecast_data.get('drift_detected', False) else "Не обнаружен",
-                    "Комментарий": str(forecast_data.get('drift_info', {}))
-                })
-            
-            if summary_data:
-                pd.DataFrame(summary_data).to_excel(writer, sheet_name="Сводка", index=False)
-                sheets_created += 1
-            
-            # Добавляем информацию о модуле с ошибкой, если она есть
-            if 'module_error' in result:
-                pd.DataFrame([{
-                    "Тип ошибки": "Ошибка модуля AutoGluon",
-                    "Описание": result.get('module_error', 'Неизвестная ошибка модуля'),
-                    "Примечание": "Ошибка не критична и не влияет на точность прогнозов"
-                }]).to_excel(writer, sheet_name="Ошибки модуля", index=False)
-                sheets_created += 1
-                logging.info("Добавлена информация об ошибках модуля AutoGluon")
-            
-            # Добавляем лидерборд, если он есть
-            # Проверяем наличие лидерборда как прямого ключа или как атрибута предиктора
-            leaderboard_df = None
-            if 'leaderboard' in result and isinstance(result['leaderboard'], pd.DataFrame) and not result['leaderboard'].empty:
-                leaderboard_df = result['leaderboard'].copy()
-            elif 'predictor' in result and hasattr(result['predictor'], 'leaderboard'):
-                try:
-                    leaderboard_df = result['predictor'].leaderboard()
-                except:
-                    logging.warning("Не удалось получить лидерборд из предиктора")
-            
-            if leaderboard_df is not None and not leaderboard_df.empty:
-                try:
-                    # Округляем числовые колонки для лучшего отображения
-                    for col in leaderboard_df.select_dtypes(include=['float']).columns:
-                        leaderboard_df[col] = leaderboard_df[col].round(6)
-                    
-                    # Добавляем специальную колонку с рангом модели для удобства
-                    leaderboard_df.insert(0, 'Ранг', range(1, len(leaderboard_df) + 1))
-                    
-                    # Улучшаем название колонки модели для удобства
-                    if 'model' in leaderboard_df.columns:
-                        leaderboard_df.rename(columns={'model': 'Модель'}, inplace=True)
-                    
-                    # Если в лидерборде есть скоры с отрицательными значениями (инвертированные метрики),
-                    # добавляем колонку с абсолютными значениями для удобства
-                    score_cols = [col for col in leaderboard_df.columns if 'score' in col.lower()]
-                    for col in score_cols:
-                        if (leaderboard_df[col] < 0).any():
-                            abs_col = f'|{col}|'
-                            leaderboard_df[abs_col] = leaderboard_df[col].abs()
-                    
-                    # Сохраняем лидерборд в Excel
-                    leaderboard_df.to_excel(writer, sheet_name="Лидерборд", index=False)
-                    
-                    # Подсвечиваем лучшую модель
-                    try:
-                        if OPENPYXL_AVAILABLE:
-                            sheet_lb = writer.sheets["Лидерборд"]
-                            best_idx = 0  # первая строка - лучшая модель
-                            fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                            row_excel = best_idx + 2  # +2 из-за заголовка и 1-индексации в Excel
-                            for col_idx in range(1, leaderboard_df.shape[1] + 1):
-                                cell = sheet_lb.cell(row=row_excel, column=col_idx)
-                                cell.fill = fill_green
-                    except Exception as e:
-                        logging.warning(f"Не удалось подсветить лучшую модель в лидерборде: {e}")
-                    
-                    sheets_created += 1
-                    logging.info("Добавлен лидерборд моделей")
-                except Exception as e:
-                    logging.error(f"Ошибка при сохранении лидерборда: {e}")
-                    pd.DataFrame([{"Ошибка": f"Ошибка при отображении лидерборда: {str(e)}"}]).to_excel(
-                        writer, sheet_name="Лидерборд_ошибка", index=False)
-            
-            # Добавляем информацию о модели-ансамбле, если она присутствует
-            # Проверяем наличие информации об ансамбле как прямого ключа или атрибута предиктора
-            ensemble_df = None
-            if 'ensemble_weights' in result and isinstance(result['ensemble_weights'], pd.DataFrame) and not result['ensemble_weights'].empty:
-                ensemble_df = result['ensemble_weights'].copy()
-                logging.info("Найдены готовые веса ансамбля в результате")
-            elif 'ensemble_info' in result and isinstance(result['ensemble_info'], pd.DataFrame) and not result['ensemble_info'].empty:
-                ensemble_df = result['ensemble_info'].copy()
-                logging.info("Найдена информация об ансамбле в результате")
-            elif 'predictor' in result and hasattr(result['predictor'], 'get_model_weights'):
-                try:
-                    ensemble_df = result['predictor'].get_model_weights()
-                    logging.info("Веса ансамбля извлечены из предиктора")
-                except Exception as e:
-                    logging.warning(f"Не удалось получить информацию об ансамбле из предиктора: {e}")
-            
-            if ensemble_df is not None and not ensemble_df.empty:
-                try:
-                    # Улучшаем отображение весов в процентах
-                    if 'Вес' in ensemble_df.columns:
-                        ensemble_df['Вес (%)'] = (ensemble_df['Вес'] * 100).round(2)
-                    
-                    ensemble_df.to_excel(writer, sheet_name="Веса ансамбля", index=False)
-                    sheets_created += 1
-                    logging.info("Добавлена информация о модели типа ансамбль")
-                except Exception as e:
-                    logging.error(f"Ошибка при сохранении информации об ансамбле: {e}")
-                    pd.DataFrame([{"Ошибка": f"Ошибка при отображении информации об ансамбле: {str(e)}"}]).to_excel(
-                        writer, sheet_name="Ансамбль_ошибка", index=False)
-            
-            # Добавляем детальную информацию о моделях
-            if model_details is not None:
-                # Преобразуем model_details в DataFrame, если это список словарей
-                model_details_df = None
-                if isinstance(model_details, list) and len(model_details) > 0:
-                    model_details_df = pd.DataFrame(model_details)
-                    logging.info(f"Преобразовали список словарей в DataFrame, строк: {len(model_details_df)}")
-                elif isinstance(model_details, pd.DataFrame):
-                    model_details_df = model_details
-                    logging.info(f"model_details уже является DataFrame, строк: {len(model_details_df)}")
-                else:
-                    logging.warning(f"model_details имеет неподдерживаемый тип: {type(model_details)}")
+            # ===== 2. Обработка сводных данных =====
+            if 'summary_data' in result and isinstance(result['summary_data'], dict):
+                # Преобразуем сводные данные в DataFrame для Excel
+                summary_data = []
                 
-                if model_details_df is not None and not model_details_df.empty:
-                    try:
-                        # Пробуем красиво отформатировать параметры моделей
-                        if 'Параметры' in model_details_df.columns:
-                            model_details_df['Параметры'] = model_details_df['Параметры'].apply(
-                                lambda x: str(x).replace('{', '\n{').replace(', ', ',\n ')
-                            )
-                        
-                        model_details_df.to_excel(writer, sheet_name="Детали моделей", index=False)
-                        sheets_created += 1
-                        logging.info("Добавлена детальная информация о моделях в ансамбле")
-                    except Exception as e:
-                        logging.error(f"Ошибка при сохранении деталей моделей: {e}")
-            
-            # Добавляем информацию о модели-ансамбле, если она присутствует
-            # Дополнительный извлечение весов моделей, если их нет в result
-            ensemble_weights, model_details = None, None
-            
-            if 'predictor' in result:
-                ensemble_weights, model_details = extract_ensemble_weights(result['predictor'])
-            
-            # Добавляем веса моделей ансамбля
-            if ensemble_weights is not None and not ensemble_weights.empty:
-                try:
-                    # Преобразуем веса в проценты для лучшей читаемости
-                    if 'Вес' in ensemble_weights.columns:
-                        ensemble_weights['Вес (%)'] = (ensemble_weights['Вес'] * 100).round(2)
-                        ensemble_weights = ensemble_weights.sort_values('Вес (%)', ascending=False)
-                    
-                    ensemble_weights.to_excel(writer, sheet_name="Веса ансамбля", index=False)
+                for metric_key, metric_value in result['summary_data'].items():
+                    if isinstance(metric_value, dict):
+                        for sub_key, sub_value in metric_value.items():
+                            summary_data.append({"Метрика": f"{metric_key}: {sub_key}", "Значение": sub_value})
+                    else:
+                        summary_data.append({"Метрика": metric_key, "Значение": metric_value})
+                
+                if summary_data:
+                    summary_df = pd.DataFrame(summary_data)
+                    summary_df.to_excel(writer, sheet_name="Сводка", index=False)
                     sheets_created += 1
-                    logging.info("Добавлена информация о весах моделей в ансамбле")
-                    
-                    # Подсвечиваем модели с наибольшим весом
-                    try:
-                        if OPENPYXL_AVAILABLE:
-                            sheet = writer.sheets["Веса ансамбля"]
-                            fill_green = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-                            # Подсвечиваем модели с весом выше среднего
-                            mean_weight = ensemble_weights['Вес (%)'].mean()
-                            for idx, row in enumerate(ensemble_weights.itertuples(), start=2):  # start=2 из-за заголовка
-                                if row._3 > mean_weight:  # _3 - индекс столбца 'Вес (%)'
-                                    for col in range(1, len(ensemble_weights.columns) + 1):
-                                        cell = sheet.cell(row=idx, column=col)
-                                        cell.fill = fill_green
-                    except Exception as e:
-                        logging.warning(f"Не удалось подсветить важные модели в ансамбле: {e}")
-                except Exception as e:
-                    logging.error(f"Ошибка при сохранении весов ансамбля: {e}")
+                    excel_written = True
+                    logging.info(f"Лист со сводными данными успешно создан")
             
-            # Добавляем детальную информацию о моделях
-            if model_details is not None and not model_details.empty:
-                try:
-                    # Пробуем красиво отформатировать параметры моделей
-                    if 'Параметры' in model_details.columns:
-                        model_details['Параметры'] = model_details['Параметры'].apply(
-                            lambda x: str(x).replace('{', '\n{').replace(', ', ',\n ')
-                        )
-                    
-                    model_details.to_excel(writer, sheet_name="Детали моделей", index=False)
+            # ===== 3. Обработка информации об ошибках модулей =====
+            if 'module_error' in result:
+                error_msg = result['module_error']
+                if isinstance(error_msg, str):
+                    pd.DataFrame([{"Сообщение": error_msg}]).to_excel(writer, sheet_name="Ошибки_модулей", index=False)
                     sheets_created += 1
-                    logging.info("Добавлена детальная информация о моделях в ансамбле")
-                except Exception as e:
-                    logging.error(f"Ошибка при сохранении деталей моделей: {e}")
+                    excel_written = True
+                    logging.info(f"Лист с информацией об ошибках модулей успешно создан")
             
-            # Если не создано ни одной страницы, создаем информационную страницу
-            if sheets_created == 0:
-                pd.DataFrame([{
-                    "Информация": "Нет данных для отображения",
-                    "Примечание": "Проверьте параметры и результаты прогнозирования"
-                }]).to_excel(writer, sheet_name="Информация", index=False)
-                logging.warning("В Excel-файле нет данных для отображения")
+            # ===== 4. Обработка лидерборда =====
+            if 'leaderboard' in result and isinstance(result.get('leaderboard'), pd.DataFrame):
+                leaderboard = result['leaderboard']
+                if not leaderboard.empty:
+                    # Округляем числовые значения для лучшего отображения
+                    for col in leaderboard.select_dtypes(include=['float']).columns:
+                        leaderboard[col] = leaderboard[col].round(6)
+                    
+                    leaderboard.to_excel(writer, sheet_name="Лидерборд", index=False)
+                    sheets_created += 1
+                    excel_written = True
+                    logging.info(f"Лист с лидербордом успешно создан")
             
-            # Определяем, является ли лучшая модель ансамблем
-            best_model_name = None
-            if 'predictor' in result and result['predictor'] is not None:
+            # ===== 5. Обработка ансамблевых весов =====
+            ensemble_weights_df = None
+            model_details_df = None
+            
+            # Способ 1: Уже извлеченные веса ансамбля
+            if 'ensemble_info' in result:
+                ensemble_info = result['ensemble_info']
+                if isinstance(ensemble_info, tuple) and len(ensemble_info) == 2:
+                    ensemble_weights_df, model_details_df = ensemble_info
+                elif isinstance(ensemble_info, dict):
+                    if 'weights' in ensemble_info:
+                        ensemble_weights_df = ensemble_info['weights']
+                    if 'details' in ensemble_info:
+                        model_details_df = ensemble_info['details']
+            
+            # Способ 2: Извлечение весов из предиктора, если доступен
+            if ensemble_weights_df is None and 'predictor' in result:
                 try:
-                    # Используем property model_best вместо устаревшего метода get_model_best
-                    best_model_name = result['predictor'].model_best if hasattr(result['predictor'], 'model_best') else result['predictor'].get_model_best()
-                    logging.info(f"Лучшая модель: {best_model_name}")
+                    ensemble_weights_df, model_details_df = extract_ensemble_weights(result['predictor'])
                 except Exception as e:
-                    logging.warning(f"Не удалось получить имя лучшей модели: {e}")
+                    logging.warning(f"Не удалось извлечь информацию об ансамбле из предиктора: {e}")
             
-            # Если это ансамблевая модель, но информация не получена
-            if best_model_name and "Ensemble" in best_model_name and ensemble_weights is None:
-                pd.DataFrame([{
-                    "Примечание": "Это ансамблевая модель",
-                    "Ошибка": "Не удалось извлечь детальную информацию о составе ансамбля",
-                    "Рекомендация": "Проверьте файлы моделей в директории AutogluonModels/TimeSeriesModel/models"
-                }]).to_excel(writer, sheet_name="Инфо об ансамбле", index=False)
+            # Сохраняем веса ансамбля, если они есть
+            if ensemble_weights_df is not None and isinstance(ensemble_weights_df, pd.DataFrame) and not ensemble_weights_df.empty:
+                ensemble_weights_df.to_excel(writer, sheet_name="Веса_ансамбля", index=False)
                 sheets_created += 1
+                excel_written = True
+                logging.info(f"Лист с весами ансамбля успешно создан")
             
+            # Сохраняем детали моделей, если они есть
+            if model_details_df is not None and isinstance(model_details_df, pd.DataFrame) and not model_details_df.empty:
+                model_details_df.to_excel(writer, sheet_name="Детали_моделей", index=False)
+                sheets_created += 1
+                excel_written = True
+                logging.info(f"Лист с деталями моделей успешно создан")
+            
+            # Если не создано ни одного листа, добавляем информационный лист
+            if sheets_created == 0:
+                pd.DataFrame([{"Информация": "Нет данных для отображения в Excel"}]).to_excel(
+                    writer, sheet_name="Информация", index=False)
+                excel_written = True
+                logging.warning(f"В результатах не найдено данных для экспорта в Excel")
+            
+            # Дополнительное логирование
+            logging.info(f"Excel-файл успешно создан, листов: {sheets_created}")
+    
     except Exception as e:
-        logging.exception(f"Ошибка при создании Excel файла: {e}")
-        # В случае критической ошибки создаем новый буфер с сообщением об ошибке
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-            pd.DataFrame([{"Ошибка": f"Не удалось создать файл: {str(e)}"}]).to_excel(
-                writer, sheet_name="Ошибка", index=False)
+        error_msg = f"Ошибка при создании Excel-файла: {str(e)}"
+        logging.error(error_msg)
+        
+        # Пытаемся создать простой Excel-файл с информацией об ошибке
+        try:
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                pd.DataFrame([{"Ошибка": error_msg}]).to_excel(writer, sheet_name="Ошибка", index=False)
+                excel_written = True
+        except Exception as inner_e:
+            logging.error(f"Не удалось создать Excel-файл даже с информацией об ошибке: {str(inner_e)}")
+            return None
+    
+    # Проверяем, что хотя бы один лист был успешно создан
+    if not excel_written:
+        logging.error("Excel-файл не был создан из-за отсутствия данных или ошибок")
+        return None
     
     # Возвращаем указатель в начало буфера
     excel_buffer.seek(0)
@@ -366,7 +249,7 @@ def extract_ensemble_weights(predictor):
             
         # Пробуем получить информацию об ансамбле разными способами
         ensemble_weights = None
-        model_details = []
+        model_details_list = []  # Изменено с model_details на model_details_list для ясности
         
         # Способ 1: Прямой метод get_model_weights() или weights_
         try:
@@ -539,7 +422,7 @@ def extract_ensemble_weights(predictor):
                                         else:
                                             logging.warning(f"Не удалось найти файл модели для {model_name}")
                                         
-                                        model_details.append(model_info)
+                                        model_details_list.append(model_info)
                                 elif isinstance(weights, pd.DataFrame):
                                     ensemble_weights = weights
                                     logging.info(f"Извлечены веса как DataFrame, строк: {len(ensemble_weights)}")
@@ -556,7 +439,7 @@ def extract_ensemble_weights(predictor):
                 logging.warning(f"Ошибка при получении детальной информации о моделях: {e}")
         
         # Создаем DataFrame с детальной информацией
-        details_df = pd.DataFrame(model_details) if model_details else None
+        details_df = pd.DataFrame(model_details_list) if model_details_list else None
         
         # Логируем результаты
         if ensemble_weights is not None:

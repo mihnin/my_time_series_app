@@ -110,6 +110,19 @@ def setup_ui():
     st.markdown("### Версия 2.0")
     st.title("Бизнес-приложение для прогнозирования временных рядов")
     
+    # Восстанавливаем сохраненные значения после перезагрузки
+    if "_saved_use_holidays" in st.session_state:
+        st.session_state["use_holidays_key"] = st.session_state["_saved_use_holidays"]
+        del st.session_state["_saved_use_holidays"]
+        
+    if "_saved_static_feats" in st.session_state:
+        st.session_state["static_feats_key"] = st.session_state["_saved_static_feats"]
+        del st.session_state["_saved_static_feats"]
+        
+    if "_saved_page" in st.session_state:
+        st.session_state["page_choice"] = st.session_state["_saved_page"]
+        del st.session_state["_saved_page"]
+    
     # Убираем админку из списка страниц, оставляем только основные
     pages = ["Главная", "Анализ данных", "Help"]
     page_choice = st.sidebar.selectbox("Навигация", pages, key="page_choice")
@@ -188,6 +201,9 @@ def setup_ui():
                                f"- Target: {auto_detected.get('tgt_col', '<не определено>')}\n" +
                                f"- Частота: {auto_detected.get('freq', '<не определено>')}")
                     
+                    # Копируем в session_state для последующего использования
+                    st.session_state["df"] = df_train
+                    
                     # Для больших датафреймов используем выборку при отображении
                     if len(df_train) > 1000:
                         # Отображаем датафрейм на всю ширину экрана с горизонтальной прокруткой
@@ -212,8 +228,15 @@ def setup_ui():
                     memory_usage = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024 * 1024)  # в ГБ
                     if memory_usage > 1.5:  # если используется больше 1.5 ГБ
                         gc.collect()
+                        
+                    # Создаем локальную копию для расчетов и освобождаем оригинал
+                    df_train_local = None
+                    gc.collect()
             except Exception as e:
                 st.error(f"Ошибка загрузки: {e}")
+                
+                # Освобождаем память после ошибки
+                gc.collect()
     
     # ========== (2) Настройка колонок ==========
     st.sidebar.header("2. Колонки датасета")
@@ -238,23 +261,9 @@ def setup_ui():
     if id_stored not in ["<нет>"] + all_cols:
         st.session_state["id_col_key"] = "<нет>"
     
-    # Проверяем наличие временных значений и применяем их перед созданием виджетов
-    if "_temp_dt_col" in st.session_state:
-        st.session_state["dt_col_key"] = st.session_state["_temp_dt_col"]
-        del st.session_state["_temp_dt_col"]
+    # Код проверки временных значений удален, так как значения устанавливаются напрямую
+    # при автоопределении полей
     
-    if "_temp_id_col" in st.session_state:
-        st.session_state["id_col_key"] = st.session_state["_temp_id_col"]
-        del st.session_state["_temp_id_col"]
-    
-    if "_temp_tgt_col" in st.session_state:
-        st.session_state["tgt_col_key"] = st.session_state["_temp_tgt_col"]
-        del st.session_state["_temp_tgt_col"]
-    
-    if "_temp_freq" in st.session_state:
-        st.session_state["freq_key"] = st.session_state["_temp_freq"]
-        del st.session_state["_temp_freq"]
-        
     dt_col = st.sidebar.selectbox("Колонка с датой", ["<нет>"] + all_cols, key="dt_col_key")
     tgt_col = st.sidebar.selectbox("Колонка target", ["<нет>"] + all_cols, key="tgt_col_key")
     id_col = st.sidebar.selectbox("Колонка ID (категориальный)", ["<нет>"] + all_cols, key="id_col_key")
@@ -263,23 +272,40 @@ def setup_ui():
     if df_current is not None and st.sidebar.button("🔍 Автоопределение полей", key="auto_detect_fields_btn"):
         auto_detected = auto_select_fields(df_current)
         if auto_detected:
-            # Вместо прямого изменения session_state виджетов, 
-            # создаем временные ключи, которые будут использоваться при следующем рендеринге
+            # Напрямую устанавливаем значения в session_state для ключей виджетов
+            # вместо использования временных переменных и перезагрузки
+            changed = False
+            
             if auto_detected.get('dt_col'):
-                st.session_state["_temp_dt_col"] = auto_detected['dt_col']
+                st.session_state["dt_col_key"] = auto_detected['dt_col']
+                changed = True
             
             if auto_detected.get('id_col'):
-                st.session_state["_temp_id_col"] = auto_detected['id_col']
+                st.session_state["id_col_key"] = auto_detected['id_col']
+                changed = True
             
             if auto_detected.get('tgt_col'):
-                st.session_state["_temp_tgt_col"] = auto_detected['tgt_col']
+                st.session_state["tgt_col_key"] = auto_detected['tgt_col']
+                changed = True
             
             if auto_detected.get('freq'):
-                st.session_state["_temp_freq"] = auto_detected['freq']
+                st.session_state["freq_key"] = auto_detected['freq']
+                changed = True
             
             st.sidebar.success("Автоматически определены поля!")
-            # Перезапускаем приложение, чтобы применить временные значения
-            st.rerun()
+            
+            # Сохраняем состояние дополнительных виджетов, которые могут быть потеряны при перезагрузке
+            if "use_holidays_key" in st.session_state:
+                use_holidays_value = st.session_state["use_holidays_key"]
+                st.session_state["_saved_use_holidays"] = use_holidays_value
+                
+            if "static_feats_key" in st.session_state:
+                static_feats_value = st.session_state["static_feats_key"]
+                st.session_state["_saved_static_feats"] = static_feats_value
+                
+            # Только если действительно что-то изменилось, выполняем перезагрузку
+            if changed:
+                st.rerun()
         else:
             st.sidebar.warning("Не удалось автоматически определить поля")
     
@@ -529,6 +555,12 @@ def setup_ui():
                                 if model_details is not None and not model_details.empty:
                                     with st.expander("Детальная информация о моделях в ансамбле"):
                                         st.dataframe(model_details)
+                                
+                                # Освобождаем память после работы с данными ансамбля
+                                del ensemble_weights
+                                if model_details is not None:
+                                    del model_details
+                                gc.collect()
                             else:
                                 st.warning("⚠️ Не удалось получить информацию о составе ансамблевой модели.")
                                 st.info("Подробная информация об ансамбле будет доступна в Excel при экспорте результатов.")

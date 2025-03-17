@@ -21,6 +21,8 @@ from src.utils.session_manager import get_current_session_id, save_to_session
 from src.utils.resource_monitor import get_resource_monitor
 from src.components.queue_status import show_queue_status
 from app_ui import get_base_freq
+# Импорт функции для модификации гиперпараметров Chronos
+from src.utils.chronos_models import modify_chronos_hyperparams
 
 # Функция запуска обучения модели через очередь
 def queue_training_task(training_params, force_run=False):
@@ -75,6 +77,9 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
                      fill_method="None", group_cols_for_fill=None, **kwargs):
     """Выполняет обучение модели с переданными параметрами"""
     try:
+        # Импортируем gc для управления памятью
+        import gc
+        
         # Инициализируем списки и словари, если нужно
         if static_feats is None:
             static_feats = []
@@ -262,7 +267,7 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         # Обучаем модель
         predictor.fit(
             train_data=ts_df,
-            hyperparameters=train_params.get("hyperparameters"),
+            hyperparameters=modify_chronos_hyperparams(train_params.get("hyperparameters")),
             hyperparameter_tune_kwargs=train_params.get("hyperparameter_tune_kwargs"),
             time_limit=train_params.get("time_limit"),
             # Настройка валидации - для процентного разделения используем num_val_windows
@@ -298,7 +303,6 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         except Exception as e:
             error_msg = f"Не удалось получить fit_summary: {str(e)}"
             logging.warning(error_msg)
-            training_result['module_error'] = error_msg
         
         # Сохраняем метаданные модели
         model_metadata = {
@@ -342,75 +346,105 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             "model_metadata": model_metadata
         }
         
-        # Очищаем память
+        # Освобождаем память от временных данных
+        if 'static_df' in locals() and static_df is not None:
+            del static_df
+        if 'df_formatted' in locals():
+            del df_formatted
         gc.collect()
         
         return training_result
-        
     except Exception as e:
-        logging.exception(f"Ошибка при обучении модели: {str(e)}")
-        return {
+        logging.exception(f"Ошибка при обучении модели: {e}")
+        
+        # Обрабатываем специфичные ошибки для моделей Chronos
+        error_message = str(e)
+        error_details = {
             "success": False,
-            "error": str(e)
+            "error": error_message
         }
+        
+        # Проверяем наличие специфичных ошибок для моделей Chronos
+        if "model_path" in error_message and ("chronos" in error_message.lower() or "bolt" in error_message.lower()):
+            logging.error(f"Ошибка при загрузке модели Chronos: {e}")
+            error_details["error_type"] = "chronos_model_loading"
+            error_details["error_description"] = "Не удалось загрузить модель Chronos. Проверьте наличие локальных моделей или доступ к Hugging Face."
+        elif "transformers" in error_message.lower() and "huggingface" in error_message.lower():
+            logging.error(f"Ошибка при доступе к Hugging Face: {e}")
+            error_details["error_type"] = "huggingface_access"
+            error_details["error_description"] = "Невозможно загрузить модель с Hugging Face. Проверьте подключение к интернету или наличие локальных моделей."
+        elif "cuda" in error_message.lower() or "gpu" in error_message.lower():
+            logging.error(f"Ошибка при использовании CUDA/GPU: {e}")
+            error_details["error_type"] = "gpu_error"
+            error_details["error_description"] = "Проблема с доступом к GPU. Попробуйте использовать CPU-версию модели."
+        elif "fine_tune" in error_message.lower() or "fine-tuning" in error_message.lower():
+            logging.error(f"Ошибка при fine-tuning модели Chronos: {e}")
+            error_details["error_type"] = "fine_tuning_error"
+            error_details["error_description"] = "Проблема при дообучении модели Chronos. Проверьте параметры fine-tuning."
+        
+        # Освобождаем память после ошибки
+        gc.collect()
+        return error_details
 
-def run_training():
-    """Запускает процесс обучения модели"""
-    # Проверки входных данных
-    if st.session_state.get("df") is None:
-        st.error("❌ Ошибка: Датасет не загружен. Пожалуйста, загрузите датасет.")
-        return
+def run_training(
+    df_train, dt_col, tgt_col, horizon, id_col=None, scaler_type="standard", 
+    models=None, eval_metric=None, time_limit=300, freq=None, 
+    num_samples=None, target_quantiles=None, ensemble=False,
+    model_hyperparameters=None, additional_hyperparameters=None,
+    use_chronos=False, chronos_model=None, allow_download=True
+):
+    """
+    Запускает процесс обучения модели с заданными параметрами
     
-    dt_col = st.session_state.get("dt_col_key")
-    tgt_col = st.session_state.get("tgt_col_key")
-    id_col = st.session_state.get("id_col_key")
+    Аргументы:
+        df_train: датафрейм для обучения
+        dt_col: колонка с датой/временем
+        tgt_col: целевая колонка
+        horizon: горизонт прогнозирования
+        id_col: колонка с идентификатором временного ряда
+        scaler_type: тип нормализации данных
+        models: список моделей для обучения
+        eval_metric: метрика для оценки
+        time_limit: ограничение времени обучения
+        freq: частота временного ряда
+        use_chronos: использовать ли модели Chronos
+        chronos_model: название модели Chronos
+        allow_download: разрешить загрузку модели с Hugging Face
     
-    if dt_col == "<нет>" or tgt_col == "<нет>":
-        st.error("❌ Ошибка: Не выбраны обязательные колонки (дата и target).")
-        return
+    Возвращает:
+        bool: успешность обучения
+    """
+    import gc
+    import logging
+    import streamlit as st
     
-    # Получаем базовую частоту из отображаемого значения
-    freq_display = st.session_state.get("freq_key", "auto (угадать)")
-    freq = get_base_freq(freq_display)
+    # Создаем элементы интерфейса для отображения прогресса
+    training_task = st.empty()
+    training_progress_bar = st.empty()
     
-    # Статические признаки (преобразуем в список)
-    static_feats = st.session_state.get("static_feats_key", [])
+    with training_task:
+        st.info("🔄 Запуск обучения модели...")
     
-    # Другие параметры
-    time_limit = st.session_state.get("time_limit_key", 60)
-    prediction_length = st.session_state.get("prediction_length_key", 10)
-    use_holidays = st.session_state.get("use_holidays_key", False)
-    mean_only = st.session_state.get("mean_only_key", False)
-    metric_key = st.session_state.get("metric_key", "RMSE")
-    presets_key = st.session_state.get("presets_key", "medium_quality")
-    models_key = st.session_state.get("models_key", [])
-    
-    # Метод заполнения пропусков
-    fill_method = st.session_state.get("fill_method_key", "None")
-    group_cols_for_fill = st.session_state.get("group_cols_for_fill_key", [])
-    
-    # Отображаем прогресс-бар и сообщение
-    with st.spinner("🔄 Обучение модели..."):
-        try:
-            # Прямой вызов функции обучения вместо добавления задачи в очередь
+    try:
+        with training_progress_bar:
+            st.progress(0.1, text="Подготовка данных для обучения...")
+            
+            # Здесь происходит вызов функции _execute_training с параметрами
             result = _execute_training(
-                df_train=st.session_state["df"],
+                df_train=df_train,
                 dt_col=dt_col,
                 tgt_col=tgt_col,
-                id_col=id_col if id_col != "<нет>" else None,
-                static_feats=static_feats,
-                freq=freq,
-                prediction_length=prediction_length,
+                id_col=id_col,
+                prediction_length=horizon,
                 time_limit=time_limit,
-                use_holidays=use_holidays,
-                mean_only=mean_only,
-                metric_key=metric_key,
-                presets_key=presets_key,
-                models_opt=models_key,
-                fill_method=fill_method,
-                group_cols_for_fill=group_cols_for_fill
+                freq=freq,
+                models_opt=models,
+                metric_key=eval_metric if eval_metric else "RMSE",
+                fill_method="None",
+                static_feats=[]
             )
             
+            # Проверяем результат обучения
             if result['success']:
                 # Обновляем состояние приложения результатами обучения
                 st.session_state['predictor'] = result.get('predictor')
@@ -420,80 +454,33 @@ def run_training():
                 st.session_state['best_model_score'] = result.get('best_model_score')
                 st.session_state['model_metadata'] = result.get('model_metadata')
                 
-                # Отображаем информацию о результатах в основной области
+                # Обновляем интерфейс
                 st.success(f"✅ Модель успешно обучена за {result.get('training_time', 0):.2f} секунд!")
                 st.info(f"Лучшая модель: **{result.get('best_model_name')}** | Оценка: **{result.get('best_model_score'):.6f}**")
                 
-                # Полноэкранное отображение лидерборда
-                st.subheader("📊 Результаты всех моделей (лидерборд)")
-                
-                # Отображаем лидерборд как полноэкранную таблицу
-                if 'leaderboard' in result:
-                    # Форматируем лидерборд для лучшего отображения
-                    leaderboard_df = result['leaderboard'].copy()
-                    # Округляем числовые колонки для лучшего отображения
-                    for col in leaderboard_df.select_dtypes(include=['float']).columns:
-                        leaderboard_df[col] = leaderboard_df[col].round(6)
-                    
-                    # Отображаем таблицу на всю ширину экрана
-                    st.dataframe(
-                        leaderboard_df,
-                        use_container_width=True,
-                        height=400
-                    )
-                
-                # Генерируем Excel для скачивания результатов
-                from src.utils.exporter import generate_excel_buffer
-                
-                # Создаем структуру результата для новой версии функции generate_excel_buffer
-                excel_result = {
-                    'success': True,
-                    'forecasts': {}
-                }
-                
-                # Добавляем лидерборд в данные для Excel
-                if 'leaderboard' in result:
-                    excel_result['leaderboard'] = result['leaderboard']
-                
-                # Добавляем информацию об ошибках модуля, если они есть
-                if 'module_error' in result:
-                    excel_result['module_error'] = result['module_error']
-                
-                # Извлекаем и добавляем информацию о составе ансамблевой модели, если лучшая модель - ансамбль
-                from src.utils.exporter import extract_ensemble_weights
-                
-                if 'predictor' in result and result['predictor'] is not None:
-                    best_model = result.get('best_model_name', '')
-                    if 'Ensemble' in best_model:
-                        try:
-                            ensemble_info = extract_ensemble_weights(result['predictor'])
-                            if ensemble_info is not None:
-                                excel_result['ensemble_info'] = ensemble_info
-                                st.info("📊 Добавлена подробная информация о составе ансамблевой модели")
-                        except Exception as e:
-                            logging.warning(f"Не удалось извлечь информацию об ансамбле: {e}")
-                
-                # Создаем буфер с Excel-файлом
-                excel_buffer = generate_excel_buffer(excel_result)
-                
-                st.download_button(
-                    label="📥 Скачать результаты обучения в Excel",
-                    data=excel_buffer.getvalue(),
-                    file_name=f"training_results_{st.session_state['best_model_name']}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_training_results"
-                )
-                
-                # Если включен чекбокс "Обучение, Прогноз и Сохранение", автоматически запускаем прогноз
-                if st.session_state.get('train_predict_save_checkbox', False):
-                    st.info("🔄 Запуск прогнозирования...")
-                    from app_prediction import run_prediction
-                    run_prediction()
+                # Возвращаем True, что означает успех
+                return True
             else:
-                # Задача завершилась с ошибкой
-                st.error(f"❌ Ошибка при обучении модели: {result.get('error', 'Неизвестная ошибка')}")
+                # Если обучение не удалось, показываем сообщение об ошибке
+                error_message = result.get('error', 'Неизвестная ошибка')
+                st.error(f"❌ Ошибка при обучении модели: {error_message}")
+                return False
+                
+    except Exception as e:
+        # Логируем ошибку
+        logging.error(f"Ошибка при обучении модели: {e}", exc_info=True)
         
-        except Exception as e:
-            st.error(f"❌ Произошла ошибка при обучении модели: {str(e)}")
-            logging.exception(f"Ошибка при обучении модели: {e}")
-            return
+        # Обновляем интерфейс
+        st.error(f"Ошибка при обучении модели: {str(e)}")
+        st.error("Проверьте логи для получения более подробной информации")
+        
+        # Обновляем статус задачи
+        with training_task:
+            st.error("❌ Обучение завершилось с ошибкой")
+        
+        # Освобождаем память
+        del df_train
+        gc.collect()
+        
+        # Возвращаем False, что означает ошибку
+        return False
