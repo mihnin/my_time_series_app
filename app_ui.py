@@ -424,7 +424,7 @@ def setup_ui():
     
     # ========== (6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")
-    st.sidebar.checkbox("Обучение, Прогноз и Сохранение", key="train_predict_save_checkbox")
+    st.sidebar.checkbox("Обучение, Прогноз и Сохранение", key="train_predict_save_checkbox", value=False)
 
     # Стилизуем кнопки: красная для обучения, голубые для остальных
     button_css = """
