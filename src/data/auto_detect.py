@@ -273,13 +273,13 @@ def detect_frequency(df: pd.DataFrame, date_col: str, id_col: Optional[str] = No
     
     # Определяем частоту на основе интервала
     if interval_days < thresholds.get('hour', 0.04):  # < ~1 час
-        frequency = 'H'
+        frequency = 'h'
     elif interval_days < thresholds.get('day', 0.9):  # < ~1 день
         frequency = 'D'
     elif interval_days < thresholds.get('week', 6):  # < ~1 неделя
         frequency = 'W'
     elif interval_days < thresholds.get('month', 28):  # < ~1 месяц
-        frequency = 'M'
+        frequency = 'ME'  # Используем 'ME' (месяц, конец) вместо устаревшего 'M'
     elif interval_days < 90:  # < ~3 месяца
         frequency = 'Q'
     else:

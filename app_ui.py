@@ -35,8 +35,8 @@ model_choices = [all_models_opt] + model_keys
 FREQ_MAPPING = {
     "auto": "auto (угадать)",
     "D": "D (день)",
-    "H": "H (час)",
-    "M": "M (месяц)",
+    "h": "h (час)",
+    "ME": "ME (месяц)",
     "B": "B (рабочие дни)",
     "W": "W (неделя)",
     "Q": "Q (квартал)"
@@ -47,18 +47,41 @@ FREQ_REVERSE_MAPPING = {v: k for k, v in FREQ_MAPPING.items()}
 
 def get_base_freq(freq_display):
     """
-    Преобразует отображаемое значение частоты в базовое значение для библиотеки.
+    Извлекает базовое значение частоты из отображаемого значения
     
-    Parameters:
-    -----------
+    Параметры
+    ---------
     freq_display : str
-        Отображаемое значение частоты (например, "D (день)")
-        
-    Returns:
-    --------
+        Отображаемое значение частоты, например "D (день)"
+    
+    Возвращает
+    ----------
     str
-        Базовое значение частоты (например, "D")
+        Базовое значение частоты, например "D"
     """
+    # Для обратной совместимости обрабатываем устаревшие алиасы из pandas 2.2.0
+    pandas_aliases_map = {
+        "H": "h",     # час → h
+        "BH": "bh",   # бизнес-час → bh
+        "CBH": "cbh", # кастомный бизнес-час → cbh
+        "T": "min",   # минута → min
+        "S": "s",     # секунда → s
+        "L": "ms",    # миллисекунда → ms
+        "U": "us",    # микросекунда → us
+        "N": "ns",     # наносекунда → ns
+        "M": "ME"     # месяц → ME (с конца месяца)
+    }
+    
+    # Проверяем, является ли входное значение устаревшим алиасом
+    if freq_display in pandas_aliases_map:
+        return pandas_aliases_map[freq_display]
+    
+    # Обработка форматов вида "X (описание)"
+    if " (" in freq_display:
+        base_freq = freq_display.split(" ")[0]
+        if base_freq in pandas_aliases_map:
+            return pandas_aliases_map[base_freq]
+    
     return FREQ_REVERSE_MAPPING.get(freq_display, "auto")
 
 def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
@@ -352,17 +375,17 @@ def setup_ui():
     st.sidebar.header("4. Частота (freq)")
     
     # Получаем список доступных частот без авто-определения
-    freq_options = ["D (день)", "H (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
+    freq_options = ["D (день)", "h (час)", "ME (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
 
     if "freq_key" not in st.session_state:
-        st.session_state["freq_key"] = "M (месяц)"  # Меняем значение по умолчанию на 'M (месяц)'
+        st.session_state["freq_key"] = "ME (месяц)"  # Меняем значение по умолчанию на 'ME (месяц)'
 
     # Проверяем, что значение freq_key есть в списке опций
     current_freq = st.session_state["freq_key"]
     if current_freq not in freq_options:
-        # Если текущее значение - 'auto (угадать)', меняем на 'M (месяц)'
+        # Если текущее значение - 'auto (угадать)', меняем на 'ME (месяц)'
         if current_freq == "auto (угадать)":
-            st.session_state["freq_key"] = "M (месяц)"
+            st.session_state["freq_key"] = "ME (месяц)"
         else:
             # Проверяем базовое значение частоты
             for opt in freq_options:
@@ -372,9 +395,9 @@ def setup_ui():
                     st.session_state["freq_key"] = opt
                     break
             
-            # Если соответствие не найдено, используем M (месяц) по умолчанию
+            # Если соответствие не найдено, используем ME (месяц) по умолчанию
             if current_freq not in freq_options:
-                st.session_state["freq_key"] = "M (месяц)"
+                st.session_state["freq_key"] = "ME (месяц)"
 
     # Выбор частоты (без кнопки автоопределения)
     freq_selection = st.sidebar.selectbox("Частота данных", freq_options, 
@@ -480,7 +503,46 @@ def setup_ui():
         # Нужно импортировать run_training непосредственно здесь, иначе будет циклический импорт
         from app_training import run_training
         st.sidebar.success("Кнопка нажата! Запуск обучения из сайдбара...")
-        run_training()
+        
+        # Проверяем наличие необходимых данных перед запуском обучения
+        if st.session_state.get("df") is None:
+            st.error("❌ Ошибка: Датасет не загружен. Пожалуйста, загрузите датасет.")
+            return
+        
+        dt_col = st.session_state.get("dt_col_key")
+        tgt_col = st.session_state.get("tgt_col_key")
+        id_col = st.session_state.get("id_col_key")
+        
+        if dt_col == "<нет>" or tgt_col == "<нет>":
+            st.error("❌ Ошибка: Не выбраны обязательные колонки (дата и target).")
+            return
+            
+        # Получаем горизонт прогнозирования
+        prediction_length = st.session_state.get("prediction_length_key", 10)
+        
+        # Получаем базовую частоту из отображаемого значения
+        freq_display = st.session_state.get("freq_key", "auto (угадать)")
+        
+        # Получаем выбранные модели
+        models_key = st.session_state.get("models_key", [])
+        
+        # Получаем выбранную метрику
+        metric_key = st.session_state.get("metric_key", "RMSE")
+        
+        # Вызываем функцию с необходимыми аргументами
+        run_training(
+            df_train=st.session_state["df"],
+            dt_col=dt_col,
+            tgt_col=tgt_col,
+            horizon=prediction_length,
+            id_col=id_col if id_col != "<нет>" else None,
+            freq=freq_display,
+            models=models_key,
+            eval_metric=metric_key,
+            time_limit=st.session_state.get("time_limit_key", 300),
+            use_chronos=True,
+            chronos_model="bolt_small"
+        )
     
     # ========== (7) Прогноз ==========
     st.sidebar.header("7. Прогноз")

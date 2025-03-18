@@ -74,8 +74,25 @@ def queue_training_task(training_params, force_run=False):
 def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq=None, 
                      prediction_length=10, time_limit=60, use_holidays=False, mean_only=False, 
                      metric_key="RMSE", presets_key="medium_quality", models_opt=None, 
-                     fill_method="None", group_cols_for_fill=None, **kwargs):
-    """Выполняет обучение модели с переданными параметрами"""
+                     fill_method="None", group_cols_for_fill=None, chronos_model="bolt_small", 
+                     use_chronos=False, **kwargs):
+    """
+    Обучение TimeSeriesPredictor на датасете
+    
+    Основные аргументы:
+        df_train: pandas.DataFrame - датасет для обучения
+        dt_col: str - колонка с датой/временем
+        tgt_col: str - целевая колонка
+        id_col: str - колонка с ID объекта (None для одного временного ряда)
+        static_feats: list - список статических признаков
+        freq: str - частота временного ряда
+        prediction_length: int - горизонт прогнозирования
+        chronos_model: str - название модели Chronos для использования
+        use_chronos: bool - использовать ли модели Chronos
+
+    Возвращает:
+        dict - словарь с результатами обучения
+    """
     try:
         # Импортируем gc для управления памятью
         import gc
@@ -265,9 +282,20 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
         )
         
         # Обучаем модель
+        # Получаем базовые hyperparameters
+        base_hyperparams = train_params.get("hyperparameters", {}) or {}
+        
+        # Создаем словарь для моделей, начиная с моделей, выбранных пользователем
+        model_hyperparams = base_hyperparams.copy() if base_hyperparams else {}
+        
+        # Добавляем Chronos только если use_chronos=True
+        if use_chronos:
+            model_hyperparams["Chronos"] = modify_chronos_hyperparams(chronos_model, {})
+            logging.info(f"Добавлена модель Chronos ({chronos_model}) к списку моделей для обучения")
+        
         predictor.fit(
             train_data=ts_df,
-            hyperparameters=modify_chronos_hyperparams(train_params.get("hyperparameters")),
+            hyperparameters=model_hyperparams,
             hyperparameter_tune_kwargs=train_params.get("hyperparameter_tune_kwargs"),
             time_limit=train_params.get("time_limit"),
             # Настройка валидации - для процентного разделения используем num_val_windows
@@ -441,7 +469,9 @@ def run_training(
                 models_opt=models,
                 metric_key=eval_metric if eval_metric else "RMSE",
                 fill_method="None",
-                static_feats=[]
+                static_feats=[],
+                use_chronos=use_chronos,
+                chronos_model=chronos_model if chronos_model else "bolt_small"
             )
             
             # Проверяем результат обучения

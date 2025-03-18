@@ -85,7 +85,7 @@ STREAMLIT_THEME = {
 DEFAULT_TIME_LIMIT = 300  # 5 минут на обучение
 DEFAULT_PREDICTION_LENGTH = 24
 DEFAULT_MODELS = ["DeepAR", "Transformer", "TemporalFusionTransformer", "SimpleFeedForward"]
-DEFAULT_FREQUENCY = "H"  # часовая
+DEFAULT_FREQUENCY = "h"  # часовая (обновлено с 'H' на 'h' для совместимости с pandas 2.2.0)
 
 # Параметры производительности
 MAX_MEMORY_USAGE_GB = 4  # Максимальное ограничение по памяти, ГБ

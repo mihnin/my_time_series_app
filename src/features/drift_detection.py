@@ -249,10 +249,11 @@ def create_drift_visualizations(historical_df: pd.DataFrame,
     
     # 4. Scatter plot средних значений по времени (для визуализации трендов)
     if id_col:
-        hist_means = hist_df.groupby([pd.Grouper(key=date_col, freq='M')])[target_col].mean().reset_index()
+        # Группировка по месяцам - используем 'ME' (конец месяца) вместо устаревшего 'M'
+        hist_means = hist_df.groupby([pd.Grouper(key=date_col, freq='ME')])[target_col].mean().reset_index()
         hist_means['source'] = 'Исторические'
         
-        new_means = new_df_copy.groupby([pd.Grouper(key=date_col, freq='M')])[target_col].mean().reset_index()
+        new_means = new_df_copy.groupby([pd.Grouper(key=date_col, freq='ME')])[target_col].mean().reset_index()
         new_means['source'] = 'Новые'
         
         combined_means = pd.concat([hist_means, new_means])

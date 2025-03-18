@@ -27,6 +27,10 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
                       freq=None, static_feats=None, horizon_val=10, **kwargs):
     """Выполняет предсказание с переданными параметрами"""
     try:
+        # Создаем элементы интерфейса для отображения прогресса
+        progress_bar = st.empty()
+        status_text = st.empty()
+        
         # Инициализируем значения по умолчанию
         if static_feats is None:
             static_feats = []
@@ -307,7 +311,7 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
                 st.subheader(f"Визуализация прогноза для колонки: {target_col}")
                 
                 # Отображаем графики для каждого ID
-                for item_id, plot_df in graphs_data.items():
+                for idx, (item_id, plot_df) in enumerate(graphs_data.items()):
                     if plot_df.empty:
                         continue
                     
@@ -331,7 +335,8 @@ def _execute_prediction(predictor, dt_col, tgt_col, id_col, df_forecast=None, us
                                        name='90% интервал')
                     
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
+                    # Используем уникальный ключ для каждого графика
+                    st.plotly_chart(fig, use_container_width=True, key=f"exec_pred_{target_col}_{item_id}_{idx}")
             
             # Кнопка для сохранения результатов в Excel
             excel_buffer = generate_excel_buffer(result)
@@ -370,6 +375,9 @@ def run_prediction():
     try:
         # Импортируем gc для управления памятью
         import gc
+        
+        # Создаем контейнер для вывода результатов
+        container = st.container()
         
         # Получаем значения из session_state
         predictor = st.session_state.get("predictor")
@@ -455,7 +463,7 @@ def run_prediction():
                     st.subheader(f"Визуализация прогноза для колонки: {target_col}")
                     
                     # Отображаем графики для каждого ID
-                    for item_id, plot_df in graphs_data.items():
+                    for idx, (item_id, plot_df) in enumerate(graphs_data.items()):
                         if plot_df.empty:
                             continue
                         
@@ -479,7 +487,8 @@ def run_prediction():
                                            name='90% интервал')
                         
                         fig.update_layout(height=400)
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Используем уникальный ключ для каждого графика с другим префиксом
+                        st.plotly_chart(fig, use_container_width=True, key=f"run_pred_{target_col}_{item_id}_{idx}")
                 
                 # Кнопка для сохранения результатов в Excel
                 excel_buffer = generate_excel_buffer(result)
