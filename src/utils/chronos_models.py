@@ -32,7 +32,7 @@ def get_local_model_path(model_name, use_bolt=False, allow_download=True):
         model_name (str): Имя или путь к модели Chronos
         use_bolt (bool): Использовать облегченную версию модели (bolt)
         allow_download (bool): Разрешить загрузку модели с Hugging Face
-        
+    
     Возвращает:
         str: Локальный путь к модели
         
@@ -98,7 +98,7 @@ def get_local_model_path(model_name, use_bolt=False, allow_download=True):
             from src.utils.config import CHRONOS_MODELS_MAPPING, DEFAULT_HF_MODEL_REPO
             
             # Преобразуем имя модели в имя репозитория HF, если оно есть в маппинге
-            if model_name in CHRONOS_MODELS_MAPPING:
+    if model_name in CHRONOS_MODELS_MAPPING:
                 repo_id = CHRONOS_MODELS_MAPPING[model_name]
                 log_messages.append(f"Найдено соответствие в маппинге: {model_name} -> {repo_id}")
             else:
@@ -187,7 +187,7 @@ def modify_chronos_hyperparams(model_name, hyperparameters=None):
     Аргументы:
         model_name (str): Имя модели
         hyperparameters (dict): Словарь гиперпараметров
-        
+    
     Возвращает:
         dict: Обновленный словарь гиперпараметров
     """
@@ -241,7 +241,7 @@ def create_chronos_predictor(model_name, use_bolt=False, allow_download=True, **
         use_bolt (bool): Использовать облегченную версию модели (bolt)
         allow_download (bool): Разрешить загрузку модели с Hugging Face
         **kwargs: Дополнительные параметры для предиктора
-        
+    
     Возвращает:
         ChronosPredictor: Предиктор на основе Chronos модели
         
@@ -269,8 +269,8 @@ def create_chronos_predictor(model_name, use_bolt=False, allow_download=True, **
         # Создаём предиктор
         predictor = ChronosPredictor(model_path=model_path, **kwargs)
         logging.info(f"Предиктор Chronos успешно создан с моделью: {model_name}")
-        
-        return predictor
+    
+    return predictor
         
     except Exception as e:
         error_msg = f"Ошибка при создании предиктора Chronos: {str(e)}"
