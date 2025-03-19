@@ -220,161 +220,171 @@ def convert_predictions_to_dataframe(predictions: TimeSeriesDataFrame) -> pd.Dat
 
 def train_model(
     train_data: TimeSeriesDataFrame,
-    prediction_length: int,
-    model_path: str = None,
-    time_limit: int = 300,
-    eval_metric: str = "RMSE",
     hyperparameters: Optional[Dict] = None,
-    preset: str = "medium_quality",
-    freq: str = None,
-):
+    time_limit: Optional[int] = None,
+    preset: Optional[str] = None,
+    model_path: Optional[str] = None,
+    eval_metric: Optional[str] = None,
+    prediction_length: Optional[int] = None
+) -> TimeSeriesPredictor:
     """
-    Обучает модель прогнозирования временных рядов с использованием AutoGluon.
+    Обучает модель временных рядов.
     
     Parameters:
     -----------
     train_data : TimeSeriesDataFrame
-        DataFrame с данными временного ряда.
-    prediction_length : int
-        Длина прогноза (горизонт).
-    model_path : str, опционально
-        Путь для сохранения модели.
+        Данные для обучения
+    hyperparameters : Dict, опционально
+        Гиперпараметры модели
     time_limit : int, опционально
-        Ограничение времени обучения в секундах.
-    eval_metric : str, опционально
-        Метрика оценки качества модели.
-    hyperparameters : dict, опционально
-        Словарь с гиперпараметрами моделей.
+        Ограничение времени обучения в секундах
     preset : str, опционально
-        Пресет для AutoGluon (medium_quality, high_quality, и т.д.).
-    freq : str, опционально
-        Частота данных ('D' для дневной, 'H' для часовой, и т.д.)
-    
+        Предустановка для обучения. Возможные значения: 'best_quality', 'high_quality', 'good_quality', 'medium_quality', 'fast_training'.
+    model_path : str, опционально
+        Путь для сохранения модели
+    eval_metric : str, опционально
+        Метрика для оценки качества модели
+    prediction_length : int, опционально
+        Длина прогноза
+        
     Returns:
     --------
-    Tuple[str, TimeSeriesPredictor]
-        Путь к сохраненной модели и объект предиктора
+    TimeSeriesPredictor
+        Обученный предиктор
     """
-    logging.info(f"Начало обучения модели с горизонтом прогнозирования {prediction_length}")
-    logging.info(f"Используемый пресет: {preset}, метрика: {eval_metric}")
-    
     try:
-        # Убедимся, что директория для модели существует
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        # Настройка параметров обучения
+        if time_limit is None:
+            time_limit = 3600  # 1 час по умолчанию
         
-        # Проверка параметров
-        if prediction_length <= 0:
-            raise ValueError(f"Некорректный горизонт прогнозирования: {prediction_length}")
-
-        if not isinstance(train_data, TimeSeriesDataFrame):
-            raise TypeError("train_data должен быть типа TimeSeriesDataFrame")
-        
-        # Если частота не указана, пытаемся получить её из данных
-        if freq is None:
-            freq = getattr(train_data, 'freq', 'D')  # По умолчанию 'D' если не удалось определить
-        
-        # Стандартизируем частоту
-        freq_mapping = {
-            'ME': 'M',  # Fix for month - AutoGluon uses M not ME
-            'MS': 'MS',
-            'D': 'D',
-            'h': 'H',
-            'H': 'H',
-            'W': 'W',
-            'Q': 'Q',
-            'B': 'B',
-            'Y': 'Y',
-            'A': 'A'
-        }
-        
-        # Преобразуем нестандартные частоты в стандартные
-        if freq in freq_mapping:
-            freq = freq_mapping[freq]
-            logging.info(f"Частота стандартизирована в: {freq}")
-            
-        logging.info(f"Данные для обучения: {len(train_data)} рядов, частота: {freq}")
-        
-        # Определяем модели для обучения на основе hyperparameters
-        models = {}
-        if hyperparameters:
-            # Получаем список доступных моделей в AutoGluon
-            valid_models = ['ADIDA', 'ARIMA', 'AutoARIMA', 'AutoCES', 'AutoETS', 'Average', 
-                          'Chronos', 'Croston', 'CrostonSBA', 'DLinear', 'DeepAR', 
-                          'DirectTabular', 'DynamicOptimizedTheta', 'ETS', 'IMAPA', 
-                          'NPTS', 'Naive', 'PatchTST', 'RecursiveTabular', 'SeasonalAverage', 
-                          'SeasonalNaive', 'SimpleFeedForward', 'TemporalFusionTransformer', 
-                          'Theta', 'TiDE', 'WaveNet', 'Zero']
-            
-            # Проверяем и фильтруем модели
-            filtered_hyperparams = {}
-            for model in hyperparameters:
-                if model in valid_models:
-                    filtered_hyperparams[model] = hyperparameters[model]
-                else:
-                    logging.warning(f"Модель {model} не поддерживается AutoGluon и будет пропущена")
-            
-            # Обновляем hyperparameters
-            hyperparameters = filtered_hyperparams
-            
-            if hyperparameters:
-                logging.info(f"Выбранные модели для обучения: {list(hyperparameters.keys())}")
+        if preset is None:
+            # Выбираем preset в зависимости от ограничения по времени
+            if time_limit <= 300:  # <= 5 минут
+                preset = 'fast_training'
+            elif time_limit <= 1800:  # <= 30 минут
+                preset = 'medium_quality'
             else:
-                logging.info("Не выбрано ни одной действительной модели, будем использовать стандартные модели из пресета")
-                # Если нет валидных моделей, мы не передаем hyperparameters вообще
-                # AutoGluon будет использовать модели из выбранного пресета
-                hyperparameters = None
-                
-        # Инициализируем и обучаем предиктор
+                preset = 'high_quality'
+        
+        if eval_metric is None:
+            eval_metric = "MASE"
+        
+        if prediction_length is None:
+            prediction_length = 10
+        
+        # Валидируем и, при необходимости, корректируем список моделей для обучения
+        if hyperparameters is not None:
+            # Фильтруем список моделей от невалидных значений
+            hyperparameters = filter_valid_models(hyperparameters)
+            
+            # Проверяем, если после фильтрации список пуст
+            if not hyperparameters:
+                logging.info("Список моделей после фильтрации оказался пустым. Будут использованы все доступные модели.")
+                # Используем все доступные модели
+                hyperparameters = {model: {} for model in get_valid_models()}
+        
+        # Логируем информацию о процессе обучения
+        logging.info(f"Начинаем обучение модели с preset={preset}, time_limit={time_limit}с, eval_metric={eval_metric}")
+        
+        if hyperparameters is not None:
+            model_count = len(hyperparameters)
+            model_list = ", ".join(list(hyperparameters.keys()))
+            logging.info(f"Будет обучено {model_count} моделей: {model_list}")
+        else:
+            logging.info("Будут обучены все модели из выбранного preset")
+        
+        # Настраиваем квантили для лучшей оценки неопределенности
+        quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        
+        # Создаем предиктор
         predictor = TimeSeriesPredictor(
             prediction_length=prediction_length,
             path=model_path,
             eval_metric=eval_metric,
             target="target",
-            freq=freq  # Добавляем параметр частоты
+            quantile_levels=quantile_levels
         )
         
-        try:
-            if hyperparameters is None:
-                logging.info(f"Обучение с использованием пресета '{preset}' без указания конкретных моделей")
-                predictor.fit(
-                    train_data=train_data,
-                    time_limit=time_limit,
-                    presets=preset
-                )
-            elif not hyperparameters:
-                logging.info("Hyperparameters пуст, используем основную модель DeepAR для предотвращения ошибки")
-                predictor.fit(
-                    train_data=train_data,
-                    time_limit=time_limit,
-                    hyperparameters={"DeepAR": {}},
-                    presets=preset
-                )
+        # Подбираем соответствующий метод обучения в зависимости от переданных параметров
+        if hyperparameters is None:
+            # Если модели не указаны, обучаем со стандартными параметрами preset
+            logging.info(f"Обучение с использованием preset={preset} без явного указания моделей")
+            predictor.fit(train_data=train_data, time_limit=time_limit, presets=preset)
+        else:
+            # Если указан пустой словарь hyperparameters или "* (все)", используем все доступные модели
+            if not hyperparameters:
+                logging.info(f"Используем все доступные модели с preset={preset}")
+                # Создаем словарь со всеми доступными моделями
+                all_models = {model: {} for model in get_valid_models()}
+                predictor.fit(train_data=train_data, time_limit=time_limit, hyperparameters=all_models, presets=preset)
             else:
-                logging.info(f"Обучение с использованием выбранных моделей: {list(hyperparameters.keys())}")
-                predictor.fit(
-                    train_data=train_data,
-                    time_limit=time_limit,
-                    hyperparameters=hyperparameters,
-                    presets=preset
-                )
-        except Exception as fit_err:
-            logging.error(f"Ошибка при обучении модели: {fit_err}")
-            raise RuntimeError(f"Не удалось обучить модель: {str(fit_err)}")
+                # Иначе используем указанные модели
+                logging.info(f"Обучение с указанными моделями и preset={preset}")
+                predictor.fit(train_data=train_data, time_limit=time_limit, hyperparameters=hyperparameters, presets=preset)
         
-        # Сохраняем модель (это происходит автоматически, но явно вызываем save для уверенности)
-        try:
-            predictor.save()
-            logging.info(f"Модель успешно сохранена по пути: {model_path}")
-        except Exception as save_error:
-            logging.error(f"Ошибка при сохранении модели: {save_error}")
+        logging.info("Обучение модели успешно завершено")
         
-        return model_path, predictor
-        
+        return predictor
+    
     except Exception as e:
         logging.error(f"Ошибка при обучении модели: {e}")
         raise RuntimeError(f"Не удалось обучить модель: {str(e)}")
 
-def extract_model_metrics(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
+
+def filter_valid_models(hyperparameters: Dict) -> Dict:
+    """
+    Фильтрует список моделей, оставляя только валидные модели.
+    
+    Parameters:
+    -----------
+    hyperparameters : Dict
+        Словарь с гиперпараметрами моделей
+        
+    Returns:
+    --------
+    Dict
+        Словарь с гиперпараметрами только валидных моделей
+    """
+    if hyperparameters is None:
+        return None
+    
+    valid_models = get_valid_models()
+    
+    # Фильтруем модели, оставляя только валидные
+    filtered_params = {}
+    
+    for model_name, params in hyperparameters.items():
+        # Если это специальное значение "* (все)", возвращаем пустой словарь
+        # что будет интерпретировано как "использовать все модели"
+        if model_name == "* (все)":
+            return {}
+        
+        if model_name in valid_models:
+            filtered_params[model_name] = params
+        else:
+            logging.warning(f"Модель '{model_name}' не поддерживается и будет пропущена")
+    
+    return filtered_params
+
+
+def get_valid_models() -> list:
+    """
+    Возвращает список валидных моделей.
+    
+    Returns:
+    --------
+    list
+        Список названий поддерживаемых моделей
+    """
+    return [
+        'DeepAR', 'Transformer', 'PatchTST', 'TemporalFusionTransformer',
+        'DLinear', 'NLinear', 'SeasNaive', 'Seasonal', 'ETS', 'AutoETS',
+        'ARIMA', 'AutoARIMA', 'Theta', 'NPTS', 'RNN', 'CNN',
+        'ADIDA', 'Croston', 'IMAPA', 'MLP', 'WaveNet',
+        'SimpleFeedForward', 'MQCNN', 'AutoGluonTabular'
+    ]
+
+def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predictions=None) -> Dict[str, Any]:
     """
     Извлекает и форматирует метрики модели из обученного предиктора.
     
@@ -382,6 +392,10 @@ def extract_model_metrics(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
     -----------
     predictor : TimeSeriesPredictor
         Обученный предиктор AutoGluon
+    test_data : TimeSeriesDataFrame, опционально
+        Тестовые данные для оценки моделей
+    predictions : TimeSeriesDataFrame, опционально
+        Предсказания моделей на тестовых данных
         
     Returns:
     --------
@@ -391,10 +405,50 @@ def extract_model_metrics(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
     try:
         metrics = {}
         
+        # Базовая информация о модели
+        model_info = {
+            "prediction_length": predictor.prediction_length,
+            "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
+            "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown",
+            "quantile_levels": predictor.quantile_levels if hasattr(predictor, 'quantile_levels') else [0.1, 0.5, 0.9],
+            "model_count": len(predictor.get_model_names()) if hasattr(predictor, 'get_model_names') and callable(predictor.get_model_names) else 0
+        }
+        
+        # Информация о всех моделях в предикторе
+        if hasattr(predictor, 'get_model_names') and callable(predictor.get_model_names):
+            try:
+                model_names = predictor.get_model_names()
+                model_info["models"] = list(model_names)
+                logging.info(f"Обученные модели: {model_names}")
+            except Exception as e:
+                logging.warning(f"Не удалось получить список моделей: {e}")
+                model_info["models"] = []
+        
+        metrics["model_info"] = model_info
+        
         # Получаем таблицу лидеров
         if hasattr(predictor, 'leaderboard') and callable(predictor.leaderboard):
-            leaderboard = predictor.leaderboard()
+            try:
+                # Если есть тестовые данные и предсказания, используем их для получения полной таблицы лидеров
+                if test_data is not None and predictions is not None:
+                    logging.info("Получение таблицы лидеров с тестовыми данными и предсказаниями")
+                    leaderboard = predictor.leaderboard(data=test_data, predictions=predictions, extra_info=True)
+                else:
+                    # Пробуем получить leaderboard стандартным способом
+                    logging.info("Получение базовой таблицы лидеров без тестовых данных")
+                    leaderboard = predictor.leaderboard(extra_info=True)
+            except TypeError as e:
+                if "missing 1 required positional argument: 'predictions'" in str(e):
+                    # Если требуется predictions, значит у нас нет их пока - возвращаем базовую информацию
+                    logging.warning("Не удалось получить полную таблицу лидеров: требуются predictions. "
+                                   "Будет возвращена только базовая информация о модели.")
+                    metrics["note"] = "Для получения полных метрик необходимо сначала выполнить прогноз"
+                    return metrics
+                else:
+                    # Другая ошибка - пробрасываем дальше
+                    raise e
             
+            # Если смогли получить leaderboard, обрабатываем его
             # Преобразуем DataFrame в словарь для сериализации в JSON
             leaderboard_dict = {}
             for model_name in leaderboard.index:
@@ -430,12 +484,29 @@ def extract_model_metrics(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
         except Exception as ensemble_err:
             logging.warning(f"Не удалось извлечь веса ансамбля: {ensemble_err}")
         
-        # Добавляем информацию о параметрах прогнозирования
-        metrics["prediction_length"] = predictor.prediction_length
-        metrics["freq"] = str(predictor.freq) if hasattr(predictor, 'freq') else "unknown"
+        # Получаем информацию о гиперпараметрах всех моделей
+        try:
+            if hasattr(predictor, 'get_info') and callable(predictor.get_info):
+                models_info = predictor.get_info()
+                if isinstance(models_info, dict):
+                    # Фильтруем и форматируем информацию
+                    hyperparams = {}
+                    for model_name, info in models_info.items():
+                        if isinstance(info, dict) and 'hyperparameters' in info:
+                            # Берем только гиперпараметры
+                            hyperparams[model_name] = info['hyperparameters']
+                    
+                    if hyperparams:
+                        metrics["models_hyperparameters"] = hyperparams
+        except Exception as hp_err:
+            logging.warning(f"Не удалось извлечь гиперпараметры моделей: {hp_err}")
         
         return metrics
         
     except Exception as e:
         logging.error(f"Ошибка при извлечении метрик модели: {e}")
-        return {"error": str(e)}
+        return {"error": str(e), "model_info": {
+            "prediction_length": predictor.prediction_length if hasattr(predictor, 'prediction_length') else None,
+            "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
+            "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown"
+        }}

@@ -8,12 +8,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-try:
-    from app_ui import display_error_message
-except ImportError:
-    # Если не удалось импортировать, создадим простую функцию
-    def display_error_message(error_text, title="Ошибка"):
-        st.error(f"{title}: {error_text}")
+from app_ui import display_error_message, METRICS_DICT, FREQ_REVERSE_MAPPING
 
 from src.utils.config import (
     TIMESERIES_MODELS_DIR, MODEL_METADATA_FILE, LOGS_DIR,
@@ -235,9 +230,6 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
     st.title("Обучение модели для прогнозирования временных рядов")
     
     try:
-        # Загружаем конфигурацию с метриками
-        from app_ui import METRICS_DICT, FREQ_REVERSE_MAPPING
-        
         # Конвертируем полное название метрики в короткое (требуется для AutoGluon)
         short_metric = eval_metric
         if eval_metric in METRICS_DICT:
@@ -403,11 +395,22 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             st.success(f"Модель {model_name} успешно обучена и сохранена!")
             
             # Показываем метрики модели
-            st.subheader("Метрики обученной модели:")
+            st.subheader("Информация об обученной модели:")
             
+            # Если есть таблица лидеров, показываем её
             if "leaderboard" in model_summary:
                 st.dataframe(model_summary["leaderboard"])
+            elif "model_info" in model_summary:
+                # Показываем базовую информацию о модели
+                st.write("### Основная информация о модели")
+                info = model_summary["model_info"]
+                for key, value in info.items():
+                    st.write(f"**{key}**: {value}")
+                
+                if "note" in model_summary:
+                    st.info(model_summary["note"])
             
+            # Если есть информация о производительности, показываем её
             if "performance" in model_summary:
                 st.write("### Общая производительность")
                 for metric, value in model_summary["performance"].items():
@@ -419,14 +422,7 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             st.session_state["prediction_length"] = horizon
             
     except Exception as e:
-        if "display_error_message" in globals():
-            display_error_message(str(e), title="Ошибка при обучении модели")
-        else:
-            try:
-                from app_ui import display_error_message
-                display_error_message(str(e), title="Ошибка при обучении модели")
-            except:
-                st.error(f"Ошибка при обучении модели: {str(e)}")
+        display_error_message(str(e), title="Ошибка при обучении модели")
         logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
         # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
 
@@ -607,26 +603,32 @@ def main():
                     st.success(f"Модель {training_params['model_name']} успешно обучена и сохранена!")
                     
                     # Показываем метрики модели
-                    st.subheader("Метрики обученной модели:")
+                    st.subheader("Информация об обученной модели:")
                     
+                    # Если есть таблица лидеров, показываем её
                     if "leaderboard" in model_summary:
                         st.dataframe(model_summary["leaderboard"])
+                    elif "model_info" in model_summary:
+                        # Показываем базовую информацию о модели
+                        st.write("### Основная информация о модели")
+                        info = model_summary["model_info"]
+                        for key, value in info.items():
+                            st.write(f"**{key}**: {value}")
+                        
+                        if "note" in model_summary:
+                            st.info(model_summary["note"])
                     
+                    # Если есть информация о производительности, показываем её
                     if "performance" in model_summary:
-                        st.json(model_summary["performance"])
+                        st.write("### Общая производительность")
+                        for metric, value in model_summary["performance"].items():
+                            st.metric(label=metric, value=f"{value:.4f}")
                     
                     # Предлагаем перейти на страницу прогнозирования
                     st.info("Теперь вы можете перейти на вкладку 'Прогнозирование' для использования модели.")
                     
                 except Exception as e:
-                    if "display_error_message" in globals():
-                        display_error_message(str(e), title="Ошибка при обучении модели")
-                    else:
-                        try:
-                            from app_ui import display_error_message
-                            display_error_message(str(e), title="Ошибка при обучении модели")
-                        except:
-                            st.error(f"Ошибка при обучении модели: {str(e)}")
+                    display_error_message(str(e), title="Ошибка при обучении модели")
                     logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
                     # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
 

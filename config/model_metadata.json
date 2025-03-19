@@ -30,5 +30,21 @@
         "metrics": {
             "error": "TimeSeriesScorer.__call__() missing 1 required positional argument: 'predictions'"
         }
+    },
+    "autogluon_model_20250320_001740": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_001740",
+        "created_at": "2025-03-20 00:18:35",
+        "prediction_length": 2,
+        "time_limit": 60,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "M",
+        "metrics": {
+            "error": "TimeSeriesScorer.__call__() missing 1 required positional argument: 'predictions'"
+        }
     }
 }
