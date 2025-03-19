@@ -28,15 +28,20 @@ METRICS_DICT, AG_MODELS = load_config(CONFIG_PATH)
 metrics_list = list(METRICS_DICT.keys())
 presets_list = ["fast_training", "medium_quality", "high_quality", "best_quality"]
 all_models_opt = "* (все)"
-model_keys = list(AG_MODELS.keys())
-model_choices = [all_models_opt] + model_keys
+autoGluon_models = [
+    'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
+    'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
+    'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
+    'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
+]
+model_options = [all_models_opt] + autoGluon_models
 
 # Зададим соответствие между базовыми значениями частоты и полными описаниями
 FREQ_MAPPING = {
     "auto": "auto (угадать)",
     "D": "D (день)",
     "h": "h (час)",
-    "ME": "ME (месяц)",
+    "M": "M (месяц)",
     "B": "B (рабочие дни)",
     "W": "W (неделя)",
     "Q": "Q (квартал)"
@@ -128,6 +133,36 @@ def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
     except Exception as e:
         logging.error(f"Ошибка при автоматическом определении полей: {e}")
         return {}
+
+def display_error_message(error_text, title="Ошибка"):
+    """Отображает красивое сообщение об ошибке"""
+    st.error(f"**{title}**: {error_text}")
+    
+    # Добавляем специальную обработку для известных ошибок
+    if "list index out of range" in error_text:
+        st.warning("""
+        **Возможная причина**: проблема с выбором моделей.
+        
+        **Рекомендации**:
+        1. Выберите "* (все)" для использования всех доступных моделей
+        2. Или выберите конкретные модели из списка
+        3. Или используйте preset с указанным качеством обучения
+        """)
+    elif "time_limit must be positive" in error_text:
+        st.warning("""
+        **Возможная причина**: некорректное значение времени обучения.
+        
+        **Рекомендации**:
+        1. Установите положительное значение времени обучения (например, 60 секунд)
+        """)
+    elif "invalid frequency" in error_text.lower():
+        st.warning("""
+        **Возможная причина**: неподдерживаемая частота временного ряда.
+        
+        **Рекомендации**:
+        1. Используйте одну из стандартных частот (D, W, M, Q, Y)
+        2. Убедитесь, что данные имеют равномерную периодичность
+        """)
 
 def setup_ui():
     st.markdown("### Версия 2.0")
@@ -375,17 +410,17 @@ def setup_ui():
     st.sidebar.header("4. Частота (freq)")
     
     # Получаем список доступных частот без авто-определения
-    freq_options = ["D (день)", "h (час)", "ME (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
+    freq_options = ["D (день)", "h (час)", "M (месяц)", "B (рабочие дни)", "W (неделя)", "Q (квартал)"]
 
     if "freq_key" not in st.session_state:
-        st.session_state["freq_key"] = "ME (месяц)"  # Меняем значение по умолчанию на 'ME (месяц)'
+        st.session_state["freq_key"] = "M (месяц)"  # Меняем значение по умолчанию на 'M (месяц)'
 
     # Проверяем, что значение freq_key есть в списке опций
     current_freq = st.session_state["freq_key"]
     if current_freq not in freq_options:
-        # Если текущее значение - 'auto (угадать)', меняем на 'ME (месяц)'
+        # Если текущее значение - 'auto (угадать)', меняем на 'M (месяц)'
         if current_freq == "auto (угадать)":
-            st.session_state["freq_key"] = "ME (месяц)"
+            st.session_state["freq_key"] = "M (месяц)"
         else:
             # Проверяем базовое значение частоты
             for opt in freq_options:
@@ -395,9 +430,9 @@ def setup_ui():
                     st.session_state["freq_key"] = opt
                     break
             
-            # Если соответствие не найдено, используем ME (месяц) по умолчанию
+            # Если соответствие не найдено, используем M (месяц) по умолчанию
             if current_freq not in freq_options:
-                st.session_state["freq_key"] = "ME (месяц)"
+                st.session_state["freq_key"] = "M (месяц)"
 
     # Выбор частоты (без кнопки автоопределения)
     freq_selection = st.sidebar.selectbox("Частота данных", freq_options, 
@@ -405,9 +440,25 @@ def setup_ui():
                                        key="freq_key")
     
     # ========== (5) Метрика и модели ==========
-    st.sidebar.header("5. Метрика и модели")
+    st.sidebar.header("5. Выбор моделей")
+    
+    # Получаем список доступных моделей AutoGluon
+    autoGluon_models = [
+        'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
+        'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
+        'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
+        'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
+    ]
+    
+    # Создаем список опций, начиная с "Все модели"
+    model_options = [all_models_opt] + autoGluon_models
+    
+    # Выбор моделей
+    if "models_key" not in st.session_state:
+        st.session_state["models_key"] = [all_models_opt]
+    
+    st.sidebar.multiselect("Модели AutoGluon", model_options, key="models_key")
     st.sidebar.selectbox("Метрика", metrics_list, index=metrics_list.index(st.session_state["metric_key"]), key="metric_key")
-    st.sidebar.multiselect("Модели AutoGluon", model_choices, key="models_key")
     st.sidebar.selectbox("Presets", presets_list, index=presets_list.index(st.session_state["presets_key"]), key="presets_key")
     st.sidebar.number_input(
         "prediction_length", 
@@ -530,19 +581,22 @@ def setup_ui():
         metric_key = st.session_state.get("metric_key", "RMSE")
         
         # Вызываем функцию с необходимыми аргументами
-        run_training(
-            df_train=st.session_state["df"],
-            dt_col=dt_col,
-            tgt_col=tgt_col,
-            horizon=prediction_length,
-            id_col=id_col if id_col != "<нет>" else None,
-            freq=freq_display,
-            models=models_key,
-            eval_metric=metric_key,
-            time_limit=st.session_state.get("time_limit_key", 300),
-            use_chronos=True,
-            chronos_model="bolt_small"
-        )
+        try:
+            run_training(
+                df_train=st.session_state["df"],
+                dt_col=dt_col,
+                tgt_col=tgt_col,
+                horizon=prediction_length,
+                id_col=id_col if id_col != "<нет>" else None,
+                freq=freq_display,
+                models=models_key,
+                eval_metric=metric_key,
+                time_limit=st.session_state.get("time_limit_key", 300),
+                use_chronos=True,
+                chronos_model="bolt_small"
+            )
+        except Exception as e:
+            display_error_message(str(e), title="Ошибка обучения модели")
     
     # ========== (7) Прогноз ==========
     st.sidebar.header("7. Прогноз")

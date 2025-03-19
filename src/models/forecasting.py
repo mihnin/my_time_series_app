@@ -272,15 +272,58 @@ def train_model(
         # Если частота не указана, пытаемся получить её из данных
         if freq is None:
             freq = getattr(train_data, 'freq', 'D')  # По умолчанию 'D' если не удалось определить
+        
+        # Стандартизируем частоту
+        freq_mapping = {
+            'ME': 'M',  # Fix for month - AutoGluon uses M not ME
+            'MS': 'MS',
+            'D': 'D',
+            'h': 'H',
+            'H': 'H',
+            'W': 'W',
+            'Q': 'Q',
+            'B': 'B',
+            'Y': 'Y',
+            'A': 'A'
+        }
+        
+        # Преобразуем нестандартные частоты в стандартные
+        if freq in freq_mapping:
+            freq = freq_mapping[freq]
+            logging.info(f"Частота стандартизирована в: {freq}")
             
         logging.info(f"Данные для обучения: {len(train_data)} рядов, частота: {freq}")
         
         # Определяем модели для обучения на основе hyperparameters
         models = {}
         if hyperparameters:
-            models = {model: {} for model in hyperparameters.keys()}
-            logging.info(f"Выбранные модели: {list(models.keys())}")
-        
+            # Получаем список доступных моделей в AutoGluon
+            valid_models = ['ADIDA', 'ARIMA', 'AutoARIMA', 'AutoCES', 'AutoETS', 'Average', 
+                          'Chronos', 'Croston', 'CrostonSBA', 'DLinear', 'DeepAR', 
+                          'DirectTabular', 'DynamicOptimizedTheta', 'ETS', 'IMAPA', 
+                          'NPTS', 'Naive', 'PatchTST', 'RecursiveTabular', 'SeasonalAverage', 
+                          'SeasonalNaive', 'SimpleFeedForward', 'TemporalFusionTransformer', 
+                          'Theta', 'TiDE', 'WaveNet', 'Zero']
+            
+            # Проверяем и фильтруем модели
+            filtered_hyperparams = {}
+            for model in hyperparameters:
+                if model in valid_models:
+                    filtered_hyperparams[model] = hyperparameters[model]
+                else:
+                    logging.warning(f"Модель {model} не поддерживается AutoGluon и будет пропущена")
+            
+            # Обновляем hyperparameters
+            hyperparameters = filtered_hyperparams
+            
+            if hyperparameters:
+                logging.info(f"Выбранные модели для обучения: {list(hyperparameters.keys())}")
+            else:
+                logging.info("Не выбрано ни одной действительной модели, будем использовать стандартные модели из пресета")
+                # Если нет валидных моделей, мы не передаем hyperparameters вообще
+                # AutoGluon будет использовать модели из выбранного пресета
+                hyperparameters = None
+                
         # Инициализируем и обучаем предиктор
         predictor = TimeSeriesPredictor(
             prediction_length=prediction_length,
@@ -290,12 +333,33 @@ def train_model(
             freq=freq  # Добавляем параметр частоты
         )
         
-        predictor.fit(
-            train_data=train_data,
-            time_limit=time_limit,
-            hyperparameters=hyperparameters,
-            presets=preset,
-        )
+        try:
+            if hyperparameters is None:
+                logging.info(f"Обучение с использованием пресета '{preset}' без указания конкретных моделей")
+                predictor.fit(
+                    train_data=train_data,
+                    time_limit=time_limit,
+                    presets=preset
+                )
+            elif not hyperparameters:
+                logging.info("Hyperparameters пуст, используем основную модель DeepAR для предотвращения ошибки")
+                predictor.fit(
+                    train_data=train_data,
+                    time_limit=time_limit,
+                    hyperparameters={"DeepAR": {}},
+                    presets=preset
+                )
+            else:
+                logging.info(f"Обучение с использованием выбранных моделей: {list(hyperparameters.keys())}")
+                predictor.fit(
+                    train_data=train_data,
+                    time_limit=time_limit,
+                    hyperparameters=hyperparameters,
+                    presets=preset
+                )
+        except Exception as fit_err:
+            logging.error(f"Ошибка при обучении модели: {fit_err}")
+            raise RuntimeError(f"Не удалось обучить модель: {str(fit_err)}")
         
         # Сохраняем модель (это происходит автоматически, но явно вызываем save для уверенности)
         try:

@@ -8,6 +8,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from app_ui import display_error_message
+except ImportError:
+    # Если не удалось импортировать, создадим простую функцию
+    def display_error_message(error_text, title="Ошибка"):
+        st.error(f"{title}: {error_text}")
+
 from src.utils.config import (
     TIMESERIES_MODELS_DIR, MODEL_METADATA_FILE, LOGS_DIR,
     DEFAULT_CHUNK_SIZE, DEFAULT_PREDICTION_LENGTH, DEFAULT_TIME_LIMIT,
@@ -160,7 +167,7 @@ def display_training_parameters():
             preset_value = [k for k, v in preset_options.items() if v == preset][0]
             
             # Чтобы отобразить более крупно и явно важный выбор модели
-            model_types = ["DeepAR", "Chronos", "ETS", "Prophet", "Transformer", "all"]
+            model_types = ["DeepAR", "Chronos", "ETS", "Prophet", "Transformer", "* (все)"]
             selected_models = st.multiselect(
                 "Выбор моделей для обучения",
                 options=model_types,
@@ -302,8 +309,52 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             st.success(f"TimeSeriesDataFrame успешно создан, содержит {len(tsdf)} рядов")
         
         # Настройка гиперпараметров и модели
-        hyperparameters = {}
         preset_to_use = "medium_quality" if time_limit > 600 else "fast_training"
+        hyperparameters = {}  # По умолчанию пустой словарь
+
+        if models:
+            # Преобразуем строку моделей в список, если нужно
+            if isinstance(models, str):
+                if models == "all":
+                    # Случай "all" - не указываем модели, используем пресет
+                    models = []
+                    logging.info("Выбраны все модели (all), будет использоваться пресет")
+                else:
+                    models = [model.strip() for model in models.split(',')]
+                    
+            logging.info(f"Исходный список выбранных моделей: {models}")
+            
+            # Проверяем наличие специального значения "* (все)"
+            if models and "* (все)" in models:
+                # Если выбрано "все модели", не указываем конкретные модели
+                models = []
+                logging.info("Выбраны все модели (* (все)), будет использоваться пресет")
+                
+            # Проверяем, есть ли в списке действительные модели AutoGluon
+            if models:
+                valid_models = [
+                    'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
+                    'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
+                    'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
+                    'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
+                ]
+                
+                # Фильтруем только действительные модели
+                valid_selected_models = [model for model in models if model in valid_models]
+                
+                if valid_selected_models:
+                    # Используем только указанные валидные модели
+                    hyperparameters = {model: {} for model in valid_selected_models}
+                    logging.info(f"Выбраны конкретные модели для обучения: {list(hyperparameters.keys())}")
+                else:
+                    # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
+                    hyperparameters = {"DeepAR": {}}
+                    logging.warning("Нет действительных моделей в выборе, используем DeepAR как дефолтную модель")
+            else:
+                # Если список моделей пуст, передаем пустой hyperparameters
+                # forecasting.train_model() обработает этот случай
+                hyperparameters = {}
+                logging.info("Список моделей пуст, для предотвращения ошибок будет использоваться модель по умолчанию")
         
         # Обрабатываем chronos модели, если включены
         if use_chronos and chronos_model:
@@ -314,13 +365,6 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             preset_to_use = chronos_preset
             logging.info(f"Используем Chronos модель: {chronos_preset}")
             
-        # Настраиваем модели для обучения
-        if models and models != "all":
-            # Преобразуем строку моделей в список, если нужно
-            if isinstance(models, str):
-                models = [model.strip() for model in models.split(',')]
-            hyperparameters = {model: {} for model in models}
-        
         # Определяем путь для сохранения модели
         model_name = f"autogluon_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         model_path = os.path.join(TIMESERIES_MODELS_DIR, model_name)
@@ -375,8 +419,16 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             st.session_state["prediction_length"] = horizon
             
     except Exception as e:
-        st.error(f"Ошибка при обучении модели: {str(e)}")
+        if "display_error_message" in globals():
+            display_error_message(str(e), title="Ошибка при обучении модели")
+        else:
+            try:
+                from app_ui import display_error_message
+                display_error_message(str(e), title="Ошибка при обучении модели")
+            except:
+                st.error(f"Ошибка при обучении модели: {str(e)}")
         logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
+        # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
 
 # Основной раздел приложения
 def main():
@@ -462,11 +514,63 @@ def main():
                     logger.info(f"TimeSeriesDataFrame успешно создан, содержит {len(tsdf)} рядов")
                     
                     # Настраиваем гиперпараметры для обучения
-                    hyperparameters = {}
+                    hyperparameters = {}  # По умолчанию пустой словарь
+
+                    if training_params["selected_models"]:
+                        # Преобразуем строку моделей в список, если нужно
+                        if isinstance(training_params["selected_models"], str):
+                            if training_params["selected_models"] == "all":
+                                # Случай "all" - не указываем модели, используем пресет
+                                training_params["selected_models"] = []
+                                logging.info("Выбраны все модели (all), будет использоваться пресет")
+                            else:
+                                training_params["selected_models"] = [model.strip() for model in training_params["selected_models"].split(',')]
+                                
+                        logging.info(f"Исходный список выбранных моделей: {training_params['selected_models']}")
+                        
+                        # Проверяем наличие специального значения "* (все)"
+                        if training_params["selected_models"] and "* (все)" in training_params["selected_models"]:
+                            # Если выбрано "все модели", не указываем конкретные модели
+                            training_params["selected_models"] = []
+                            logging.info("Выбраны все модели (* (все)), будет использоваться пресет")
+                            
+                        # Проверяем, есть ли в списке действительные модели AutoGluon
+                        if training_params["selected_models"]:
+                            valid_models = [
+                                'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
+                                'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
+                                'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
+                                'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
+                            ]
+                            
+                            # Фильтруем только действительные модели
+                            valid_selected_models = [model for model in training_params["selected_models"] if model in valid_models]
+                            
+                            if valid_selected_models:
+                                # Используем только указанные валидные модели
+                                hyperparameters = {model: {} for model in valid_selected_models}
+                                logging.info(f"Выбраны конкретные модели для обучения: {list(hyperparameters.keys())}")
+                            else:
+                                # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
+                                hyperparameters = {"DeepAR": {}}
+                                logging.warning("Нет действительных моделей в выборе, используем DeepAR как дефолтную модель")
+                        else:
+                            # Если список моделей пуст, передаем пустой hyperparameters
+                            # forecasting.train_model() обработает этот случай
+                            hyperparameters = {}
+                            logging.info("Список моделей пуст, для предотвращения ошибок будет использоваться модель по умолчанию")
                     
-                    # Если выбраны конкретные модели (не "all")
-                    if "all" not in training_params["selected_models"]:
-                        hyperparameters = {model: {} for model in training_params["selected_models"]}
+                    # Настройка пресета
+                    preset_to_use = "medium_quality" if training_params["time_limit"] > 600 else "fast_training"
+                    
+                    # Обрабатываем chronos модели, если включены
+                    if training_params["use_gpu"] and training_params["preset"] == "chronos":
+                        # Используем переданную модель Chronos или bolt_small по умолчанию
+                        chronos_preset = training_params["preset"] if training_params["preset"] in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
+                                                                                                  "chronos_tiny", "chronos_mini", "chronos_small", 
+                                                                                                  "chronos_base", "chronos_large", "chronos"] else "bolt_small"
+                        preset_to_use = chronos_preset
+                        logging.info(f"Используем Chronos модель: {chronos_preset}")
                     
                     # Обучаем модель
                     logger.info(f"Запуск обучения модели с параметрами: {training_params}")
@@ -477,7 +581,7 @@ def main():
                         time_limit=training_params["time_limit"],
                         eval_metric=training_params["eval_metric"],
                         hyperparameters=hyperparameters,
-                        preset=training_params["preset"],
+                        preset=preset_to_use,
                         freq=training_params["freq"]
                     )
                     
@@ -515,8 +619,16 @@ def main():
                     st.info("Теперь вы можете перейти на вкладку 'Прогнозирование' для использования модели.")
                     
                 except Exception as e:
-                    st.error(f"Ошибка при обучении модели: {str(e)}")
+                    if "display_error_message" in globals():
+                        display_error_message(str(e), title="Ошибка при обучении модели")
+                    else:
+                        try:
+                            from app_ui import display_error_message
+                            display_error_message(str(e), title="Ошибка при обучении модели")
+                        except:
+                            st.error(f"Ошибка при обучении модели: {str(e)}")
                     logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
+                    # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
 
 if __name__ == "__main__":
     run_training()
