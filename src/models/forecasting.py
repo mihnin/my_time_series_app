@@ -225,7 +225,8 @@ def train_model(
     preset: Optional[str] = None,
     model_path: Optional[str] = None,
     eval_metric: Optional[str] = None,
-    prediction_length: Optional[int] = None
+    prediction_length: Optional[int] = None,
+    freq: Optional[str] = None
 ) -> TimeSeriesPredictor:
     """
     Обучает модель временных рядов.
@@ -246,6 +247,8 @@ def train_model(
         Метрика для оценки качества модели
     prediction_length : int, опционально
         Длина прогноза
+    freq : str, опционально
+        Частота временного ряда для явной передачи в TimeSeriesPredictor
         
     Returns:
     --------
@@ -272,8 +275,14 @@ def train_model(
         if prediction_length is None:
             prediction_length = 10
         
+        # Проверяем, используется ли preset, который требует skip_model_selection=True
+        is_skip_model_preset = False
+        if preset and (preset.startswith('bolt_') or preset.startswith('chronos_') or preset == 'chronos'):
+            is_skip_model_preset = True
+            logging.info(f"Используется preset {preset}, который требует skip_model_selection=True. Список моделей будет игнорирован.")
+        
         # Валидируем и, при необходимости, корректируем список моделей для обучения
-        if hyperparameters is not None:
+        if hyperparameters is not None and not is_skip_model_preset:
             # Фильтруем список моделей от невалидных значений
             hyperparameters = filter_valid_models(hyperparameters)
             
@@ -286,12 +295,12 @@ def train_model(
         # Логируем информацию о процессе обучения
         logging.info(f"Начинаем обучение модели с preset={preset}, time_limit={time_limit}с, eval_metric={eval_metric}")
         
-        if hyperparameters is not None:
+        if hyperparameters is not None and not is_skip_model_preset:
             model_count = len(hyperparameters)
             model_list = ", ".join(list(hyperparameters.keys()))
             logging.info(f"Будет обучено {model_count} моделей: {model_list}")
         else:
-            logging.info("Будут обучены все модели из выбранного preset")
+            logging.info("Будут обучены модели из выбранного preset")
         
         # Настраиваем квантили для лучшей оценки неопределенности
         quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -302,11 +311,16 @@ def train_model(
             path=model_path,
             eval_metric=eval_metric,
             target="target",
-            quantile_levels=quantile_levels
+            quantile_levels=quantile_levels,
+            freq=freq
         )
         
         # Подбираем соответствующий метод обучения в зависимости от переданных параметров
-        if hyperparameters is None:
+        if is_skip_model_preset:
+            # Для preset с skip_model_selection=True не передаем hyperparameters
+            logging.info(f"Обучение с использованием preset={preset} без передачи списка моделей")
+            predictor.fit(train_data=train_data, time_limit=time_limit, presets=preset)
+        elif hyperparameters is None:
             # Если модели не указаны, обучаем со стандартными параметрами preset
             logging.info(f"Обучение с использованием preset={preset} без явного указания моделей")
             predictor.fit(train_data=train_data, time_limit=time_limit, presets=preset)
@@ -377,11 +391,12 @@ def get_valid_models() -> list:
         Список названий поддерживаемых моделей
     """
     return [
-        'DeepAR', 'Transformer', 'PatchTST', 'TemporalFusionTransformer',
-        'DLinear', 'NLinear', 'SeasNaive', 'Seasonal', 'ETS', 'AutoETS',
-        'ARIMA', 'AutoARIMA', 'Theta', 'NPTS', 'RNN', 'CNN',
-        'ADIDA', 'Croston', 'IMAPA', 'MLP', 'WaveNet',
-        'SimpleFeedForward', 'MQCNN', 'AutoGluonTabular'
+        'ADIDA', 'ARIMA', 'AutoARIMA', 'AutoCES', 'AutoETS', 'Average', 
+        'Chronos', 'Croston', 'CrostonSBA', 'DLinear', 'DeepAR', 
+        'DirectTabular', 'DynamicOptimizedTheta', 'ETS', 'IMAPA', 
+        'NPTS', 'Naive', 'PatchTST', 'RecursiveTabular', 'SeasonalAverage', 
+        'SeasonalNaive', 'SimpleFeedForward', 'TemporalFusionTransformer', 
+        'Theta', 'TiDE', 'WaveNet', 'Zero'
     ]
 
 def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predictions=None) -> Dict[str, Any]:
@@ -391,7 +406,7 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
     Parameters:
     -----------
     predictor : TimeSeriesPredictor
-        Обученный предиктор AutoGluon
+        Обученный TimeSeriesPredictor
     test_data : TimeSeriesDataFrame, опционально
         Тестовые данные для оценки моделей
     predictions : TimeSeriesDataFrame, опционально

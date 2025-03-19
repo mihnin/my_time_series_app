@@ -162,7 +162,7 @@ def display_training_parameters():
             preset_value = [k for k, v in preset_options.items() if v == preset][0]
             
             # Чтобы отобразить более крупно и явно важный выбор модели
-            model_types = ["DeepAR", "Chronos", "ETS", "Prophet", "Transformer", "* (все)"]
+            model_types = ["DeepAR", "Chronos", "ETS", "Prophet", "PatchTST", "* (все)"]
             selected_models = st.multiselect(
                 "Выбор моделей для обучения",
                 options=model_types,

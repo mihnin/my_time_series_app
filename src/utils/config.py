@@ -84,7 +84,7 @@ STREAMLIT_THEME = {
 # Значения по умолчанию
 DEFAULT_TIME_LIMIT = 300  # 5 минут на обучение
 DEFAULT_PREDICTION_LENGTH = 24
-DEFAULT_MODELS = ["DeepAR", "Transformer", "TemporalFusionTransformer", "SimpleFeedForward"]
+DEFAULT_MODELS = ["DeepAR", "PatchTST", "TemporalFusionTransformer", "SimpleFeedForward"]
 DEFAULT_FREQUENCY = "h"  # часовая (обновлено с 'H' на 'h' для совместимости с pandas 2.2.0)
 
 # Параметры производительности
