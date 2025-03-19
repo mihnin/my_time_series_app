@@ -98,7 +98,7 @@ def get_local_model_path(model_name, use_bolt=False, allow_download=True):
             from src.utils.config import CHRONOS_MODELS_MAPPING, DEFAULT_HF_MODEL_REPO
             
             # Преобразуем имя модели в имя репозитория HF, если оно есть в маппинге
-    if model_name in CHRONOS_MODELS_MAPPING:
+            if model_name in CHRONOS_MODELS_MAPPING:
                 repo_id = CHRONOS_MODELS_MAPPING[model_name]
                 log_messages.append(f"Найдено соответствие в маппинге: {model_name} -> {repo_id}")
             else:
@@ -212,7 +212,7 @@ def modify_chronos_hyperparams(model_name, hyperparameters=None):
     })
     
     # Специфичные параметры в зависимости от типа модели
-    if 'timeseries-transformer' in model_name.lower():
+    if model_name and 'timeseries-transformer' in model_name.lower():
         # Трансформеры обычно требуют особых настроек
         chronos_params.update({
             'patience': chronos_params.get('patience', 3),
@@ -220,7 +220,7 @@ def modify_chronos_hyperparams(model_name, hyperparameters=None):
             'weight_decay': chronos_params.get('weight_decay', 1e-5),
         })
     
-    if 'bolt' in model_name.lower():
+    if model_name and 'bolt' in model_name.lower():
         # Облегченные модели Bolt требуют меньше ресурсов
         chronos_params.update({
             'batch_size': chronos_params.get('batch_size', 64),
@@ -248,34 +248,20 @@ def create_chronos_predictor(model_name, use_bolt=False, allow_download=True, **
     Вызывает:
         ValueError: Если модель не найдена или не может быть загружена
     """
-    import logging
+    # Получаем путь к локальной модели
+    model_path, log = get_local_model_path(model_name, use_bolt, allow_download)
     
-    try:
-        # Получаем путь к локальной модели
-        model_path, diagnostics = get_local_model_path(model_name, use_bolt, allow_download)
-        logging.info(f"Получен путь к модели Chronos: {model_path}")
-        logging.debug(f"Диагностика поиска модели:\n{diagnostics}")
-        
-        # Импортируем класс ChronosPredictor
-        try:
-            from autogluon.timeseries.models.chronos.predictor import ChronosPredictor
-            logging.info("Успешно импортирован класс ChronosPredictor")
-        except ImportError as e:
-            error_msg = f"Не удалось импортировать ChronosPredictor: {str(e)}"
-            logging.error(error_msg)
-            logging.error("Проверьте, что установлен пакет autogluon-timeseries с поддержкой моделей Chronos")
-            raise ValueError(error_msg)
-        
-        # Создаём предиктор
-        predictor = ChronosPredictor(model_path=model_path, **kwargs)
-        logging.info(f"Предиктор Chronos успешно создан с моделью: {model_name}")
+    # Логируем результат поиска модели
+    logging.info(f"Создание предиктора на основе Chronos модели: {model_name} (путь: {model_path})")
+    
+    # Создаем предиктор
+    from autogluon.timeseries.models.chronos.chronos import ChronosModel
+    predictor = ChronosModel(
+        model_path=model_path,
+        **kwargs
+    )
     
     return predictor
-        
-    except Exception as e:
-        error_msg = f"Ошибка при создании предиктора Chronos: {str(e)}"
-        logging.error(error_msg)
-        raise ValueError(error_msg)
 
 def example_usage():
     """Пример использования функционала"""

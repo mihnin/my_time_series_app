@@ -281,7 +281,6 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             freq=base_freq if base_freq != "auto" else None
         )
         
-        # Обучаем модель
         # Получаем базовые hyperparameters
         base_hyperparams = train_params.get("hyperparameters", {}) or {}
         
@@ -293,49 +292,37 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             model_hyperparams["Chronos"] = modify_chronos_hyperparams(chronos_model, {})
             logging.info(f"Добавлена модель Chronos ({chronos_model}) к списку моделей для обучения")
         
+        # Обучаем модель
         predictor.fit(
             train_data=ts_df,
             hyperparameters=model_hyperparams,
             hyperparameter_tune_kwargs=train_params.get("hyperparameter_tune_kwargs"),
             time_limit=train_params.get("time_limit"),
             # Настройка валидации - для процентного разделения используем num_val_windows
-            num_val_windows=1 if fixed_split else max(1, round(val_percent/10)),
-            val_step_size=prediction_length if fixed_split else None,
-            enable_ensemble=True
+            num_val_windows=1 if 'percent' in split_mode else 0,
+            enable_ensemble=True  # Включаем построение ансамблевой модели
         )
         
-        # Засекаем время обучения
-        training_time = time.time() - start_time
-        logging.info(f"Обучение модели завершено за {training_time:.2f} секунд")
+        # Логируем информацию о затраченном времени
+        train_time = time.time() - start_time
+        logging.info(f"Обучение завершено за {train_time:.2f} секунд")
+        
+        # Получаем fit_summary для информации о процессе обучения
+        try:
+            fit_summary = predictor.fit_summary()
+            logging.info(f"Fit summary: {fit_summary}")
+            training_result["fit_summary"] = fit_summary
+        except Exception as e:
+            logging.warning(f"Не удалось получить fit_summary: {e}")
+            training_result["fit_summary"] = {"error": str(e)}
         
         # Получаем и сохраняем результаты
         leaderboard = predictor.leaderboard(silent=True)
         
-        # Пытаемся получить fit_summary, но обрабатываем возможные ошибки
-        fit_summary = None
-        try:
-            fit_summary = predictor.fit_summary()
-        except ValueError as ve:
-            # Проверяем наличие специфической ошибки с day_of_week
-            if "Cannot locate autogluon.timeseries.utils" in str(ve):
-                error_msg = f"Не удалось получить fit_summary из-за проблемы с модулем: {str(ve)}"
-                logging.warning(error_msg)
-                logging.info("Продолжаем работу без fit_summary")
-                # Сохраняем информацию об ошибке в результат
-                training_result['module_error'] = error_msg
-            else:
-                # Для других ошибок ValueError логируем, но не прерываем работу
-                error_msg = f"Ошибка при получении fit_summary: {str(ve)}"
-                logging.warning(error_msg)
-                training_result['module_error'] = error_msg
-        except Exception as e:
-            error_msg = f"Не удалось получить fit_summary: {str(e)}"
-            logging.warning(error_msg)
-        
         # Сохраняем метаданные модели
         model_metadata = {
             "model_path": model_path,
-            "training_time": training_time,
+            "training_time": train_time,
             "dt_col": dt_col,
             "tgt_col": tgt_col,
             "id_col": id_col,
@@ -367,8 +354,8 @@ def _execute_training(df_train, dt_col, tgt_col, id_col, static_feats=None, freq
             "success": True,
             "predictor": predictor,
             "leaderboard": leaderboard,
-            "fit_summary": fit_summary,  # Может быть None, если возникла ошибка
-            "training_time": training_time,
+            "fit_summary": training_result["fit_summary"],
+            "training_time": train_time,
             "best_model_name": best_model_name,
             "best_model_score": best_model_score,
             "model_metadata": model_metadata
