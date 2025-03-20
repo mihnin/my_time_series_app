@@ -941,7 +941,7 @@ def run_prediction():
         import logging
         from autogluon.timeseries import TimeSeriesPredictor
         from datetime import datetime
-        from src.data_processing.timeseries_utils import make_timeseries_dataframe
+        from src.models.forecasting import make_timeseries_dataframe
         from src.utils.export import generate_excel_report
         
         # Настраиваем страницу Streamlit

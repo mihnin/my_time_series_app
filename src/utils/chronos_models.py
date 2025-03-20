@@ -1,6 +1,6 @@
 """
 Модуль для работы с моделями Chronos.
-Обеспечивает использование локальных моделей Chronos-Bolt в корпоративной среде без доступа к Hugging Face.
+Обеспечивает использование моделей Chronos-Bolt напрямую из Hugging Face без локального скачивания.
 """
 import os
 import logging
@@ -11,14 +11,14 @@ from typing import Dict, Any, Tuple, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-# Словарь соответствия названий моделей и их локальных путей
+# Словарь соответствия названий моделей и их HF идентификаторов
 CHRONOS_MODELS_MAPPING = {
-    "bolt_tiny": "chronos-bolt-tiny",
-    "bolt_small": "chronos-bolt-small", 
-    "bolt_base": "chronos-bolt-base",
-    "autogluon/chronos-bolt-tiny": "chronos-bolt-tiny",
-    "autogluon/chronos-bolt-small": "chronos-bolt-small",
-    "autogluon/chronos-bolt-base": "chronos-bolt-base"
+    "bolt_tiny": "autogluon/chronos-bolt-tiny",
+    "bolt_small": "autogluon/chronos-bolt-small", 
+    "bolt_base": "autogluon/chronos-bolt-base",
+    "chronos_tiny": "autogluon/chronos-tiny",
+    "chronos_small": "autogluon/chronos-small",
+    "chronos_base": "autogluon/chronos-base"
 }
 
 def get_base_dir() -> Path:
@@ -31,175 +31,46 @@ def get_base_dir() -> Path:
     base_dir = Path(os.environ.get("APP_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
     return base_dir
 
-def get_local_model_path(model_name: str, use_bolt: bool = False, allow_download: bool = True) -> Tuple[str, str]:
+def get_model_path(model_name: str) -> str:
     """
-    Получение пути к локальной модели Chronos
+    Получение пути к модели Chronos в формате Hugging Face
     
     Args:
-        model_name (str): Имя или путь к модели Chronos
-        use_bolt (bool): Использовать облегченную версию модели (bolt)
-        allow_download (bool): Разрешить загрузку модели с Hugging Face
+        model_name (str): Имя модели Chronos
     
     Returns:
-        Tuple[str, str]: Локальный путь к модели и лог сообщений
+        str: Путь к модели в формате Hugging Face
         
     Raises:
-        ValueError: Если модель не найдена или не может быть загружена
+        ValueError: Если модель не найдена в списке поддерживаемых
     """
-    # Получаем директорию для моделей из конфигурации
-    try:
-        from src.utils.config import CHRONOS_MODELS_DIR, HF_CACHE_DIR
-        models_dir = CHRONOS_MODELS_DIR
-        hf_cache_dir = HF_CACHE_DIR
-    except ImportError:
-        # Если конфигурация не доступна, используем значения по умолчанию
-        base_dir = get_base_dir()
-        models_dir = base_dir / "models" / "chronos"
-        hf_cache_dir = base_dir / "models" / "hf_cache"
-    
-    # Убеждаемся, что директории существуют
-    models_dir.mkdir(parents=True, exist_ok=True)
-    hf_cache_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Логгер для сбора диагностических сообщений
-    log_messages = []
-    log_messages.append(f"Поиск модели: {model_name}, bolt: {use_bolt}, allow_download: {allow_download}")
-    log_messages.append(f"Директория моделей: {models_dir}")
-    log_messages.append(f"Директория кэша HF: {hf_cache_dir}")
-    
-    # Конвертируем model_name в путь если это уже полный путь
-    if os.path.exists(model_name):
-        log_messages.append(f"Найден прямой путь к модели: {model_name}")
-        return model_name, "\n".join(log_messages)
+    # Проверяем, является ли переданный путь уже HF путем
+    if "/" in model_name:
+        logger.info(f"Используется прямой путь к модели в HF: {model_name}")
+        return model_name
     
     # Проверяем, есть ли модель в маппинге
     model_key = model_name.lower()
     if model_key in CHRONOS_MODELS_MAPPING:
-        mapped_name = CHRONOS_MODELS_MAPPING[model_key]
-        log_messages.append(f"Найдено соответствие в маппинге: {model_key} -> {mapped_name}")
-        model_name = mapped_name
+        hf_path = CHRONOS_MODELS_MAPPING[model_key]
+        logger.info(f"Найдено соответствие в маппинге: {model_key} -> {hf_path}")
+        return hf_path
     
-    # Определяем суффикс модели
-    model_suffix = "-bolt" if use_bolt else ""
+    # Если модель не найдена в маппинге, пробуем использовать её как репозиторий HF напрямую
+    # Добавляем стандартный префикс, если это просто имя модели
+    if "autogluon/" not in model_name:
+        hf_path = f"autogluon/{model_name}"
+        logger.info(f"Модель не найдена в маппинге, пробуем использовать с префиксом: {hf_path}")
+        return hf_path
     
-    # Проверяем разные варианты локальных путей
-    local_paths = [
-        # 1. Полный путь к модели в папке autogluon
-        os.path.join(str(get_base_dir()), "autogluon", model_name),
-        # 2. Прямое имя модели в директории моделей
-        os.path.join(str(models_dir), f"{model_name}{model_suffix}"),
-        # 3. Имя модели с префиксом как поддиректория
-        os.path.join(str(models_dir), model_name, f"{model_name}{model_suffix}"),
-        # 4. Только имя модели как поддиректория
-        os.path.join(str(models_dir), model_name),
-        # 5. Путь к кэшу HF
-        os.path.join(str(hf_cache_dir), model_name)
-    ]
-    
-    # Ищем модель в возможных локальных путях
-    for path in local_paths:
-        if os.path.exists(path):
-            log_messages.append(f"Найдена локальная модель по пути: {path}")
-            return path, "\n".join(log_messages)
-        else:
-            log_messages.append(f"Путь не существует: {path}")
-    
-    # Если локальная модель не найдена, пробуем получить из репозитория HF
-    if allow_download:
-        log_messages.append("Локальная модель не найдена, попытка загрузки с Hugging Face...")
-        
-        # Пытаемся импортировать модуль для получения моделей из HF
-        try:
-            from src.utils.config import CHRONOS_MODELS_MAPPING as CONFIG_MAPPING
-            from src.utils.config import DEFAULT_HF_MODEL_REPO
-            
-            # Преобразуем имя модели в имя репозитория HF, если оно есть в маппинге
-            if model_name in CONFIG_MAPPING:
-                repo_id = CONFIG_MAPPING[model_name]
-                log_messages.append(f"Найдено соответствие в конфигурации: {model_name} -> {repo_id}")
-            else:
-                # Если модель не найдена в маппинге, используем её как репозиторий HF напрямую или используем дефолтный
-                repo_id = model_name if "/" in model_name else DEFAULT_HF_MODEL_REPO
-                log_messages.append(f"Используем как репозиторий HF или стандартный: {repo_id}")
-            
-            # Пытаемся загрузить модель из репозитория HF
-            try:
-                # Проверка наличия токена HF
-                hf_token = os.environ.get("HF_TOKEN", None)
-                if hf_token:
-                    log_messages.append("Найден токен HF в переменных окружения")
-                else:
-                    log_messages.append("Токен HF не найден, загрузка в анонимном режиме")
-                
-                # Проверяем интернет-соединение
-                import socket
-                try:
-                    socket.create_connection(("huggingface.co", 443), timeout=3)
-                    log_messages.append("Соединение с huggingface.co доступно")
-                except OSError:
-                    error_msg = "Нет доступа к huggingface.co, проверьте подключение к интернету"
-                    log_messages.append(error_msg)
-                    raise ValueError(error_msg)
-                
-                # Пытаемся загрузить библиотеку transformers
-                try:
-                    import transformers
-                    log_messages.append(f"Библиотека transformers загружена, версия: {transformers.__version__}")
-                except ImportError:
-                    error_msg = "Не удалось импортировать библиотеку transformers. Установите её: pip install transformers"
-                    log_messages.append(error_msg)
-                    raise ValueError(error_msg)
-                
-                # Загружаем модель с HF
-                from transformers import AutoModelForPrediction
-                
-                # Определяем путь сохранения модели
-                local_model_path = os.path.join(str(models_dir), model_name)
-                log_messages.append(f"Пытаемся загрузить модель из {repo_id} в {local_model_path}")
-                
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    # Пытаемся загрузить модель
-                    model = AutoModelForPrediction.from_pretrained(
-                        repo_id,
-                        cache_dir=str(hf_cache_dir),
-                        token=hf_token
-                    )
-                    log_messages.append(f"Модель успешно загружена из {repo_id}")
-                    
-                    # Сохраняем модель локально
-                    model.save_pretrained(local_model_path)
-                    log_messages.append(f"Модель сохранена локально в {local_model_path}")
-                    
-                    return local_model_path, "\n".join(log_messages)
-                    
-            except Exception as e:
-                error_msg = f"Не удалось загрузить модель с Hugging Face: {str(e)}"
-                log_messages.append(error_msg)
-                raise ValueError(error_msg)
-                
-        except ImportError as e:
-            error_msg = f"Не удалось импортировать необходимые модули для загрузки с HF: {str(e)}"
-            log_messages.append(error_msg)
-            raise ValueError(error_msg)
-    else:
-        log_messages.append("Загрузка с Hugging Face отключена параметром allow_download=False")
-    
-    # Если все попытки неудачны, возвращаем ошибку
-    error_message = f"Модель '{model_name}' не найдена локально"
-    error_message += " и не может быть загружена с Hugging Face" if allow_download else ""
-    error_message += f". Попробуйте установить модель вручную в директорию: {models_dir}"
-    
-    log_messages.append(error_message)
-    raise ValueError(error_message)
+    return model_name
 
-def modify_chronos_hyperparams(hyperparams: Dict[str, Any], allow_download: bool = True) -> Dict[str, Any]:
+def modify_chronos_hyperparams(hyperparams: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Модифицирует гиперпараметры для использования локальных моделей Chronos
+    Модифицирует гиперпараметры для использования моделей Chronos
     
     Args:
         hyperparams (Dict[str, Any]): Исходные гиперпараметры
-        allow_download (bool): Разрешить загрузку модели с Hugging Face
     
     Returns:
         Dict[str, Any]: Модифицированные гиперпараметры
@@ -213,42 +84,33 @@ def modify_chronos_hyperparams(hyperparams: Dict[str, Any], allow_download: bool
         
         # Если указан путь к модели
         if "model_path" in chronos_params:
-            model_path = chronos_params["model_path"]
+            model_name = chronos_params["model_path"]
             
             try:
-                # Получаем локальный путь к модели
-                local_path, log_message = get_local_model_path(
-                    model_path, 
-                    use_bolt=model_path.endswith("bolt") or "bolt" in model_path.lower(),
-                    allow_download=allow_download
-                )
+                # Получаем HF путь к модели
+                hf_path = get_model_path(model_name)
                 
-                # Заменяем путь на локальный
-                chronos_params["model_path"] = local_path
+                # Заменяем путь на HF путь
+                chronos_params["model_path"] = hf_path
                 modified_params["Chronos"] = chronos_params
                 
                 # Логируем изменения
-                logger.info(f"Заменен путь к модели: {model_path} -> {local_path}")
-                logger.debug(log_message)
+                logger.info(f"Используем модель из Hugging Face: {hf_path}")
                 
             except Exception as e:
-                logger.warning(f"Не удалось заменить путь к модели {model_path}: {str(e)}")
-                # В случае ошибки оставляем оригинальный путь
+                logger.warning(f"Ошибка при определении пути к модели {model_name}: {str(e)}")
     
     return modified_params
 
 def create_chronos_predictor(prediction_length: int, train_data=None, model_name: str = "bolt_small", 
-                           use_bolt: bool = False, allow_download: bool = True, time_limit: int = 300,
-                           hyperparams: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
+                           time_limit: int = 300, hyperparams: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
     """
     Создаёт предиктор на основе Chronos модели
     
     Args:
         prediction_length (int): Горизонт прогнозирования
         train_data: Данные для обучения (опционально)
-        model_name (str): Имя или путь к модели Chronos
-        use_bolt (bool): Использовать облегченную версию модели (bolt)
-        allow_download (bool): Разрешить загрузку модели с Hugging Face
+        model_name (str): Имя модели Chronos
         time_limit (int): Ограничение времени обучения в секундах
         hyperparams (Dict[str, Any]): Гиперпараметры моделей (опционально)
         **kwargs: Дополнительные параметры для предиктора
@@ -257,7 +119,7 @@ def create_chronos_predictor(prediction_length: int, train_data=None, model_name
         TimeSeriesPredictor: Предиктор на основе Chronos модели
         
     Raises:
-        ValueError: Если модель не найдена или не может быть загружена
+        ValueError: Если модель не может быть загружена
     """
     start_time = time.time()
     logger.info(f"Создание предиктора Chronos {model_name}, horizont={prediction_length}")
@@ -270,30 +132,21 @@ def create_chronos_predictor(prediction_length: int, train_data=None, model_name
         logger.error(error_msg)
         raise ValueError(error_msg)
     
-    # Получаем локальный путь к модели
-    try:
-        local_model_path, log_message = get_local_model_path(
-            model_name, 
-            use_bolt=use_bolt,
-            allow_download=allow_download
-        )
-        logger.debug(log_message)
-    except Exception as e:
-        logger.error(f"Ошибка при получении пути к модели {model_name}: {str(e)}")
-        raise ValueError(f"Не удалось получить путь к модели: {str(e)}")
+    # Получаем HF путь к модели
+    hf_model_path = get_model_path(model_name)
     
     # Формируем гиперпараметры
     if hyperparams is None:
         hyperparams = {
-            "Chronos": {"model_path": local_model_path}
+            "Chronos": {"model_path": hf_model_path}
         }
     else:
         # Если уже есть секция Chronos, обновляем путь к модели
         if "Chronos" in hyperparams:
-            hyperparams["Chronos"]["model_path"] = local_model_path
+            hyperparams["Chronos"]["model_path"] = hf_model_path
         else:
             # Иначе создаем новую секцию
-            hyperparams["Chronos"] = {"model_path": local_model_path}
+            hyperparams["Chronos"] = {"model_path": hf_model_path}
     
     # Создаем предиктор с указанными параметрами
     predictor = TimeSeriesPredictor(
@@ -319,8 +172,6 @@ def create_chronos_predictor(prediction_length: int, train_data=None, model_name
         except Exception as e:
             logger.error(f"Ошибка при обучении предиктора: {str(e)}")
             raise ValueError(f"Ошибка при обучении предиктора: {str(e)}")
-    else:
-        logger.info("Данные для обучения не предоставлены, создан необученный предиктор")
     
     return predictor
 
@@ -343,14 +194,11 @@ def check_model_availability(model_name: str) -> Dict[str, Any]:
     }
     
     try:
-        local_path, log_message = get_local_model_path(
-            model_name, 
-            allow_download=False  # Не пытаемся скачать модель
-        )
+        hf_path = get_model_path(model_name)
         
         result["available"] = True
-        result["local_path"] = local_path
-        result["log"] = log_message.split("\n")
+        result["local_path"] = hf_path
+        result["log"] = [f"Используем модель из Hugging Face: {hf_path}"]
         
     except Exception as e:
         result["error"] = str(e)
@@ -365,7 +213,7 @@ def example_usage():
     
     # Пример 1: Получение пути к модели
     try:
-        model_path, log = get_local_model_path("bolt_tiny")
+        model_path = get_model_path("bolt_tiny")
         print(f"Путь к модели: {model_path}")
     except ValueError as e:
         print(f"Ошибка: {e}")

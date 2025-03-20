@@ -1,7 +1,7 @@
 {
-    "autogluon_model_20250319_235621": {
-        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250319_235621",
-        "created_at": "2025-03-19 23:59:06",
+    "autogluon_model_20250320_014812": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_014812",
+        "created_at": "2025-03-20 01:48:23",
         "prediction_length": 2,
         "time_limit": 600,
         "eval_metric": "MAE (Mean absolute error)",
@@ -12,12 +12,17 @@
         "num_time_series": 1,
         "data_frequency": "M",
         "metrics": {
-            "error": "TimeSeriesScorer.__call__() missing 1 required positional argument: 'predictions'"
+            "error": "`get_model_names` has been deprecated and will be removed in version 1.2. Please use `model_names` instead",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "M",
+                "eval_metric": "MAE"
+            }
         }
     },
-    "autogluon_model_20250320_000416": {
-        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_000416",
-        "created_at": "2025-03-20 00:06:25",
+    "autogluon_model_20250320_102715": {
+        "model_path": null,
+        "created_at": "2025-03-20 10:27:15",
         "prediction_length": 2,
         "time_limit": 600,
         "eval_metric": "MAE (Mean absolute error)",
@@ -26,25 +31,98 @@
             26
         ],
         "num_time_series": 1,
-        "data_frequency": "M",
+        "data_frequency": "None",
         "metrics": {
-            "error": "TimeSeriesScorer.__call__() missing 1 required positional argument: 'predictions'"
+            "error": "'NoneType' object has no attribute 'prediction_length'",
+            "model_info": {
+                "prediction_length": null,
+                "freq": "unknown",
+                "eval_metric": "unknown"
+            }
         }
     },
-    "autogluon_model_20250320_001740": {
-        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_001740",
-        "created_at": "2025-03-20 00:18:35",
+    "autogluon_model_20250320_102722": {
+        "model_path": null,
+        "created_at": "2025-03-20 10:27:22",
         "prediction_length": 2,
-        "time_limit": 60,
+        "time_limit": 600,
         "eval_metric": "MAE (Mean absolute error)",
         "data_shape": [
             63,
             26
         ],
         "num_time_series": 1,
-        "data_frequency": "M",
+        "data_frequency": "None",
         "metrics": {
-            "error": "TimeSeriesScorer.__call__() missing 1 required positional argument: 'predictions'"
+            "error": "'NoneType' object has no attribute 'prediction_length'",
+            "model_info": {
+                "prediction_length": null,
+                "freq": "unknown",
+                "eval_metric": "unknown"
+            }
+        }
+    },
+    "autogluon_model_20250320_102941": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_102941",
+        "created_at": "2025-03-20 10:29:43",
+        "prediction_length": 2,
+        "time_limit": 600,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "None",
+        "metrics": {
+            "error": "`get_model_names` has been deprecated and will be removed in version 1.2. Please use `model_names` instead",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "D",
+                "eval_metric": "MAE"
+            }
+        }
+    },
+    "autogluon_model_20250320_104454": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_104454",
+        "created_at": "2025-03-20 10:44:57",
+        "prediction_length": 2,
+        "time_limit": 600,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "None",
+        "metrics": {
+            "error": "`get_model_names` has been deprecated and will be removed in version 1.2. Please use `model_names` instead",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "D",
+                "eval_metric": "MAE"
+            }
+        }
+    },
+    "autogluon_model_20250320_105438": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_105438",
+        "created_at": "2025-03-20 10:54:41",
+        "prediction_length": 2,
+        "time_limit": 600,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "None",
+        "metrics": {
+            "error": "`get_model_names` has been deprecated and will be removed in version 1.2. Please use `model_names` instead",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "D",
+                "eval_metric": "MAE"
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 autogluon==1.2.0
 autogluon.timeseries==1.2.0
 numpy==1.26.4  
-pandas==2.2.3  
+pandas==2.2.2  
 PyYAML==6.0.2  
 plotly==5.20.0  
 openpyxl==3.1.5  

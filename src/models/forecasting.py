@@ -1,13 +1,13 @@
-# src/models/forecasting.py
+import os
+from typing import Dict, Any, List, Optional, Tuple
 import logging
+from pathlib import Path
+
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict, Any, Union, Tuple
-import os
-from pathlib import Path
 
-def make_timeseries_dataframe(df, static_features=None, freq='D'):
+def make_timeseries_dataframe(df, static_features=None, freq='D', id_column=None, timestamp_column=None, target_column=None):
     """
     Создаёт TimeSeriesDataFrame с улучшенной обработкой ошибок
     
@@ -19,6 +19,12 @@ def make_timeseries_dataframe(df, static_features=None, freq='D'):
         Датафрейм со статическими признаками (постоянными для каждого item_id).
     freq : str, опционально
         Частота временного ряда ('D' по умолчанию для daily)
+    id_column : str, опционально
+        Имя колонки с идентификаторами временных рядов (по умолчанию 'item_id')
+    timestamp_column : str, опционально
+        Имя колонки с временными метками (по умолчанию 'timestamp')
+    target_column : str, опционально
+        Имя колонки с целевой переменной (по умолчанию 'target')
     
     Returns:
     --------
@@ -26,38 +32,60 @@ def make_timeseries_dataframe(df, static_features=None, freq='D'):
         TimeSeriesDataFrame для использования в AutoGluon.
     """
     try:
+        # Создаем рабочую копию датафрейма
+        df_copy = df.copy()
+        
+        # Переименовываем колонки, если заданы пользовательские имена
+        if id_column and id_column != "item_id":
+            if id_column not in df_copy.columns:
+                raise ValueError(f"Колонка ID {id_column} не найдена в данных")
+            logging.info(f"Переименовываем колонку ID из {id_column} в 'item_id'")
+            df_copy.rename(columns={id_column: 'item_id'}, inplace=True)
+            
+        if timestamp_column and timestamp_column != "timestamp":
+            if timestamp_column not in df_copy.columns:
+                raise ValueError(f"Колонка временных меток {timestamp_column} не найдена в данных")
+            logging.info(f"Переименовываем колонку временных меток из {timestamp_column} в 'timestamp'")
+            df_copy.rename(columns={timestamp_column: 'timestamp'}, inplace=True)
+            
+        if target_column and target_column != "target":
+            if target_column not in df_copy.columns:
+                raise ValueError(f"Колонка целевой переменной {target_column} не найдена в данных")
+            logging.info(f"Переименовываем колонку целевой переменной из {target_column} в 'target'")
+            df_copy.rename(columns={target_column: 'target'}, inplace=True)
+        
         # Проверка необходимых колонок
         required_cols = ["item_id", "timestamp", "target"]
         for col in required_cols:
-            if col not in df.columns:
+            if col not in df_copy.columns:
                 raise ValueError(f"Отсутствует обязательная колонка: {col}")
         
         # Проверка типа данных для timestamp
-        if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
+        if not pd.api.types.is_datetime64_any_dtype(df_copy["timestamp"]):
             logging.warning("Колонка timestamp не имеет тип datetime64. Преобразуем...")
-            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+            df_copy["timestamp"] = pd.to_datetime(df_copy["timestamp"], errors="coerce")
             
             # Проверяем успешность преобразования
-            if df["timestamp"].isna().any():
-                failed_values = df.loc[df["timestamp"].isna(), "timestamp"].head(5).tolist()
+            if df_copy["timestamp"].isna().any():
+                failed_values = df_copy.loc[df_copy["timestamp"].isna(), "timestamp"].head(5).tolist()
                 logging.error(f"Не удалось преобразовать некоторые значения даты: {failed_values}")
                 raise ValueError("Ошибка преобразования timestamp в datetime")
         
         # Проверка на дубликаты
-        duplicate_pairs = df.duplicated(subset=["item_id", "timestamp"]).sum()
+        duplicate_pairs = df_copy.duplicated(subset=["item_id", "timestamp"]).sum()
         if duplicate_pairs > 0:
             logging.warning(f"Найдены дубликаты в парах item_id-timestamp: {duplicate_pairs}. Удаляем...")
-            df = df.drop_duplicates(subset=["item_id", "timestamp"])
+            df_copy = df_copy.drop_duplicates(subset=["item_id", "timestamp"])
         
         # Проверка на пропуски в целевой переменной
-        num_missing = df["target"].isna().sum()
+        num_missing = df_copy["target"].isna().sum()
         if num_missing > 0:
-            missing_percent = 100 * num_missing / len(df)
+            missing_percent = 100 * num_missing / len(df_copy)
             logging.warning(f"В колонке target есть пропуски: {num_missing} ({missing_percent:.2f}%)")
             # Здесь можно добавить автоматическое заполнение пропусков, если нужно
         
         # Создаем TimeSeriesDataFrame
-        ts_df = TimeSeriesDataFrame(df, static_features=static_features)
+        ts_df = TimeSeriesDataFrame(df_copy, static_features=static_features)
         
         # Устанавливаем частоту, если указана и не auto
         if freq and freq.lower() != 'auto':
@@ -69,7 +97,7 @@ def make_timeseries_dataframe(df, static_features=None, freq='D'):
                 # Пытаемся определить частоту автоматически
                 try:
                     inferred_freq = pd.infer_freq(
-                        df.loc[df["item_id"] == df["item_id"].iloc[0]]["timestamp"]
+                        df_copy.loc[df_copy["item_id"] == df_copy["item_id"].iloc[0]]["timestamp"]
                     )
                     if inferred_freq:
                         logging.info(f"Автоматически определена частота: {inferred_freq}")
@@ -100,9 +128,10 @@ def make_timeseries_dataframe(df, static_features=None, freq='D'):
             logging.debug(f"Примеры данных:\n{df.head(3)}")
                 
         except Exception as debug_err:
-            logging.error(f"Ошибка при отладочном логировании: {debug_err}")
-        
-        raise ValueError(f"Не удалось создать TimeSeriesDataFrame: {e}")
+            logging.error(f"Ошибка при логировании отладочной информации: {debug_err}")
+            
+        # Повторно выбрасываем оригинальную ошибку
+        raise
 
 def forecast(predictor: TimeSeriesPredictor, ts_df, known_covariates=None):
     """
@@ -227,7 +256,7 @@ def train_model(
     eval_metric: Optional[str] = None,
     prediction_length: Optional[int] = None,
     freq: Optional[str] = None
-) -> TimeSeriesPredictor:
+) -> Tuple[str, TimeSeriesPredictor]:
     """
     Обучает модель временных рядов.
     
@@ -252,74 +281,86 @@ def train_model(
         
     Returns:
     --------
-    TimeSeriesPredictor
-        Обученный предиктор
+    Tuple[str, TimeSeriesPredictor]
+        Кортеж (путь к сохраненной модели, обученный предиктор)
     """
     try:
-        # Настройка параметров обучения
-        if time_limit is None:
-            time_limit = 3600  # 1 час по умолчанию
-        
-        if preset is None:
-            # Выбираем preset в зависимости от ограничения по времени
-            if time_limit <= 300:  # <= 5 минут
-                preset = 'fast_training'
-            elif time_limit <= 1800:  # <= 30 минут
-                preset = 'medium_quality'
-            else:
-                preset = 'high_quality'
-        
-        if eval_metric is None:
-            eval_metric = "MASE"
-        
-        if prediction_length is None:
-            prediction_length = 10
-        
-        # Проверяем, используется ли preset, который требует skip_model_selection=True
+        # Проверяем, является ли preset Chronos/Bolt моделью, которая требует skip_model_selection=True
         is_skip_model_preset = False
-        if preset and (preset.startswith('bolt_') or preset.startswith('chronos_') or preset == 'chronos'):
-            is_skip_model_preset = True
-            logging.info(f"Используется preset {preset}, который требует skip_model_selection=True. Список моделей будет игнорирован.")
         
-        # Валидируем и, при необходимости, корректируем список моделей для обучения
-        if hyperparameters is not None and not is_skip_model_preset:
-            # Фильтруем список моделей от невалидных значений
-            hyperparameters = filter_valid_models(hyperparameters)
-            
-            # Проверяем, если после фильтрации список пуст
-            if not hyperparameters:
-                logging.info("Список моделей после фильтрации оказался пустым. Будут использованы все доступные модели.")
-                # Используем все доступные модели
-                hyperparameters = {model: {} for model in get_valid_models()}
+        if preset:
+            # Для Bolt/Chronos моделей проверяем, указан ли локальный путь или нужно загрузить локально
+            if isinstance(preset, str) and (preset.startswith("bolt_") or preset.startswith("chronos")):
+                logging.info(f"Обнаружена Chronos/Bolt модель: {preset}")
+                
+                # Устанавливаем флаг для специальной обработки
+                is_skip_model_preset = True
+                
+                # Проверяем, существует ли локальная копия модели или это путь к модели
+                if not os.path.exists(preset):
+                    # Проверяем наличие локальной модели или загружаем её
+                    preset = ensure_local_chronos_model(preset)
         
-        # Логируем информацию о процессе обучения
-        logging.info(f"Начинаем обучение модели с preset={preset}, time_limit={time_limit}с, eval_metric={eval_metric}")
+        # Если путь не указан, создаем временный
+        if model_path is None:
+            model_path = os.path.join(tempfile.gettempdir(), f"autogluon_ts_model_{int(time.time())}")
+            logging.info(f"Модель будет сохранена во временную директорию: {model_path}")
         
-        if hyperparameters is not None and not is_skip_model_preset:
-            model_count = len(hyperparameters)
-            model_list = ", ".join(list(hyperparameters.keys()))
-            logging.info(f"Будет обучено {model_count} моделей: {model_list}")
-        else:
-            logging.info("Будут обучены модели из выбранного preset")
+        # Создаем директорию для модели, если её нет
+        os.makedirs(model_path, exist_ok=True)
         
-        # Настраиваем квантили для лучшей оценки неопределенности
-        quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        # Устанавливаем метрику по умолчанию, если не указана
+        if eval_metric is None:
+            eval_metric = "RMSE"
+        
+        # Создаем TimeSeriesPredictor с настройками
+        logging.info(f"Создание TimeSeriesPredictor с метрикой {eval_metric}")
+        
+        # Определяем квантили для предсказания
+        quantile_levels = None
+        if eval_metric in ["Quantile", "MAPE", "MASE"]:
+            quantile_levels = [0.1, 0.5, 0.9]
         
         # Создаем предиктор
         predictor = TimeSeriesPredictor(
             prediction_length=prediction_length,
             path=model_path,
             eval_metric=eval_metric,
-            target="target",
             quantile_levels=quantile_levels,
             freq=freq
         )
         
         # Подбираем соответствующий метод обучения в зависимости от переданных параметров
         if is_skip_model_preset:
-            # Для preset с skip_model_selection=True не передаем hyperparameters
-            logging.info(f"Обучение с использованием preset={preset} без передачи списка моделей")
-            predictor.fit(train_data=train_data, time_limit=time_limit, presets=preset)
+            # Для Chronos/Bolt моделей, добавляем настройки для сохранения всех моделей в лидерборде
+            # Если мы хотим включать другие модели помимо Chronos/Bolt для сравнения в лидерборде
+            if hyperparameters and len(hyperparameters) > 0:
+                logging.info(f"Обучение с использованием preset={preset} и дополнительными моделями для сравнения")
+                # Создаем специальный гиперпараметр для Chronos с указанием конкретной модели
+                # но при этом сохраняем другие модели для сравнения в лидерборде
+                special_hyperparams = hyperparameters.copy()
+                # Добавляем Chronos с выбранным preset или локальным путём
+                special_hyperparams['Chronos'] = {'model_path': preset}
+                predictor.fit(
+                    train_data=train_data, 
+                    time_limit=time_limit, 
+                    hyperparameters=special_hyperparams,
+                    skip_model_selection=False  # Явно указываем, чтобы обучить все модели
+                )
+            else:
+                # Если нет дополнительных моделей, обучаем только Chronos/Bolt
+                logging.info(f"Обучение с использованием preset={preset} без дополнительных моделей")
+                if isinstance(preset, str) and os.path.exists(preset):
+                    # Если preset - это путь к локальной модели
+                    predictor.fit(
+                        train_data=train_data, 
+                        time_limit=time_limit, 
+                        hyperparameters={'Chronos': {'model_path': preset}},
+                        skip_model_selection=True
+                    )
+                else:
+                    # Иначе используем preset как есть
+                    predictor.fit(train_data=train_data, time_limit=time_limit, presets=preset)
         elif hyperparameters is None:
             # Если модели не указаны, обучаем со стандартными параметрами preset
             logging.info(f"Обучение с использованием preset={preset} без явного указания моделей")
@@ -338,12 +379,12 @@ def train_model(
         
         logging.info("Обучение модели успешно завершено")
         
-        return predictor
+        # Возвращаем путь к модели и сам предиктор
+        return (model_path, predictor)
     
     except Exception as e:
-        logging.error(f"Ошибка при обучении модели: {e}")
-        raise RuntimeError(f"Не удалось обучить модель: {str(e)}")
-
+        logging.error(f"Ошибка при обучении модели: {str(e)}")
+        return (None, None)
 
 def filter_valid_models(hyperparameters: Dict) -> Dict:
     """
@@ -525,3 +566,66 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
             "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
             "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown"
         }}
+
+# Константы для локальных путей к моделям Chronos/Bolt
+CHRONOS_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "chronos")
+
+def ensure_local_chronos_model(model_name: str) -> str:
+    """
+    Проверяет наличие локальной копии модели Chronos/Bolt и загружает её при необходимости.
+    
+    Parameters:
+    -----------
+    model_name : str
+        Название модели (например, 'bolt_small', 'chronos_base')
+        
+    Returns:
+    --------
+    str
+        Путь к локальной модели
+    """
+    # Преобразуем названия пресетов в соответствующие HuggingFace репозитории
+    model_mapping = {
+        "bolt_tiny": "autogluon/chronos-bolt-tiny",
+        "bolt_mini": "autogluon/chronos-bolt-mini",
+        "bolt_small": "autogluon/chronos-bolt-small",
+        "bolt_base": "autogluon/chronos-bolt-base",
+        "chronos_tiny": "autogluon/chronos-t5-tiny",
+        "chronos_mini": "autogluon/chronos-t5-mini",
+        "chronos_small": "autogluon/chronos-t5-small",
+        "chronos_base": "autogluon/chronos-t5-base",
+        "chronos_large": "autogluon/chronos-t5-large",
+        "chronos": "autogluon/chronos-t5-base",  # По умолчанию используем base версию
+    }
+    
+    # Получаем HuggingFace repo_id для данной модели
+    repo_id = model_mapping.get(model_name, f"autogluon/{model_name.replace('_', '-')}")
+    
+    # Создаем путь, куда будет загружена модель
+    local_model_dir = os.path.join(CHRONOS_MODELS_DIR, model_name.replace("_", "/"))
+    os.makedirs(os.path.dirname(local_model_dir), exist_ok=True)
+    
+    # Проверяем, существует ли локальная модель
+    config_file = os.path.join(local_model_dir, "config.json")
+    if os.path.exists(config_file):
+        logging.info(f"Используем локальную копию модели {model_name} из {local_model_dir}")
+        return local_model_dir
+    
+    # Если нет, скачиваем модель с HuggingFace
+    try:
+        logging.info(f"Локальная копия модели {model_name} не найдена, загружаем из {repo_id}")
+        from huggingface_hub import snapshot_download
+        
+        # Скачиваем модель в указанную директорию
+        model_dir = snapshot_download(
+            repo_id=repo_id,
+            local_dir=local_model_dir,
+            local_dir_use_symlinks=False  # Не используем симлинки для совместимости с Windows
+        )
+        logging.info(f"Модель {model_name} успешно загружена в {model_dir}")
+        return model_dir
+    except Exception as e:
+        logging.error(f"Ошибка при загрузке модели {model_name} из {repo_id}: {str(e)}")
+        # В случае ошибки при загрузке, возвращаем путь, который будет использоваться как есть
+        # AutoGluon сам попытается загрузить модель из интернета, если её нет локально
+        return model_name

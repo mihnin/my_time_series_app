@@ -76,6 +76,31 @@ def show_dataframe_info(df):
 
 def save_model_metadata(model_name, info_dict):
     """Сохраняет метаданные модели в JSON-файл"""
+    
+    def convert_to_serializable(obj):
+        """Превращает не-JSON-сериализуемые объекты в строки"""
+        if isinstance(obj, (pd.DataFrame, pd.Series)):
+            return obj.to_dict()
+        try:
+            # Пробуем сначала простую сериализацию
+            json.dumps(obj)
+            return obj
+        except (TypeError, OverflowError):
+            # Если объект не сериализуемый, преобразуем его в строку
+            return str(obj)
+    
+    # Рекурсивно проходим по всему словарю и конвертируем объекты
+    def make_serializable(d):
+        if isinstance(d, dict):
+            return {k: make_serializable(v) for k, v in d.items()}
+        elif isinstance(d, list):
+            return [make_serializable(item) for item in d]
+        else:
+            return convert_to_serializable(d)
+    
+    # Конвертируем все метаданные в сериализуемый формат
+    serializable_info = make_serializable(info_dict)
+    
     metadata_file = Path(MODEL_METADATA_FILE)
     
     # Загружаем существующие метаданные или создаем новый словарь
@@ -90,7 +115,7 @@ def save_model_metadata(model_name, info_dict):
         metadata = {}
     
     # Добавляем метаданные текущей модели
-    metadata[model_name] = info_dict
+    metadata[model_name] = serializable_info
     
     # Сохраняем обновленные метаданные
     with open(metadata_file, "w", encoding="utf-8") as f:
@@ -241,14 +266,10 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 st.warning(f"Предупреждение: метрика {eval_metric} не распознана. Используем RMSE по умолчанию.")
                 short_metric = "RMSE"
         
-        # Конвертируем отображаемое значение частоты в значение для AutoGluon
-        base_freq = freq
-        if freq in FREQ_REVERSE_MAPPING:
-            base_freq = FREQ_REVERSE_MAPPING[freq]
-            logging.info(f"Преобразована частота из {freq} в {base_freq}")
-        else:
-            logging.info(f"Используем частоту {base_freq} без преобразования")
-        
+        # Используем переданное значение частоты
+        # Переменная freq_value доступна только при вызове из интерфейса, не при прямом вызове функции
+        base_freq = freq  # Используем аргумент функции вместо переменной из GUI
+
         # Выводим информацию о параметрах
         st.write("### Параметры обучения")
         params_df = pd.DataFrame({
@@ -285,20 +306,26 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             # Создаем TimeSeriesDataFrame
             tsdf = make_timeseries_dataframe(
                 df=df_copy,
-                freq=base_freq
+                freq=base_freq,
+                id_column='item_id',
+                timestamp_column='timestamp',
+                target_column='target'
             )
             
-            # Проверяем, что частота корректно установлена
-            logging.info(f"TimeSeriesDataFrame создан с частотой {getattr(tsdf, 'freq', 'не определена')}")
-            logging.info(f"Количество рядов в TimeSeriesDataFrame: {len(tsdf)}")
+            # Теперь, когда tsdf создан, проверяем и логируем информацию о частоте
+            base_freq = getattr(tsdf, 'freq', None)
+            logging.info("Создание TimeSeriesDataFrame из набора данных размером %s", df_train.shape)
+            logging.info("TimeSeriesDataFrame создан с частотой %s", base_freq if base_freq else 'не определена')
+            logging.info("Количество рядов в TimeSeriesDataFrame: %s", len(tsdf))
+            
             if len(tsdf) == 0:
                 raise ValueError("TimeSeriesDataFrame не содержит данных")
                 
+            st.success(f"TimeSeriesDataFrame успешно создан, содержит {len(tsdf)} рядов")
+            
             # Выводим идентификаторы рядов
             item_ids = tsdf.item_ids
-            logging.info(f"Идентификаторы рядов: {item_ids[:5]}{'...' if len(item_ids) > 5 else ''}")
-            
-            st.success(f"TimeSeriesDataFrame успешно создан, содержит {len(tsdf)} рядов")
+            logging.info("Идентификаторы рядов: %s", item_ids[:5])
         
         # Настройка гиперпараметров и модели
         preset_to_use = "medium_quality" if time_limit > 600 else "fast_training"
@@ -314,7 +341,7 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 else:
                     models = [model.strip() for model in models.split(',')]
                     
-            logging.info(f"Исходный список выбранных моделей: {models}")
+            logging.info("Исходный список выбранных моделей: %s", models)
             
             # Проверяем наличие специального значения "* (все)"
             if models and "* (все)" in models:
@@ -337,7 +364,7 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 if valid_selected_models:
                     # Используем только указанные валидные модели
                     hyperparameters = {model: {} for model in valid_selected_models}
-                    logging.info(f"Выбраны конкретные модели для обучения: {list(hyperparameters.keys())}")
+                    logging.info("Выбраны конкретные модели для обучения: %s", list(hyperparameters.keys()))
                 else:
                     # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
                     hyperparameters = {"DeepAR": {}}
@@ -355,24 +382,48 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                                                               "chronos_tiny", "chronos_mini", "chronos_small", 
                                                               "chronos_base", "chronos_large", "chronos"] else "bolt_small"
             preset_to_use = chronos_preset
-            logging.info(f"Используем Chronos модель: {chronos_preset}")
+            logging.info("Используем Chronos модель: %s", chronos_preset)
             
+            # Важно! Если указаны другие модели, нужно добавить их вместе с Chronos
+            if models and models != ["Chronos"]:
+                # Добавляем выбранную Chronos модель в hyperparameters
+                if not hyperparameters:
+                    hyperparameters = {}
+                hyperparameters['Chronos'] = {'model_path': chronos_preset}
+                logging.info("Добавляем Chronos модель к другим выбранным моделям. Всего моделей: %d", len(hyperparameters))
+            else:
+                # Если выбрана только Chronos, то настраиваем preset
+                hyperparameters = {'Chronos': {'model_path': chronos_preset}}
+                logging.info("Используем только Chronos модель с preset %s", chronos_preset)
+        
         # Определяем путь для сохранения модели
         model_name = f"autogluon_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         model_path = os.path.join(TIMESERIES_MODELS_DIR, model_name)
         
         # Обучаем модель
         with st.spinner(f"Обучение модели (ограничение времени: {time_limit} сек)..."):
-            model_path, predictor = train_model(
-                train_data=tsdf,
-                prediction_length=horizon,
-                model_path=model_path,
-                time_limit=time_limit,
-                eval_metric=short_metric,
-                hyperparameters=hyperparameters,
-                preset=preset_to_use,
-                freq=base_freq
-            )
+            # Готовим параметры для вызова train_model
+            train_params = {
+                "train_data": tsdf,
+                "prediction_length": horizon,
+                "model_path": model_path,
+                "time_limit": time_limit,
+                "eval_metric": short_metric,
+                "hyperparameters": hyperparameters,
+                "preset": preset_to_use
+            }
+            
+            # Добавляем параметр freq только если он определен
+            if base_freq:
+                # Явно передаем частоту в train_model, так как она требуется для TimeSeriesPredictor
+                train_params["freq"] = base_freq
+            else:
+                # Если не удалось определить частоту, устанавливаем дефолтное значение
+                # Это необходимо для работы TimeSeriesPredictor
+                train_params["freq"] = "D"  # Устанавливаем дневную частоту по умолчанию
+                logging.warning("Частота данных не определена, используем 'D' (дневную) по умолчанию")
+            
+            model_path, predictor = train_model(**train_params)
             
             # Получаем метрики модели
             model_summary = extract_model_metrics(predictor)
@@ -391,6 +442,63 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             }
             
             save_model_metadata(model_name, metadata)
+            
+            # Выводим лидерборд моделей
+            if hasattr(predictor, 'leaderboard') and callable(predictor.leaderboard):
+                st.subheader("Leaderboard моделей")
+                leaderboard_df = predictor.leaderboard()
+                st.dataframe(leaderboard_df)
+                
+                # Сохраняем результаты в Excel
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                excel_file = f"reports/training_leaderboard_{model_name}_{timestamp}.xlsx"
+                os.makedirs(os.path.dirname(excel_file), exist_ok=True)
+                
+                # Создаем Excel-отчет с результатами обучения
+                with st.spinner("Сохранение результатов обучения в Excel..."):
+                    try:
+                        # Копируем и преобразуем DataFrame лидерборда для Excel
+                        # Исправляем проблему с преобразованием типов данных
+                        leaderboard_excel = leaderboard_df.copy()
+                        
+                        # Преобразуем все столбцы в строки, чтобы избежать ошибок с типами данных
+                        for col in leaderboard_excel.columns:
+                            if col == 'model':
+                                continue  # Пропускаем столбец с именами моделей
+                            leaderboard_excel[col] = leaderboard_excel[col].astype(str)
+                        
+                        # Сохраняем в Excel
+                        with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+                            # Сохраняем лидерборд на отдельном листе
+                            leaderboard_excel.to_excel(writer, sheet_name='Leaderboard', index=True)
+                            
+                            # Сохраняем метрики обучения на отдельном листе
+                            metrics_df = pd.DataFrame([metadata])
+                            metrics_df.to_excel(writer, sheet_name='Metrics', index=False)
+                            
+                            # Если есть информация о тестовых метриках, сохраняем и их
+                            if 'test_performance' in model_summary:
+                                test_metrics = model_summary['test_performance']
+                                test_df = pd.DataFrame(test_metrics, index=[0])
+                                test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                                
+                        logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
+                        
+                        # Восстановить кнопку скачивания Excel файла
+                        try:
+                            with open(excel_file, "rb") as f:
+                                st.download_button(
+                                    label=f"Скачать отчет Excel с результатами обучения",
+                                    data=f,
+                                    file_name=os.path.basename(excel_file),
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key="download_training_report"
+                                )
+                        except Exception as download_err:
+                            logging.error(f"Ошибка при создании кнопки скачивания: {download_err}", exc_info=True)
+                    except Exception as excel_err:
+                        logging.error(f"Ошибка при сохранении в Excel: {excel_err}", exc_info=True)
+                        st.warning(f"Не удалось сохранить результаты в Excel: {excel_err}")
             
             st.success(f"Модель {model_name} успешно обучена и сохранена!")
             
@@ -421,10 +529,14 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             st.session_state["model_name"] = model_name
             st.session_state["prediction_length"] = horizon
             
+    except (ValueError, KeyError, TypeError) as e:
+        logger.error("Ошибка при обучении модели: %s", str(e))
+        st.error(f"Ошибка при обучении модели: {str(e)}")
+        return None
     except Exception as e:
-        display_error_message(str(e), title="Ошибка при обучении модели")
-        logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
-        # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
+        logger.error("Неожиданная ошибка при обучении модели: %s", str(e))
+        st.error(f"Неожиданная ошибка при обучении модели: {str(e)}")
+        return None
 
 # Основной раздел приложения
 def main():
@@ -499,15 +611,18 @@ def main():
             with st.spinner("Обучение модели, пожалуйста подождите..."):
                 try:
                     # Создаем TimeSeriesDataFrame
-                    logger.info(f"Создание TimeSeriesDataFrame из набора данных размером {df.shape}")
+                    logger.info("Создание TimeSeriesDataFrame из набора данных размером %s", df.shape)
+                    
+                    # Определяем частоту для передачи в make_timeseries_dataframe
+                    freq_for_df = training_params.get("freq")
+                    
                     tsdf = make_timeseries_dataframe(
                         df=df,
-                        freq=training_params["freq"],
-                        id_column=training_params["id_column"],
-                        timestamp_column=training_params["timestamp_column"],
-                        target_column=training_params["target_column"]
+                        freq=freq_for_df,
+                        id_column=training_params.get("id_column"),
+                        timestamp_column=training_params.get("timestamp_column"),
+                        target_column=training_params.get("target_column")
                     )
-                    logger.info(f"TimeSeriesDataFrame успешно создан, содержит {len(tsdf)} рядов")
                     
                     # Настраиваем гиперпараметры для обучения
                     hyperparameters = {}  # По умолчанию пустой словарь
@@ -522,7 +637,7 @@ def main():
                             else:
                                 training_params["selected_models"] = [model.strip() for model in training_params["selected_models"].split(',')]
                                 
-                        logging.info(f"Исходный список выбранных моделей: {training_params['selected_models']}")
+                        logging.info("Исходный список выбранных моделей: %s", training_params['selected_models'])
                         
                         # Проверяем наличие специального значения "* (все)"
                         if training_params["selected_models"] and "* (все)" in training_params["selected_models"]:
@@ -545,7 +660,7 @@ def main():
                             if valid_selected_models:
                                 # Используем только указанные валидные модели
                                 hyperparameters = {model: {} for model in valid_selected_models}
-                                logging.info(f"Выбраны конкретные модели для обучения: {list(hyperparameters.keys())}")
+                                logging.info("Выбраны конкретные модели для обучения: %s", list(hyperparameters.keys()))
                             else:
                                 # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
                                 hyperparameters = {"DeepAR": {}}
@@ -566,20 +681,44 @@ def main():
                                                                                                   "chronos_tiny", "chronos_mini", "chronos_small", 
                                                                                                   "chronos_base", "chronos_large", "chronos"] else "bolt_small"
                         preset_to_use = chronos_preset
-                        logging.info(f"Используем Chronos модель: {chronos_preset}")
+                        logging.info("Используем Chronos модель: %s", chronos_preset)
+                        
+                        # Важно! Если указаны другие модели, нужно добавить их вместе с Chronos
+                        if training_params["selected_models"] and training_params["selected_models"] != ["Chronos"]:
+                            # Добавляем выбранную Chronos модель в hyperparameters
+                            if not hyperparameters:
+                                hyperparameters = {}
+                            hyperparameters['Chronos'] = {'model_path': chronos_preset}
+                            logging.info("Добавляем Chronos модель к другим выбранным моделям. Всего моделей: %d", len(hyperparameters))
+                        else:
+                            # Если выбрана только Chronos, то настраиваем preset
+                            hyperparameters = {'Chronos': {'model_path': chronos_preset}}
+                            logging.info("Используем только Chronos модель с preset %s", chronos_preset)
                     
                     # Обучаем модель
-                    logger.info(f"Запуск обучения модели с параметрами: {training_params}")
-                    model_path, predictor = train_model(
-                        train_data=tsdf,
-                        prediction_length=training_params["prediction_length"],
-                        model_path=os.path.join(TIMESERIES_MODELS_DIR, training_params["model_name"]),
-                        time_limit=training_params["time_limit"],
-                        eval_metric=training_params["eval_metric"],
-                        hyperparameters=hyperparameters,
-                        preset=preset_to_use,
-                        freq=training_params["freq"]
-                    )
+                    logger.info("Запуск обучения модели с параметрами: %s", training_params)
+                    
+                    # Готовим параметры для вызова train_model
+                    train_params = {
+                        "train_data": tsdf,
+                        "prediction_length": training_params["prediction_length"],
+                        "model_path": os.path.join(TIMESERIES_MODELS_DIR, training_params["model_name"]),
+                        "time_limit": training_params["time_limit"],
+                        "eval_metric": training_params["eval_metric"],
+                        "hyperparameters": hyperparameters,
+                        "preset": preset_to_use
+                    }
+                    
+                    # Проверяем формат частоты, который ожидает TimeSeriesPredictor
+                    valid_freq_formats = ['H', 'D', 'W', 'M', 'Q', 'Y', 'min', '15min', '30min', '1h', 'B']
+                    if training_params.get("freq") and training_params["freq"] in valid_freq_formats:
+                        # Частота уже указана при создании TimeSeriesDataFrame, не нужно снова передавать в train_model
+                        # Если параметр присутствует, удаляем его
+                        if "freq" in train_params:
+                            del train_params["freq"]
+                    
+                    # Вызываем функцию обучения с распакованными параметрами
+                    model_path, predictor = train_model(**train_params)
                     
                     # Получаем метрики модели
                     model_summary = extract_model_metrics(predictor)
@@ -599,7 +738,63 @@ def main():
                     
                     save_model_metadata(training_params["model_name"], metadata)
                     
-                    # Отображаем результат обучения
+                    # Выводим лидерборд моделей
+                    if hasattr(predictor, 'leaderboard') and callable(predictor.leaderboard):
+                        st.subheader("Leaderboard моделей")
+                        leaderboard_df = predictor.leaderboard()
+                        st.dataframe(leaderboard_df)
+                        
+                        # Сохраняем результаты в Excel
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        excel_file = f"reports/training_leaderboard_{training_params['model_name']}_{timestamp}.xlsx"
+                        os.makedirs(os.path.dirname(excel_file), exist_ok=True)
+                        
+                        # Создаем Excel-отчет с результатами обучения
+                        with st.spinner("Сохранение результатов обучения в Excel..."):
+                            try:
+                                # Копируем и преобразуем DataFrame лидерборда для Excel
+                                # Исправляем проблему с преобразованием типов данных
+                                leaderboard_excel = leaderboard_df.copy()
+                                
+                                # Преобразуем все столбцы в строки, чтобы избежать ошибок с типами данных
+                                for col in leaderboard_excel.columns:
+                                    if col == 'model':
+                                        continue  # Пропускаем столбец с именами моделей
+                                    leaderboard_excel[col] = leaderboard_excel[col].astype(str)
+                                
+                                # Сохраняем в Excel
+                                with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+                                    # Сохраняем лидерборд на отдельном листе
+                                    leaderboard_excel.to_excel(writer, sheet_name='Leaderboard', index=True)
+                                    
+                                    # Сохраняем метрики обучения на отдельном листе
+                                    metrics_df = pd.DataFrame([metadata])
+                                    metrics_df.to_excel(writer, sheet_name='Metrics', index=False)
+                                    
+                                    # Если есть информация о тестовых метриках, сохраняем и их
+                                    if 'test_performance' in model_summary:
+                                        test_metrics = model_summary['test_performance']
+                                        test_df = pd.DataFrame(test_metrics, index=[0])
+                                        test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                                        
+                                logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
+                                
+                                # Восстановить кнопку скачивания Excel файла
+                                try:
+                                    with open(excel_file, "rb") as f:
+                                        st.download_button(
+                                            label=f"Скачать отчет Excel с результатами обучения",
+                                            data=f,
+                                            file_name=os.path.basename(excel_file),
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            key="download_training_report"
+                                        )
+                                except Exception as download_err:
+                                    logging.error(f"Ошибка при создании кнопки скачивания: {download_err}", exc_info=True)
+                            except Exception as excel_err:
+                                logging.error(f"Ошибка при сохранении в Excel: {excel_err}", exc_info=True)
+                                st.warning(f"Не удалось сохранить результаты в Excel: {excel_err}")
+                    
                     st.success(f"Модель {training_params['model_name']} успешно обучена и сохранена!")
                     
                     # Показываем метрики модели
@@ -627,10 +822,39 @@ def main():
                     # Предлагаем перейти на страницу прогнозирования
                     st.info("Теперь вы можете перейти на вкладку 'Прогнозирование' для использования модели.")
                     
+                except (ValueError, KeyError, TypeError) as e:
+                    logger.error("Ошибка при обучении модели: %s", str(e))
+                    st.error(f"Ошибка при обучении модели: {str(e)}")
+                    return None
                 except Exception as e:
-                    display_error_message(str(e), title="Ошибка при обучении модели")
-                    logger.error(f"Ошибка при обучении модели: {str(e)}", exc_info=True)
-                    # Не поднимаем ошибку повторно, так как это может вызвать проблемы в Streamlit
+                    logger.error("Неожиданная ошибка при обучении модели: %s", str(e))
+                    st.error(f"Неожиданная ошибка при обучении модели: {str(e)}")
+                    return None
 
 if __name__ == "__main__":
-    run_training()
+    try:
+        # Проверяем, что файл был загружен
+        if "df_train" not in st.session_state or st.session_state.get("df_train") is None:
+            st.warning("Необходимо сначала загрузить данные. Пожалуйста, вернитесь на вкладку 'Загрузка данных'.")
+        else:
+            # Получаем датафрейм из состояния сессии
+            df_train = st.session_state.df_train
+            
+            # Запускаем процесс обучения
+            run_training(df_train)
+    
+    except ValueError as ve:
+        st.error(f"Ошибка валидации данных: {ve}")
+        logging.error("Ошибка валидации данных: %s", ve)
+    except TypeError as te:
+        st.error(f"Ошибка типа данных: {te}")
+        logging.error("Ошибка типа данных: %s", te)
+    except RuntimeError as re:
+        st.error(f"Ошибка выполнения: {re}")
+        logging.error("Ошибка выполнения: %s", re)
+    except KeyError as ke:
+        st.error(f"Ошибка доступа к данным: {ke}")
+        logging.error("Ошибка доступа к данным: %s", ke)
+    except Exception as e:
+        st.error(f"Произошла неожиданная ошибка: {e}")
+        logging.error("Произошла неожиданная ошибка: %s", e, exc_info=True)
