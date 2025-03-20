@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+import plotly.express as px
 
 from app_ui import display_error_message, METRICS_DICT, FREQ_REVERSE_MAPPING
 
@@ -16,7 +17,7 @@ from src.utils.config import (
     MAX_VISUALIZE_POINTS
 )
 from src.models.forecasting import (
-    make_timeseries_dataframe, train_model, extract_model_metrics
+    make_timeseries_dataframe, train_model, extract_model_metrics, forecast, convert_predictions_to_dataframe, get_model_performance
 )
 from src.validation.data_validation import validate_forecasting_data, display_validation_results
 from app_saving import save_model_metadata
@@ -460,7 +461,72 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 # Если частота уже определена в TimeSeriesDataFrame, используем ее
                 train_params["freq"] = tsdf.freq
             
+            # Изменяем настройку гиперпараметров для использования всех моделей
+            if preset_to_use in ["high_quality", "best_quality", "medium_quality", "good_quality", "fast_training", "default"]:
+                # Если используем preset, не нужны ручные гиперпараметры
+                train_params["hyperparameters"] = None
+                logging.info(f"Используем preset '{preset_to_use}' для обучения всех подходящих моделей")
+            elif models and "all" in models:
+                # Если запрошены все модели, передаем пустой словарь
+                train_params["hyperparameters"] = {}
+                logging.info("Используем все доступные модели AutoGluon TimeSeries")
+            
+            # Обучаем модель
             model_path, predictor = train_model(**train_params)
+            
+            # Выполняем прогнозирование на основе обученной модели
+            with st.spinner("Выполняем прогнозирование..."):
+                try:
+                    # Создаем тестовые данные (последние N точек)
+                    train_data_split, test_data = tsdf.train_test_split(prediction_length=horizon)
+                    
+                    # Выполняем прогнозирование
+                    predictions = forecast(predictor, train_data_split)
+                    
+                    # Преобразуем результаты прогноза в DataFrame для отображения
+                    forecast_df = convert_predictions_to_dataframe(predictions)
+                    
+                    # Получаем данные о весах ансамбля, если доступны
+                    ensemble_metrics = get_model_performance(predictor)
+                    if "ensemble_weights" in ensemble_metrics:
+                        ensemble_weights = ensemble_metrics["ensemble_weights"]
+                        ensemble_df = pd.DataFrame({
+                            "model": list(ensemble_weights.keys()),
+                            "weight": list(ensemble_weights.values())
+                        })
+                    else:
+                        ensemble_df = pd.DataFrame(columns=["model", "weight"])
+                    
+                    # Оценка модели на тестовых данных
+                    if test_data is not None:
+                        test_metrics = predictor.evaluate(test_data)
+                        test_df = pd.DataFrame({
+                            "metric": list(test_metrics.keys()), 
+                            "value": list(test_metrics.values())
+                        })
+                    else:
+                        test_df = pd.DataFrame(columns=["metric", "value"])
+                        
+                    # Отображаем результаты прогнозирования
+                    st.subheader("Результаты прогнозирования")
+                    st.dataframe(forecast_df.head(20))
+                    
+                    # Строим график прогноза
+                    st.subheader("График прогноза")
+                    try:
+                        # Получаем один временной ряд для примера графика
+                        sample_item_id = forecast_df["item_id"].iloc[0]
+                        sample_forecast = forecast_df[forecast_df["item_id"] == sample_item_id]
+                        
+                        # Строим график
+                        fig = px.line(sample_forecast, x="timestamp", y="target", title=f"Прогноз для {sample_item_id}")
+                        st.plotly_chart(fig)
+                    except Exception as plot_err:
+                        logging.error(f"Ошибка при построении графика: {plot_err}", exc_info=True)
+                    
+                except Exception as pred_err:
+                    logging.error(f"Ошибка при прогнозировании: {pred_err}", exc_info=True)
+                    st.error(f"Не удалось выполнить прогнозирование: {pred_err}")
             
             # Получаем метрики модели
             model_summary = extract_model_metrics(predictor)
@@ -496,11 +562,18 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                     try:
                         # Запись данных в Excel
                         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-                            st.dataframe(leaderboard_df)
+                            # Сохраняем лидерборд
                             leaderboard_df.to_excel(writer, sheet_name='Leaderboard', index=False)
-                            forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
-                            ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
-                            test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                            
+                            # Проверяем наличие переменных перед сохранением
+                            if 'forecast_df' in locals() and not forecast_df.empty:
+                                forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
+                            
+                            if 'ensemble_df' in locals() and not ensemble_df.empty:
+                                ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
+                            
+                            if 'test_df' in locals() and not test_df.empty:
+                                test_df.to_excel(writer, sheet_name='Test Performance', index=False)
                                 
                         logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
                         
@@ -771,10 +844,64 @@ def main():
                     # Вызываем функцию обучения с распакованными параметрами
                     model_path, predictor = train_model(**train_params)
                     
+                    # Выполняем прогнозирование на основе обученной модели
+                    with st.spinner("Выполняем прогнозирование..."):
+                        try:
+                            # Создаем тестовые данные (последние N точек)
+                            train_data_split, test_data = tsdf.train_test_split(prediction_length=training_params["prediction_length"])
+                            
+                            # Выполняем прогнозирование
+                            predictions = forecast(predictor, train_data_split)
+                            
+                            # Преобразуем результаты прогноза в DataFrame для отображения
+                            forecast_df = convert_predictions_to_dataframe(predictions)
+                            
+                            # Получаем данные о весах ансамбля, если доступны
+                            ensemble_metrics = get_model_performance(predictor)
+                            if "ensemble_weights" in ensemble_metrics:
+                                ensemble_weights = ensemble_metrics["ensemble_weights"]
+                                ensemble_df = pd.DataFrame({
+                                    "model": list(ensemble_weights.keys()),
+                                    "weight": list(ensemble_weights.values())
+                                })
+                            else:
+                                ensemble_df = pd.DataFrame(columns=["model", "weight"])
+                            
+                            # Оценка модели на тестовых данных
+                            if test_data is not None:
+                                test_metrics = predictor.evaluate(test_data)
+                                test_df = pd.DataFrame({
+                                    "metric": list(test_metrics.keys()), 
+                                    "value": list(test_metrics.values())
+                                })
+                            else:
+                                test_df = pd.DataFrame(columns=["metric", "value"])
+                                
+                            # Отображаем результаты прогнозирования
+                            st.subheader("Результаты прогнозирования")
+                            st.dataframe(forecast_df.head(20))
+                            
+                            # Строим график прогноза
+                            st.subheader("График прогноза")
+                            try:
+                                # Получаем один временной ряд для примера графика
+                                sample_item_id = forecast_df["item_id"].iloc[0]
+                                sample_forecast = forecast_df[forecast_df["item_id"] == sample_item_id]
+                                
+                                # Строим график
+                                fig = px.line(sample_forecast, x="timestamp", y="target", title=f"Прогноз для {sample_item_id}")
+                                st.plotly_chart(fig)
+                            except Exception as plot_err:
+                                logging.error(f"Ошибка при построении графика: {plot_err}", exc_info=True)
+                            
+                        except Exception as pred_err:
+                            logging.error(f"Ошибка при прогнозировании: {pred_err}", exc_info=True)
+                            st.error(f"Не удалось выполнить прогнозирование: {pred_err}")
+                    
                     # Получаем метрики модели
                     model_summary = extract_model_metrics(predictor)
                     
-                    # Сохраняем метаданные модели
+                    # Сохраняем модель и метаданные
                     metadata = {
                         "model_path": model_path,
                         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -805,12 +932,19 @@ def main():
                             try:
                                 # Запись данных в Excel
                                 with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-                                    st.dataframe(leaderboard_df)
+                                    # Сохраняем лидерборд
                                     leaderboard_df.to_excel(writer, sheet_name='Leaderboard', index=False)
-                                    forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
-                                    ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
-                                    test_df.to_excel(writer, sheet_name='Test Performance', index=False)
-                                        
+                                    
+                                    # Проверяем наличие переменных перед сохранением
+                                    if 'forecast_df' in locals() and not forecast_df.empty:
+                                        forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
+                                    
+                                    if 'ensemble_df' in locals() and not ensemble_df.empty:
+                                        ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
+                                    
+                                    if 'test_df' in locals() and not test_df.empty:
+                                        test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                                    
                                 logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
                                 
                                 # Восстановить кнопку скачивания Excel файла
@@ -828,34 +962,34 @@ def main():
                             except Exception as excel_err:
                                 logging.error(f"Ошибка при сохранении в Excel: {excel_err}", exc_info=True)
                                 st.warning(f"Не удалось сохранить результаты в Excel: {excel_err}")
-                    
-                    st.success(f"Модель {training_params['model_name']} успешно обучена и сохранена!")
-                    
-                    # Показываем метрики модели
-                    st.subheader("Информация об обученной модели:")
-                    
-                    # Если есть таблица лидеров, показываем её
-                    if "leaderboard" in model_summary:
-                        st.dataframe(model_summary["leaderboard"])
-                    elif "model_info" in model_summary:
-                        # Показываем базовую информацию о модели
-                        st.write("### Основная информация о модели")
-                        info = model_summary["model_info"]
-                        for key, value in info.items():
-                            st.write(f"**{key}**: {value}")
                         
-                        if "note" in model_summary:
-                            st.info(model_summary["note"])
-                    
-                    # Если есть информация о производительности, показываем её
-                    if "performance" in model_summary:
-                        st.write("### Общая производительность")
-                        for metric, value in model_summary["performance"].items():
-                            st.metric(label=metric, value=f"{value:.4f}")
-                    
-                    # Предлагаем перейти на страницу прогнозирования
-                    st.info("Теперь вы можете перейти на вкладку 'Прогнозирование' для использования модели.")
-                    
+                        st.success(f"Модель {training_params['model_name']} успешно обучена и сохранена!")
+                        
+                        # Показываем метрики модели
+                        st.subheader("Информация об обученной модели:")
+                        
+                        # Если есть таблица лидеров, показываем её
+                        if "leaderboard" in model_summary:
+                            st.dataframe(model_summary["leaderboard"])
+                        elif "model_info" in model_summary:
+                            # Показываем базовую информацию о модели
+                            st.write("### Основная информация о модели")
+                            info = model_summary["model_info"]
+                            for key, value in info.items():
+                                st.write(f"**{key}**: {value}")
+                            
+                            if "note" in model_summary:
+                                st.info(model_summary["note"])
+                        
+                        # Если есть информация о производительности, показываем её
+                        if "performance" in model_summary:
+                            st.write("### Общая производительность")
+                            for metric, value in model_summary["performance"].items():
+                                st.metric(label=metric, value=f"{value:.4f}")
+                        
+                        # Предлагаем перейти на страницу прогнозирования
+                        st.info("Теперь вы можете перейти на вкладку 'Прогнозирование' для использования модели.")
+                        
                 except (ValueError, KeyError, TypeError) as e:
                     logger.error("Ошибка при обучении модели: %s", str(e))
                     st.error(f"Ошибка при обучении модели: {str(e)}")

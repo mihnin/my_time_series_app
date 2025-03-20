@@ -70,7 +70,7 @@ def run_prediction():
                     # Имитация результатов (замените на реальный код)
                     results = {
                         "forecast": pd.DataFrame({
-                            "date": pd.date_range(start=datetime.datetime.now(), periods=horizon, freq="D"),
+                            "date": pd.date_range(start=datetime.datetime.now(), periods=horizon, freq='D'),
                             "value": np.random.randn(horizon).cumsum() + 100
                         }),
                         "best_model": "DeepAR",
@@ -93,6 +93,7 @@ def run_prediction():
                 
             except Exception as e:
                 st.error(f"Ошибка при прогнозировании: {e}")
+                
         else:
             # Если прогноз уже выполнен ранее и результаты есть в кэше, отображаем их
             if "prediction_results" in st.session_state:
@@ -108,4 +109,4 @@ if __name__ == "__main__":
     st.title("Прогнозирование временных рядов с AutoGluon")
     
     # Запуск основной функции
-    run_prediction() 
+    run_prediction()

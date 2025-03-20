@@ -218,7 +218,18 @@ def get_model_performance(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
             except Exception as e:
                 logging.warning(f"Не удалось извлечь веса ансамбля: {e}")
         
-        return {'leaderboard': leaderboard}
+        # Если смогли получить leaderboard, обрабатываем его
+        # Преобразуем DataFrame в словарь для сериализации в JSON
+        leaderboard_dict = {}
+        for model_name in leaderboard.index:
+            leaderboard_dict[model_name] = {
+                col: float(leaderboard.loc[model_name, col]) 
+                if isinstance(leaderboard.loc[model_name, col], (int, float, np.number)) 
+                else str(leaderboard.loc[model_name, col])
+                for col in leaderboard.columns
+            }
+        
+        return {'leaderboard': leaderboard_dict}
     except Exception as e:
         logging.error(f"Ошибка при получении метрик производительности: {e}")
         return {'error': str(e)}
@@ -509,29 +520,11 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
                 else:
                     # Другая ошибка - пробрасываем дальше
                     raise e
-            
-            # Если смогли получить leaderboard, обрабатываем его
-            # Преобразуем DataFrame в словарь для сериализации в JSON
-            leaderboard_dict = {}
-            for model_name in leaderboard.index:
-                leaderboard_dict[model_name] = {
-                    col: float(leaderboard.loc[model_name, col]) 
-                    if isinstance(leaderboard.loc[model_name, col], (int, float, np.number)) 
-                    else str(leaderboard.loc[model_name, col])
-                    for col in leaderboard.columns
-                }
-            
-            metrics["leaderboard"] = leaderboard_dict
-            
-            # Получаем лучшую модель и метрику
-            best_model = leaderboard.index[0]
-            best_score = float(leaderboard.iloc[0][predictor.eval_metric])
-            metrics["best_model"] = best_model
-            metrics["best_score"] = best_score
-            
-            # Добавляем метрику и направление оптимизации (меньше/больше - лучше)
-            metrics["eval_metric"] = predictor.eval_metric
-            metrics["higher_is_better"] = predictor.higher_is_better
+            except Exception as err:
+                # Перехватываем ошибки, связанные с изменениями в API автоглюона
+                logging.error(f"Ошибка при извлечении метрик модели: {err}")
+                metrics["error"] = str(err)
+                return metrics
         
         # Получаем информацию о составе ансамбля, если доступна
         try:
@@ -562,6 +555,29 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
                         metrics["models_hyperparameters"] = hyperparams
         except Exception as hp_err:
             logging.warning(f"Не удалось извлечь гиперпараметры моделей: {hp_err}")
+        
+        # Если смогли получить leaderboard, обрабатываем его
+        # Преобразуем DataFrame в словарь для сериализации в JSON
+        leaderboard_dict = {}
+        for model_name in leaderboard.index:
+            leaderboard_dict[model_name] = {
+                col: float(leaderboard.loc[model_name, col]) 
+                if isinstance(leaderboard.loc[model_name, col], (int, float, np.number)) 
+                else str(leaderboard.loc[model_name, col])
+                for col in leaderboard.columns
+            }
+        
+        metrics["leaderboard"] = leaderboard_dict
+        
+        # Получаем лучшую модель и метрику
+        best_model = leaderboard.index[0]
+        best_score = float(leaderboard.iloc[0][predictor.eval_metric])
+        metrics["best_model"] = best_model
+        metrics["best_score"] = best_score
+        
+        # Добавляем метрику и направление оптимизации (меньше/больше - лучше)
+        metrics["eval_metric"] = predictor.eval_metric
+        metrics["higher_is_better"] = predictor.higher_is_better
         
         return metrics
         
