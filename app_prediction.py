@@ -24,6 +24,11 @@ def run_prediction():
             st.warning("Необходимо сначала загрузить данные.")
             return
         
+        # Проверяем наличие обученной модели
+        if "predictor" not in st.session_state or st.session_state.get("predictor") is None:
+            st.error("Необходимо сначала обучить модель.")
+            return
+        
         # Получаем данные из состояния сессии (из df_train или df)
         if "df_train" in st.session_state and st.session_state.get("df_train") is not None:
             df_train = st.session_state.df_train
@@ -32,16 +37,18 @@ def run_prediction():
             # Сохраняем под правильным ключом для совместимости
             st.session_state["df_train"] = df_train
         
+        # Получаем предиктор из состояния сессии
+        predictor = st.session_state.get("predictor")
+        
         # Настраиваем параметры прогнозирования
         st.subheader("Параметры прогнозирования")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            horizon = st.number_input("Горизонт прогнозирования (периоды)", min_value=1, value=10)
-            freq = st.selectbox("Частота данных", 
-                               options=["auto", "D", "W", "M", "Q", "Y"], 
-                               index=0)
+            # Используем сохраненный горизонт прогнозирования, если доступен
+            default_horizon = st.session_state.get("prediction_length", 10)
+            horizon = st.number_input("Горизонт прогнозирования (периоды)", min_value=1, value=default_horizon)
         
         with col2:
             eval_metric = st.selectbox("Метрика оценки", 

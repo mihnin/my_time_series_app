@@ -499,72 +499,55 @@ def get_valid_models() -> list:
 
 def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predictions=None) -> Dict[str, Any]:
     """
-    Извлекает и форматирует метрики модели из обученного предиктора.
+    Извлекает метрики модели и информацию о лучшей модели.
     
     Parameters:
     -----------
     predictor : TimeSeriesPredictor
-        Обученный TimeSeriesPredictor
-    test_data : TimeSeriesDataFrame, опционально
-        Тестовые данные для оценки моделей
-    predictions : TimeSeriesDataFrame, опционально
-        Предсказания моделей на тестовых данных
+        Обученный предиктор AutoGluon
+    test_data : TimeSeriesDataFrame, optional
+        Тестовые данные для оценки
+    predictions : object, optional
+        Предсказания модели
         
     Returns:
     --------
-    Dict[str, Any]
-        Словарь с метриками производительности и информацией о моделях
+    Dict
+        Словарь с метриками модели
     """
-    try:
-        metrics = {}
-        
-        # Базовая информация о модели
-        model_info = {
+    metrics = {
+        "model_info": {
             "prediction_length": predictor.prediction_length,
-            "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
-            "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown",
-            "quantile_levels": predictor.quantile_levels if hasattr(predictor, 'quantile_levels') else [0.1, 0.5, 0.9],
-            "model_count": len(predictor.model_names()) if hasattr(predictor, 'model_names') and callable(predictor.model_names) else 0
+            "freq": str(predictor.freq),
+            "eval_metric": predictor.eval_metric
         }
-        
-        # Информация о всех моделях в предикторе
-        if hasattr(predictor, 'model_names') and callable(predictor.model_names):
-            try:
-                model_names = predictor.model_names()
-                model_info["models"] = list(model_names)
-                logging.info(f"Обученные модели: {model_names}")
-            except Exception as e:
-                logging.warning(f"Не удалось получить список моделей: {e}")
-                model_info["models"] = []
-        
-        metrics["model_info"] = model_info
-        
+    }
+    
+    try:
         # Получаем таблицу лидеров
-        if hasattr(predictor, 'leaderboard') and callable(predictor.leaderboard):
-            try:
-                # Если есть тестовые данные и предсказания, используем их для получения полной таблицы лидеров
-                if test_data is not None and predictions is not None:
-                    logging.info("Получение таблицы лидеров с тестовыми данными и предсказаниями")
-                    leaderboard = predictor.leaderboard(data=test_data, predictions=predictions, extra_info=True)
-                else:
-                    # Пробуем получить leaderboard стандартным способом
-                    logging.info("Получение базовой таблицы лидеров без тестовых данных")
-                    leaderboard = predictor.leaderboard(extra_info=True)
-            except TypeError as e:
-                if "missing 1 required positional argument: 'predictions'" in str(e):
-                    # Если требуется predictions, значит у нас нет их пока - возвращаем базовую информацию
-                    logging.warning("Не удалось получить полную таблицу лидеров: требуются predictions. "
-                                   "Будет возвращена только базовая информация о модели.")
-                    metrics["note"] = "Для получения полных метрик необходимо сначала выполнить прогноз"
-                    return metrics
-                else:
-                    # Другая ошибка - пробрасываем дальше
-                    raise e
-            except Exception as err:
-                # Перехватываем ошибки, связанные с изменениями в API автоглюона
-                logging.error(f"Ошибка при извлечении метрик модели: {err}")
-                metrics["error"] = str(err)
+        try:
+            if test_data is not None and predictions is not None:
+                logging.info("Получение таблицы лидеров с тестовыми данными и предсказаниями")
+                leaderboard = predictor.leaderboard(test_data, predictions, extra_info=True)
+            else:
+                # Пробуем получить leaderboard стандартным способом
+                logging.info("Получение базовой таблицы лидеров без тестовых данных")
+                leaderboard = predictor.leaderboard(extra_info=True)
+        except TypeError as e:
+            if "missing 1 required positional argument: 'predictions'" in str(e):
+                # Если требуется predictions, значит у нас нет их пока - возвращаем базовую информацию
+                logging.warning("Не удалось получить полную таблицу лидеров: требуются predictions. "
+                            "Будет возвращена только базовая информация о модели.")
+                metrics["note"] = "Для получения полных метрик необходимо сначала выполнить прогноз"
                 return metrics
+            else:
+                # Другая ошибка - пробрасываем дальше
+                raise e
+        except Exception as err:
+            # Перехватываем ошибки, связанные с изменениями в API автоглюона
+            logging.error(f"Ошибка при извлечении метрик модели: {err}")
+            metrics["error"] = str(err)
+            return metrics
         
         # Получаем информацию о составе ансамбля, если доступна
         try:
@@ -628,6 +611,94 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
             "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
             "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown"
         }}
+
+def get_model_performance(predictor):
+    """
+    Получает информацию о производительности модели и весах ансамбля, если доступно.
+    
+    Parameters:
+    -----------
+    predictor : TimeSeriesPredictor
+        Обученный предиктор AutoGluon
+        
+    Returns:
+    --------
+    Dict
+        Словарь с информацией о производительности модели и весах ансамбля
+    """
+    result = {}
+    
+    try:
+        # Сначала пытаемся получить лидерборд
+        if hasattr(predictor, 'leaderboard') and callable(predictor.leaderboard):
+            try:
+                leaderboard = predictor.leaderboard(extra_info=True)
+                result["leaderboard"] = leaderboard
+                
+                # Находим лучшую модель
+                best_model_name = leaderboard.index[0]
+                result["best_model_name"] = best_model_name
+                
+                # Если это ансамбль, пытаемся извлечь веса
+                if "Ensemble" in best_model_name or "WeightedEnsemble" in best_model_name:
+                    ensemble_weights = {}
+                    
+                    # Метод 1: Через get_model или get_fitted_model
+                    try:
+                        # Пытаемся получить модель разными способами
+                        if hasattr(predictor, 'get_model'):
+                            ensemble_model = predictor.get_model(best_model_name)
+                        elif hasattr(predictor, 'get_fitted_model'):
+                            ensemble_model = predictor.get_fitted_model(best_model_name)
+                        else:
+                            ensemble_model = None
+                            
+                        if ensemble_model:
+                            # Пытаемся получить веса разными способами
+                            if hasattr(ensemble_model, 'weights_'):
+                                ensemble_weights = ensemble_model.weights_
+                            elif hasattr(ensemble_model, 'model_weights'):
+                                ensemble_weights = ensemble_model.model_weights
+                            elif hasattr(ensemble_model, 'weights'):
+                                ensemble_weights = ensemble_model.weights
+                            # Для более новых версий AutoGluon
+                            elif hasattr(ensemble_model, 'model_base_ensemble') and hasattr(ensemble_model.model_base_ensemble, 'weights'):
+                                ensemble_weights = ensemble_model.model_base_ensemble.weights
+                    except Exception as e:
+                        logging.warning(f"Не удалось получить веса ансамбля через модель: {e}")
+                    
+                    # Метод 2: Через trainer
+                    if not ensemble_weights and hasattr(predictor, '_trainer'):
+                        try:
+                            if hasattr(predictor._trainer, '_get_best_model'):
+                                model = predictor._trainer._get_best_model()
+                                if hasattr(model, 'weights'):
+                                    ensemble_weights = model.weights
+                            elif hasattr(predictor._trainer, 'model_weights'):
+                                ensemble_weights = predictor._trainer.model_weights
+                        except Exception as e:
+                            logging.warning(f"Не удалось получить веса ансамбля через trainer: {e}")
+                    
+                    # Сохраняем веса ансамбля
+                    if ensemble_weights:
+                        result["ensemble_weights"] = ensemble_weights
+            except Exception as e:
+                logging.warning(f"Ошибка при получении leaderboard: {e}")
+        
+        # Получаем информацию о модели
+        model_info = {}
+        if hasattr(predictor, 'get_info') and callable(predictor.get_info):
+            try:
+                model_info = predictor.get_info()
+            except Exception as e:
+                logging.warning(f"Ошибка при получении информации о модели: {e}")
+        
+        result["model_info"] = model_info
+        
+        return result
+    except Exception as e:
+        logging.error(f"Ошибка при получении информации о производительности модели: {e}")
+        return {"error": str(e)}
 
 # Константы для локальных путей к моделям Chronos/Bolt
 CHRONOS_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "chronos")
