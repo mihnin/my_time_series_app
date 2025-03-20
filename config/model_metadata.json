@@ -124,5 +124,26 @@
                 "eval_metric": "MAE"
             }
         }
+    },
+    "autogluon_model_20250320_112519": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_112519",
+        "created_at": "2025-03-20 11:25:48",
+        "prediction_length": 2,
+        "time_limit": 600,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "None",
+        "metrics": {
+            "error": "`get_model_names` has been deprecated and will be removed in version 1.2. Please use `model_names` instead",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "D",
+                "eval_metric": "MAE"
+            }
+        }
     }
 }
