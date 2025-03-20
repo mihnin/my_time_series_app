@@ -330,103 +330,62 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
         
         # Настройка гиперпараметров и модели
         preset_to_use = "medium_quality" if time_limit > 600 else "fast_training"
-        hyperparameters = {}  # По умолчанию пустой словарь
-
-        if models:
-            # Преобразуем строку моделей в список, если нужно
-            if isinstance(models, str):
-                if models == "all":
-                    # Если выбрано "все модели", создаем словарь для всех доступных моделей
-                    all_models = {
-                        # Базовые модели
-                        "Naive": {},
-                        "SeasonalNaive": {},
-                        "Average": {},
-                        "SeasonalAverage": {},
-                        "Zero": {},
-                        # Статистические модели
-                        "ETS": {},
-                        "AutoETS": {},
-                        "AutoARIMA": {},
-                        "AutoCES": {},
-                        "Theta": {},
-                        "NPTS": {},
-                        # Глубокие обучающие модели
-                        "DeepAR": {},
-                        "DLinear": {},
-                        "PatchTST": {},
-                        "SimpleFeedForward": {},
-                        "TemporalFusionTransformer": {},
-                        "TiDE": {},
-                        "WaveNet": {},
-                        # Табличные модели
-                        "DirectTabular": {},
-                        "RecursiveTabular": {}
-                    }
-                    
-                    # Если используется Chronos, добавляем его
-                    if use_chronos:
-                        # Используем переданную модель Chronos или bolt_small по умолчанию
-                        chronos_preset = chronos_model if chronos_model in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
-                                                                        "chronos_tiny", "chronos_mini", "chronos_small", 
-                                                                        "chronos_base", "chronos_large", "chronos"] else "bolt_small"
-                        all_models["Chronos"] = {'model_path': chronos_preset}
-                        logging.info(f"Добавлена Chronos модель {chronos_preset} в список всех моделей")
-                    
-                    hyperparameters = all_models
-                    logging.info(f"Выбраны все модели (* (все)), будет использоваться {len(hyperparameters)} моделей")
-                    use_chronos = False  # Отключаем отдельную обработку Chronos, так как она уже добавлена
-                else:
-                    models = [model.strip() for model in models.split(',')]
-            
-            logging.info("Исходный список выбранных моделей: %s", models)
-            
-            # Проверяем, есть ли в списке действительные модели AutoGluon
-            if models:
-                valid_models = [
-                    'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
-                    'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
-                    'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
-                    'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
-                ]
-                
-                # Фильтруем только действительные модели
-                valid_selected_models = [model for model in models if model in valid_models]
-                
-                if valid_selected_models:
-                    # Используем только указанные валидные модели
-                    hyperparameters = {model: {} for model in valid_selected_models}
-                    logging.info("Выбраны конкретные модели для обучения: %s", list(hyperparameters.keys()))
-                else:
-                    # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
-                    hyperparameters = {"DeepAR": {}}
-                    logging.warning("Нет действительных моделей в выборе, используем DeepAR как дефолтную модель")
-        else:
-                # Если список моделей пуст, передаем пустой hyperparameters
-                # forecasting.train_model() обработает этот случай
-                hyperparameters = {}
-                logging.info("Список моделей пуст, для предотвращения ошибок будет использоваться модель по умолчанию")
         
-        # Обрабатываем chronos модели, если включены
-        if use_chronos and chronos_model:
-            # Используем переданную модель Chronos или bolt_small по умолчанию
-            chronos_preset = chronos_model if chronos_model in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
-                                                              "chronos_tiny", "chronos_mini", "chronos_small", 
-                                                              "chronos_base", "chronos_large", "chronos"] else "bolt_small"
-            preset_to_use = chronos_preset
-            logging.info("Используем Chronos модель: %s", chronos_preset)
+        # По умолчанию используем "default" для активации всех моделей
+        hyperparameters = "default"
+        
+        # Если указано значение hyperparameters="default", используем его напрямую
+        if models and isinstance(models, list) and "default" in models:
+            logging.info("Используется параметр hyperparameters='default' для включения всех доступных моделей")
+            hyperparameters = "default"
+        # Также проверяем, есть ли среди моделей "* (все)" или "all"
+        elif models and isinstance(models, list) and ("* (все)" in models or "all" in models):
+            logging.info("Используется параметр hyperparameters='default' для включения всех доступных моделей через '* (все)'")
+            hyperparameters = "default"
+        elif models:
+            # Если в models передан список конкретных моделей, проверяем их
+            valid_models = [
+                'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
+                'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
+                'DLinear', 'TiDE', 'TemporalFusionTransformer', 'Naive', 
+                'SeasonalNaive', 'Average', 'SeasonalAverage', 'Chronos'
+            ]
             
-            # Важно! Если указаны другие модели, нужно добавить их вместе с Chronos
-            if models and models != ["Chronos"]:
-                # Добавляем выбранную Chronos модель в hyperparameters
-                if not hyperparameters:
-                    hyperparameters = {}
-                hyperparameters['Chronos'] = {'model_path': chronos_preset}
-                logging.info("Добавляем Chronos модель к другим выбранным моделям. Всего моделей: %d", len(hyperparameters))
+            # Фильтруем список моделей, оставляя только действительные
+            if isinstance(models, list):
+                selected_models = [model for model in models if model in valid_models]
+                
+                if selected_models:
+                    # Используем только указанные модели, создавая словарь с пустыми настройками
+                    hyperparameters = {model: {} for model in selected_models}
+                    logging.info(f"Используются конкретные модели: {selected_models}")
+                else:
+                    # Если нет действительных моделей, используем "default"
+                    hyperparameters = "default"
+                    logging.info("В выборе нет действительных моделей, используется hyperparameters='default'")
+        
+        # Обработка Chronos отдельно
+        if use_chronos:
+            chronos_preset = chronos_model if chronos_model in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
+                                                                "chronos_tiny", "chronos_mini", "chronos_small", 
+                                                                "chronos_base", "chronos_large", "chronos"] else "bolt_small"
+            
+            if hyperparameters == "default":
+                # Если используем default, создаем словарь с одной моделью Chronos
+                logging.info(f"Используется Chronos модель {chronos_preset} вместе с default гиперпараметрами")
             else:
-                # Если выбрана только Chronos, то настраиваем preset
-                hyperparameters = {'Chronos': {'model_path': chronos_preset}}
-                logging.info("Используем только Chronos модель с preset %s", chronos_preset)
+                # Если уже есть словарь моделей, добавляем к нему Chronos
+                if isinstance(hyperparameters, dict):
+                    hyperparameters['Chronos'] = {'model_path': chronos_preset}
+                    logging.info(f"Добавлена Chronos модель {chronos_preset} к существующим моделям")
+                else:
+                    # Если hyperparameters не словарь (возможно строка "default"), переопределяем его
+                    hyperparameters = {'Chronos': {'model_path': chronos_preset}}
+                    logging.info(f"Используется только модель Chronos ({chronos_preset})")
+        
+        # Логируем финальные параметры
+        logging.info(f"Финальное значение hyperparameters: {hyperparameters}")
+        logging.info(f"Используемый preset: {preset_to_use}")
         
         # Определяем путь для сохранения модели
         model_name = f"autogluon_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -462,14 +421,14 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 train_params["freq"] = tsdf.freq
             
             # Изменяем настройку гиперпараметров для использования всех моделей
-            if preset_to_use in ["high_quality", "best_quality", "medium_quality", "good_quality", "fast_training", "default"]:
-                # Если используем preset, не нужны ручные гиперпараметры
-                train_params["hyperparameters"] = None
-                logging.info(f"Используем preset '{preset_to_use}' для обучения всех подходящих моделей")
+            if preset_to_use in ["high_quality", "best_quality", "medium_quality", "good_quality", "fast_training"]:
+                # Если используем preset, устанавливаем hyperparameters="default"
+                train_params["hyperparameters"] = "default"
+                logging.info(f"Используем preset '{preset_to_use}' с hyperparameters='default' для обучения всех подходящих моделей")
             elif models and "all" in models:
-                # Если запрошены все модели, передаем пустой словарь
-                train_params["hyperparameters"] = {}
-                logging.info("Используем все доступные модели AutoGluon TimeSeries")
+                # Если запрошены все модели без пресета, используем hyperparameters="default"
+                train_params["hyperparameters"] = "default"
+                logging.info("Используем hyperparameters='default' для активации всех доступных моделей AutoGluon TimeSeries")
             
             # Обучаем модель
             model_path, predictor = train_model(**train_params)
@@ -721,56 +680,13 @@ def main():
                     hyperparameters = {}  # По умолчанию пустой словарь
 
                     if training_params["selected_models"]:
-                        # Преобразуем строку моделей в список, если нужно
-                        if isinstance(training_params["selected_models"], str):
-                            if training_params["selected_models"] == "all":
-                                # Если выбрано "все модели", создаем словарь для всех доступных моделей
-                                all_models = {
-                                    # Базовые модели
-                                    "Naive": {},
-                                    "SeasonalNaive": {},
-                                    "Average": {},
-                                    "SeasonalAverage": {},
-                                    "Zero": {},
-                                    # Статистические модели
-                                    "ETS": {},
-                                    "AutoETS": {},
-                                    "AutoARIMA": {},
-                                    "AutoCES": {},
-                                    "Theta": {},
-                                    "NPTS": {},
-                                    # Глубокие обучающие модели
-                                    "DeepAR": {},
-                                    "DLinear": {},
-                                    "PatchTST": {},
-                                    "SimpleFeedForward": {},
-                                    "TemporalFusionTransformer": {},
-                                    "TiDE": {},
-                                    "WaveNet": {},
-                                    # Табличные модели
-                                    "DirectTabular": {},
-                                    "RecursiveTabular": {}
-                                }
-                                
-                                # Если используется Chronos, добавляем его
-                                if training_params["use_gpu"] and training_params["preset"] == "chronos":
-                                    # Используем переданную модель Chronos или bolt_small по умолчанию
-                                    chronos_preset = training_params["preset"] if training_params["preset"] in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
-                                                                                                      "chronos_tiny", "chronos_mini", "chronos_small", 
-                                                                                                      "chronos_base", "chronos_large", "chronos"] else "bolt_small"
-                                    all_models["Chronos"] = {'model_path': chronos_preset}
-                                    logging.info(f"Добавлена Chronos модель {chronos_preset} в список всех моделей")
-                                
-                                hyperparameters = all_models
-                                logging.info(f"Выбраны все модели (* (все)), будет использоваться {len(hyperparameters)} моделей")
-                                training_params["selected_models"] = []  # Отключаем отдельную обработку Chronos, так как она уже добавлена
-                            else:
-                                training_params["selected_models"] = [model.strip() for model in training_params["selected_models"].split(',')]
-                                
-                        logging.info("Исходный список выбранных моделей: %s", training_params['selected_models'])
-                        
-                        # Проверяем, есть ли в списке действительные модели AutoGluon
-                        if training_params["selected_models"]:
+                        # Проверяем, есть ли "all" или "* (все)" в списке моделей
+                        if "* (все)" in training_params["selected_models"] or "all" in training_params["selected_models"]:
+                            # Используем "default" для включения всех доступных моделей
+                            hyperparameters = "default"
+                            logging.info("Выбраны все модели (* (все)), используем hyperparameters='default'")
+                        else:
+                            # Если выбраны конкретные модели
                             valid_models = [
                                 'DeepAR', 'ARIMA', 'AutoARIMA', 'AutoETS', 'ETS', 'Theta', 
                                 'DirectTabular', 'RecursiveTabular', 'NPTS', 'PatchTST', 
@@ -786,14 +702,24 @@ def main():
                                 hyperparameters = {model: {} for model in valid_selected_models}
                                 logging.info("Выбраны конкретные модели для обучения: %s", list(hyperparameters.keys()))
                             else:
-                                # Если нет действительных моделей в выборе, используем DeepAR как дефолтную
-                                hyperparameters = {"DeepAR": {}}
-                                logging.warning("Нет действительных моделей в выборе, используем DeepAR как дефолтную модель")
-                        else:
-                            # Если список моделей пуст, передаем пустой hyperparameters
-                            # forecasting.train_model() обработает этот случай
-                            hyperparameters = {}
-                            logging.info("Список моделей пуст, для предотвращения ошибок будет использоваться модель по умолчанию")
+                                # Если нет действительных моделей в выборе, используем "default"
+                                hyperparameters = "default"
+                                logging.warning("Нет действительных моделей в выборе, используем hyperparameters='default'")
+                    else:
+                        # Если список моделей пуст, используем "default"
+                        hyperparameters = "default"
+                        logging.info("Список моделей пуст, используем hyperparameters='default'")
+                    
+                    # Готовим параметры для вызова train_model
+                    train_params = {
+                        "train_data": tsdf,
+                        "prediction_length": training_params["prediction_length"],
+                        "model_path": os.path.join(TIMESERIES_MODELS_DIR, training_params["model_name"]),
+                        "time_limit": training_params["time_limit"],
+                        "eval_metric": training_params["eval_metric"],
+                        "hyperparameters": hyperparameters,
+                        "preset": training_params["preset"]
+                    }
                     
                     # Настройка пресета
                     preset_to_use = "medium_quality" if training_params["time_limit"] > 600 else "fast_training"
@@ -821,25 +747,6 @@ def main():
                     
                     # Обучаем модель
                     logger.info("Запуск обучения модели с параметрами: %s", training_params)
-                    
-                    # Готовим параметры для вызова train_model
-                    train_params = {
-                        "train_data": tsdf,
-                        "prediction_length": training_params["prediction_length"],
-                        "model_path": os.path.join(TIMESERIES_MODELS_DIR, training_params["model_name"]),
-                        "time_limit": training_params["time_limit"],
-                        "eval_metric": training_params["eval_metric"],
-                        "hyperparameters": hyperparameters,
-                        "preset": preset_to_use
-                    }
-                    
-                    # Проверяем формат частоты, который ожидает TimeSeriesPredictor
-                    valid_freq_formats = ['H', 'D', 'W', 'M', 'Q', 'Y', 'min', '15min', '30min', '1h', 'B']
-                    if training_params.get("freq") and training_params["freq"] in valid_freq_formats:
-                        # Частота уже указана при создании TimeSeriesDataFrame, не нужно снова передавать в train_model
-                        # Если параметр присутствует, удаляем его
-                        if "freq" in train_params:
-                            del train_params["freq"]
                     
                     # Вызываем функцию обучения с распакованными параметрами
                     model_path, predictor = train_model(**train_params)

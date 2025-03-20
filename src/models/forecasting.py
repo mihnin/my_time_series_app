@@ -1,11 +1,13 @@
 import os
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import logging
 from pathlib import Path
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 import pandas as pd
 import numpy as np
+import tempfile
+import time
 
 def make_timeseries_dataframe(df, static_features=None, freq='D', id_column=None, timestamp_column=None, target_column=None):
     """
@@ -195,30 +197,53 @@ def get_model_performance(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
         Словарь с метриками производительности моделей.
     """
     try:
-        if not hasattr(predictor, 'leaderboard') or predictor.leaderboard is None:
+        if not hasattr(predictor, 'leaderboard') or not callable(getattr(predictor, 'leaderboard', None)):
             return {'error': 'Информация о производительности моделей недоступна'}
         
         leaderboard = predictor.leaderboard()
         
         # Добавляем веса ансамбля, если доступны
-        if hasattr(predictor, '_trainer') and predictor._trainer is not None:
-            try:
-                if hasattr(predictor._trainer, '_get_best_model') and hasattr(predictor._trainer._get_best_model(), 'weights'):
-                    model = predictor._trainer._get_best_model()
-                    if hasattr(model, 'weights'):
-                        weights = model.weights
-                        weighted_models = {}
-                        for model_name, weight in weights.items():
-                            weighted_models[model_name] = float(weight)
-                        
-                        return {
-                            'leaderboard': leaderboard,
-                            'ensemble_weights': weighted_models
-                        }
-            except Exception as e:
-                logging.warning(f"Не удалось извлечь веса ансамбля: {e}")
+        ensemble_weights = {}
         
-        # Если смогли получить leaderboard, обрабатываем его
+        # Улучшенный поиск информации о весах ансамбля
+        try:
+            # Проверяем если у нас есть модель WeightedEnsemble в лидерборде
+            if 'WeightedEnsemble' in leaderboard.index:
+                # Пытаемся получить модель ансамбля разными способами
+                if hasattr(predictor, '_trainer') and hasattr(predictor._trainer, '_get_best_model'):
+                    model = predictor._trainer._get_best_model()
+                    if hasattr(model, 'weights') and model.weights:
+                        logging.info("Найдены веса ансамбля через _get_best_model()")
+                        ensemble_weights = {str(model_name): float(weight) for model_name, weight in model.weights.items()}
+                
+                # Альтернативный метод получения моделей и весов из лидерборда
+                if not ensemble_weights and hasattr(predictor, 'model_best'):
+                    model_name = predictor.model_best
+                    if model_name and 'WeightedEnsemble' in model_name:
+                        try:
+                            # Прямой доступ к модели
+                            model = predictor._trainer.load_model(model_name)
+                            if hasattr(model, 'weights') and model.weights:
+                                logging.info(f"Найдены веса ансамбля через model_best: {model_name}")
+                                ensemble_weights = {str(model_name): float(weight) for model_name, weight in model.weights.items()}
+                        except Exception as e:
+                            logging.warning(f"Не удалось получить веса ансамбля через model_best: {e}")
+                
+                # Если все еще не нашли веса, пробуем прямой доступ к модели WeightedEnsemble
+                if not ensemble_weights:
+                    for model_name in leaderboard.index:
+                        if 'WeightedEnsemble' in model_name:
+                            try:
+                                model = predictor._trainer.load_model(model_name)
+                                if hasattr(model, 'weights') and model.weights:
+                                    logging.info(f"Найдены веса ансамбля через прямой доступ: {model_name}")
+                                    ensemble_weights = {str(model_name): float(weight) for model_name, weight in model.weights.items()}
+                                    break
+                            except Exception as e:
+                                logging.warning(f"Не удалось получить веса ансамбля через прямой доступ к {model_name}: {e}")
+        except Exception as e:
+            logging.warning(f"Не удалось извлечь веса ансамбля: {e}")
+        
         # Преобразуем DataFrame в словарь для сериализации в JSON
         leaderboard_dict = {}
         for model_name in leaderboard.index:
@@ -229,7 +254,14 @@ def get_model_performance(predictor: TimeSeriesPredictor) -> Dict[str, Any]:
                 for col in leaderboard.columns
             }
         
-        return {'leaderboard': leaderboard_dict}
+        result = {'leaderboard': leaderboard_dict}
+        
+        # Добавляем информацию о весах ансамбля, если нашли
+        if ensemble_weights:
+            result['ensemble_weights'] = ensemble_weights
+            logging.info(f"Извлечены веса ансамбля: {ensemble_weights}")
+        
+        return result
     except Exception as e:
         logging.error(f"Ошибка при получении метрик производительности: {e}")
         return {'error': str(e)}
@@ -266,7 +298,7 @@ def convert_predictions_to_dataframe(predictions: TimeSeriesDataFrame) -> pd.Dat
 
 def train_model(
     train_data: TimeSeriesDataFrame,
-    hyperparameters: Optional[Dict] = None,
+    hyperparameters: Optional[Union[Dict, str]] = None,
     time_limit: Optional[int] = None,
     preset: Optional[str] = None,
     model_path: Optional[str] = None,
@@ -281,8 +313,8 @@ def train_model(
     -----------
     train_data : TimeSeriesDataFrame
         Данные для обучения
-    hyperparameters : Dict, опционально
-        Гиперпараметры модели
+    hyperparameters : Dict или str, опционально
+        Гиперпараметры модели. Может быть словарем или строкой "default" для использования всех моделей
     time_limit : int, опционально
         Ограничение времени обучения в секундах
     preset : str, опционально
@@ -347,8 +379,17 @@ def train_model(
             freq=freq
         )
         
+        # Проверяем, если hyperparameters="default" для использования всех моделей
+        if hyperparameters == "default":
+            logging.info("Используется hyperparameters='default' для включения всех моделей")
+            # В этом случае используем preset и не передаем hyperparameters
+            predictor.fit(
+                train_data=train_data,
+                time_limit=time_limit,
+                presets=preset if preset else "medium_quality"
+            )
         # Подбираем соответствующий метод обучения в зависимости от переданных параметров
-        if is_skip_model_preset:
+        elif is_skip_model_preset:
             # Для Chronos/Bolt моделей, добавляем настройки для сохранения всех моделей в лидерборде
             # Если мы хотим включать другие модели помимо Chronos/Bolt для сравнения в лидерборде
             if hyperparameters and len(hyperparameters) > 0:
@@ -398,10 +439,9 @@ def train_model(
         
         # Возвращаем путь к модели и сам предиктор
         return (model_path, predictor)
-    
     except Exception as e:
-        logging.error(f"Ошибка при обучении модели: {str(e)}")
-        return (None, None)
+        logging.error(f"Ошибка при обучении модели: {e}")
+        raise
 
 def filter_valid_models(hyperparameters: Dict) -> Dict:
     """

@@ -10,7 +10,6 @@ import logging
 from typing import Dict, Any, Optional
 
 from src.data.data_processing import load_data, show_dataset_stats
-from src.data.auto_detect import detect_column_names, detect_frequency
 from src.config.app_config import get_config
 
 CONFIG_PATH = "config/config.yaml"
@@ -82,51 +81,6 @@ def get_base_freq(freq_display):
     
     # Возвращаем исходное значение, если не удалось распознать
     return freq_display
-
-def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Автоматически определяет колонки даты, ID и target на основе данных
-    
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        Датафрейм с данными
-        
-    Returns:
-    --------
-    Dict[str, str]
-        Словарь с определенными полями
-    """
-    config = get_config()
-    auto_detection_enabled = config.get('auto_detection', {}).get('fields_enabled', True)
-    
-    if not auto_detection_enabled:
-        return {}
-    
-    try:
-        # Определяем колонки
-        detected_fields = detect_column_names(df)
-        
-        # Проверяем, что полученные значения не являются pandas Series
-        for key in ['dt_col', 'id_col', 'tgt_col']:
-            if key in detected_fields and isinstance(detected_fields[key], pd.Series):
-                # Если это Series и содержит одно значение, берем первый элемент
-                if len(detected_fields[key]) == 1:
-                    detected_fields[key] = detected_fields[key].iloc[0]
-                else:
-                    # Иначе используем наиболее подходящее значение или None
-                    logging.warning(f"Поле {key} содержит множество значений, берем первое")
-                    detected_fields[key] = detected_fields[key].iloc[0] if not detected_fields[key].empty else None
-        
-        # Устанавливаем значение частоты по умолчанию - 'D (день)'
-        detected_fields['freq'] = "D (день)"
-        
-        logging.info(f"Автоматически определены поля: {detected_fields}")
-        return detected_fields
-    
-    except Exception as e:
-        logging.error(f"Ошибка при автоматическом определении полей: {e}")
-        return {}
 
 def display_error_message(error_text, title="Ошибка"):
     """Отображает красивое сообщение об ошибке"""
@@ -230,29 +184,6 @@ def setup_ui():
                     st.session_state["df"] = df_train
                     st.success(f"Train-файл загружен! Строк: {len(df_train)}, колонок: {len(df_train.columns)}")
                     
-                    # Автоматическое определение полей
-                    auto_detected = auto_select_fields(df_train)
-                    
-                    # Применяем автоматически определенные поля
-                    if auto_detected:
-                        if auto_detected.get('dt_col'):
-                            st.session_state["dt_col_key"] = auto_detected['dt_col']
-                        
-                        if auto_detected.get('id_col'):
-                            st.session_state["id_col_key"] = auto_detected['id_col']
-                        
-                        if auto_detected.get('tgt_col'):
-                            st.session_state["tgt_col_key"] = auto_detected['tgt_col']
-                        
-                        if auto_detected.get('freq'):
-                            st.session_state["freq_key"] = auto_detected['freq']
-                        
-                        st.info("Автоматически определены поля:\n" +
-                               f"- Дата: {auto_detected.get('dt_col', '<не определено>')}\n" +
-                               f"- ID: {auto_detected.get('id_col', '<не определено>')}\n" +
-                               f"- Target: {auto_detected.get('tgt_col', '<не определено>')}\n" +
-                               f"- Частота: {auto_detected.get('freq', '<не определено>')}")
-                    
                     # Копируем в session_state для последующего использования
                     st.session_state["df"] = df_train
                     
@@ -295,6 +226,7 @@ def setup_ui():
     df_current = st.session_state.get("df")
     all_cols = list(df_current.columns) if df_current is not None else []
     
+    # Простая инициализация значений
     if "dt_col_key" not in st.session_state:
         st.session_state["dt_col_key"] = "<нет>"
     if "tgt_col_key" not in st.session_state:
@@ -302,64 +234,10 @@ def setup_ui():
     if "id_col_key" not in st.session_state:
         st.session_state["id_col_key"] = "<нет>"
     
-    dt_stored = st.session_state["dt_col_key"]
-    tgt_stored = st.session_state["tgt_col_key"]
-    id_stored = st.session_state["id_col_key"]
-    
-    if dt_stored not in ["<нет>"] + all_cols:
-        st.session_state["dt_col_key"] = "<нет>"
-    if tgt_stored not in ["<нет>"] + all_cols:
-        st.session_state["tgt_col_key"] = "<нет>"
-    if id_stored not in ["<нет>"] + all_cols:
-        st.session_state["id_col_key"] = "<нет>"
-    
-    # Код проверки временных значений удален, так как значения устанавливаются напрямую
-    # при автоопределении полей
-    
+    # Создаем виджеты
     dt_col = st.sidebar.selectbox("Колонка с датой", ["<нет>"] + all_cols, key="dt_col_key")
     tgt_col = st.sidebar.selectbox("Колонка target", ["<нет>"] + all_cols, key="tgt_col_key")
     id_col = st.sidebar.selectbox("Колонка ID (категориальный)", ["<нет>"] + all_cols, key="id_col_key")
-    
-    # Кнопка автоматического определения полей
-    if df_current is not None and st.sidebar.button("🔍 Автоопределение полей", key="auto_detect_fields_btn"):
-        auto_detected = auto_select_fields(df_current)
-        if auto_detected:
-            # Напрямую устанавливаем значения в session_state для ключей виджетов
-            # вместо использования временных переменных и перезагрузки
-            changed = False
-            
-            if auto_detected.get('dt_col'):
-                st.session_state["dt_col_key"] = auto_detected['dt_col']
-                changed = True
-            
-            if auto_detected.get('id_col'):
-                st.session_state["id_col_key"] = auto_detected['id_col']
-                changed = True
-            
-            if auto_detected.get('tgt_col'):
-                st.session_state["tgt_col_key"] = auto_detected['tgt_col']
-                changed = True
-            
-            if auto_detected.get('freq'):
-                st.session_state["freq_key"] = auto_detected['freq']
-                changed = True
-            
-            st.sidebar.success("Автоматически определены поля!")
-            
-            # Сохраняем состояние дополнительных виджетов, которые могут быть потеряны при перезагрузке
-            if "use_holidays_key" in st.session_state:
-                use_holidays_value = st.session_state["use_holidays_key"]
-                st.session_state["_saved_use_holidays"] = use_holidays_value
-                
-            if "static_feats_key" in st.session_state:
-                static_feats_value = st.session_state["static_feats_key"]
-                st.session_state["_saved_static_feats"] = static_feats_value
-                
-            # Только если действительно что-то изменилось, выполняем перезагрузку
-            if changed:
-                st.rerun()
-        else:
-            st.sidebar.warning("Не удалось автоматически определить поля")
     
     # Статические признаки
     st.sidebar.header("Статические признаки (до 3)")
@@ -376,6 +254,47 @@ def setup_ui():
     if "use_holidays_key" not in st.session_state:
         st.session_state["use_holidays_key"] = False
     st.sidebar.checkbox("Учитывать праздники РФ?", value=st.session_state["use_holidays_key"], key="use_holidays_key")
+    
+    # Предварительный график
+    if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
+        try:
+            with st.spinner("Построение графика..."):
+                df_plot = df_current.copy()
+                
+                # Для больших датафреймов используем выборку при построении графика
+                if len(df_plot) > 10000:
+                    st.info(f"Для графика используется выборка из 10000 точек (из {len(df_plot)} строк).")
+                    # Если есть ID, берем по несколько ID
+                    if id_col != "<нет>":
+                        ids = df_plot[id_col].unique()
+                        if len(ids) > 10:
+                            selected_ids = ids[:10]  # Берем первые 10 ID
+                            df_plot = df_plot[df_plot[id_col].isin(selected_ids)]
+                        
+                        # Если все еще слишком много точек
+                        if len(df_plot) > 10000:
+                            df_plot = df_plot.sample(10000, random_state=42)
+                    else:
+                        df_plot = df_plot.sample(10000, random_state=42)
+                
+                # Правильное преобразование дат с использованием dayfirst=False
+                df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", format=None, dayfirst=False)
+                df_plot = df_plot.dropna(subset=[dt_col])
+                
+                if id_col != "<нет>":
+                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, color=id_col, title="График Target по ID")
+                else:
+                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, title="График Target (без ID)")
+                
+                fig_target.update_layout(height=400)
+                st.subheader("Предварительный анализ Target")
+                st.plotly_chart(fig_target, use_container_width=True)
+                
+                # Освобождаем память
+                del df_plot
+                gc.collect()
+        except Exception as e:
+            st.warning(f"Не удалось построить график: {e}")
     
     # ========== (3) Обработка пропусков ==========
     st.sidebar.header("3. Обработка пропусков")
@@ -474,47 +393,6 @@ def setup_ui():
         key="mean_only_key",
         help="Если включено, модель будет предсказывать только среднее значение (0.5 квантиль). Если выключено, будут предсказаны все квантили (0.1, 0.5, 0.9), что даст интервалы неопределенности."
     )
-    
-    # Предварительный график
-    if df_current is not None and dt_col != "<нет>" and tgt_col != "<нет>":
-        try:
-            with st.spinner("Построение графика..."):
-                df_plot = df_current.copy()
-                
-                # Для больших датафреймов используем выборку при построении графика
-                if len(df_plot) > 10000:
-                    st.info(f"Для графика используется выборка из 10000 точек (из {len(df_plot)} строк).")
-                    # Если есть ID, берем по несколько ID
-                    if id_col != "<нет>":
-                        ids = df_plot[id_col].unique()
-                        if len(ids) > 10:
-                            selected_ids = ids[:10]  # Берем первые 10 ID
-                            df_plot = df_plot[df_plot[id_col].isin(selected_ids)]
-                        
-                        # Если все еще слишком много точек
-                        if len(df_plot) > 10000:
-                            df_plot = df_plot.sample(10000, random_state=42)
-                    else:
-                        df_plot = df_plot.sample(10000, random_state=42)
-                
-                # Правильное преобразование дат с использованием dayfirst=False
-                df_plot[dt_col] = pd.to_datetime(df_plot[dt_col], errors="coerce", format=None, dayfirst=False)
-                df_plot = df_plot.dropna(subset=[dt_col])
-                
-                if id_col != "<нет>":
-                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, color=id_col, title="График Target по ID")
-                else:
-                    fig_target = px.line(df_plot.sort_values(dt_col), x=dt_col, y=tgt_col, title="График Target (без ID)")
-                
-                fig_target.update_layout(height=400)
-                st.subheader("Предварительный анализ Target")
-                st.plotly_chart(fig_target, use_container_width=True)
-                
-                # Освобождаем память
-                del df_plot
-                gc.collect()
-        except Exception as e:
-            st.warning(f"Не удалось построить график: {e}")
     
     # ========== (6) Обучение модели ==========
     st.sidebar.header("6. Обучение модели")

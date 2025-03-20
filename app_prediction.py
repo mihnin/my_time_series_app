@@ -18,12 +18,19 @@ def run_prediction():
         st.write("Прогнозирование временных рядов с использованием AutoGluon")
         
         # Проверяем наличие данных
-        if "df_train" not in st.session_state or st.session_state.get("df_train") is None:
+        # Вначале проверяем в df_train, затем - в df (для совместимости с app_ui.py)
+        if ("df_train" not in st.session_state or st.session_state.get("df_train") is None) and \
+           ("df" not in st.session_state or st.session_state.get("df") is None):
             st.warning("Необходимо сначала загрузить данные.")
             return
         
-        # Получаем данные из состояния сессии
-        df_train = st.session_state.df_train
+        # Получаем данные из состояния сессии (из df_train или df)
+        if "df_train" in st.session_state and st.session_state.get("df_train") is not None:
+            df_train = st.session_state.df_train
+        else:
+            df_train = st.session_state.df
+            # Сохраняем под правильным ключом для совместимости
+            st.session_state["df_train"] = df_train
         
         # Настраиваем параметры прогнозирования
         st.subheader("Параметры прогнозирования")
