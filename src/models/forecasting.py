@@ -89,6 +89,12 @@ def make_timeseries_dataframe(df, static_features=None, freq='D', id_column=None
         
         # Устанавливаем частоту, если указана и не auto
         if freq and freq.lower() != 'auto':
+            # Очистка частоты от русского описания
+            if " " in freq:
+                freq = freq.split(" ")[0]
+            if "(" in freq:
+                freq = freq.split("(")[0].strip()
+            
             try:
                 logging.info(f"Устанавливаем частоту {freq} для TimeSeriesDataFrame")
                 ts_df = ts_df.convert_frequency(freq=freq)
@@ -467,13 +473,13 @@ def extract_model_metrics(predictor: TimeSeriesPredictor, test_data=None, predic
             "freq": str(predictor.freq) if hasattr(predictor, 'freq') else "unknown",
             "eval_metric": predictor.eval_metric if hasattr(predictor, 'eval_metric') else "unknown",
             "quantile_levels": predictor.quantile_levels if hasattr(predictor, 'quantile_levels') else [0.1, 0.5, 0.9],
-            "model_count": len(predictor.get_model_names()) if hasattr(predictor, 'get_model_names') and callable(predictor.get_model_names) else 0
+            "model_count": len(predictor.model_names()) if hasattr(predictor, 'model_names') and callable(predictor.model_names) else 0
         }
         
         # Информация о всех моделях в предикторе
-        if hasattr(predictor, 'get_model_names') and callable(predictor.get_model_names):
+        if hasattr(predictor, 'model_names') and callable(predictor.model_names):
             try:
-                model_names = predictor.get_model_names()
+                model_names = predictor.model_names()
                 model_info["models"] = list(model_names)
                 logging.info(f"Обученные модели: {model_names}")
             except Exception as e:

@@ -335,20 +335,51 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
             # Преобразуем строку моделей в список, если нужно
             if isinstance(models, str):
                 if models == "all":
-                    # Случай "all" - не указываем модели, используем пресет
-                    models = []
-                    logging.info("Выбраны все модели (all), будет использоваться пресет")
+                    # Если выбрано "все модели", создаем словарь для всех доступных моделей
+                    all_models = {
+                        # Базовые модели
+                        "Naive": {},
+                        "SeasonalNaive": {},
+                        "Average": {},
+                        "SeasonalAverage": {},
+                        "Zero": {},
+                        # Статистические модели
+                        "ETS": {},
+                        "AutoETS": {},
+                        "AutoARIMA": {},
+                        "AutoCES": {},
+                        "Theta": {},
+                        "NPTS": {},
+                        # Глубокие обучающие модели
+                        "DeepAR": {},
+                        "DLinear": {},
+                        "PatchTST": {},
+                        "SimpleFeedForward": {},
+                        "TemporalFusionTransformer": {},
+                        "TiDE": {},
+                        "WaveNet": {},
+                        # Табличные модели
+                        "DirectTabular": {},
+                        "RecursiveTabular": {}
+                    }
+                    
+                    # Если используется Chronos, добавляем его
+                    if use_chronos:
+                        # Используем переданную модель Chronos или bolt_small по умолчанию
+                        chronos_preset = chronos_model if chronos_model in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
+                                                                        "chronos_tiny", "chronos_mini", "chronos_small", 
+                                                                        "chronos_base", "chronos_large", "chronos"] else "bolt_small"
+                        all_models["Chronos"] = {'model_path': chronos_preset}
+                        logging.info(f"Добавлена Chronos модель {chronos_preset} в список всех моделей")
+                    
+                    hyperparameters = all_models
+                    logging.info(f"Выбраны все модели (* (все)), будет использоваться {len(hyperparameters)} моделей")
+                    use_chronos = False  # Отключаем отдельную обработку Chronos, так как она уже добавлена
                 else:
                     models = [model.strip() for model in models.split(',')]
             
             logging.info("Исходный список выбранных моделей: %s", models)
             
-            # Проверяем наличие специального значения "* (все)"
-            if models and "* (все)" in models:
-                # Если выбрано "все модели", не указываем конкретные модели
-                models = []
-                logging.info("Выбраны все модели (* (все)), будет использоваться пресет")
-                
             # Проверяем, есть ли в списке действительные модели AutoGluon
             if models:
                 valid_models = [
@@ -413,15 +444,21 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 "preset": preset_to_use
             }
             
-            # Добавляем параметр freq только если он определен
-            if base_freq:
-                # Явно передаем частоту в train_model, так как она требуется для TimeSeriesPredictor
-                train_params["freq"] = base_freq
-            else:
+            # Явно передаем частоту в train_model, так как она требуется для TimeSeriesPredictor
+            if tsdf.freq is None:
                 # Если не удалось определить частоту, устанавливаем дефолтное значение
-                # Это необходимо для работы TimeSeriesPredictor
-                train_params["freq"] = "D"  # Устанавливаем дневную частоту по умолчанию
-                logging.warning("Частота данных не определена, используем 'D' (дневную) по умолчанию")
+                # и явно очищаем от русского описания
+                clean_freq = freq
+                if " " in clean_freq:
+                    clean_freq = clean_freq.split(" ")[0]
+                if "(" in clean_freq:
+                    clean_freq = clean_freq.split("(")[0].strip()
+                    
+                train_params["freq"] = clean_freq  # Используем очищенную частоту
+                logging.warning(f"Частота данных не определена, используем '{clean_freq}' по умолчанию")
+            else:
+                # Если частота уже определена в TimeSeriesDataFrame, используем ее
+                train_params["freq"] = tsdf.freq
             
             model_path, predictor = train_model(**train_params)
             
@@ -457,30 +494,13 @@ def run_training(df_train=None, dt_col=None, tgt_col=None, horizon=None, id_col=
                 # Создаем Excel-отчет с результатами обучения
                 with st.spinner("Сохранение результатов обучения в Excel..."):
                     try:
-                        # Копируем и преобразуем DataFrame лидерборда для Excel
-                        # Исправляем проблему с преобразованием типов данных
-                        leaderboard_excel = leaderboard_df.copy()
-                        
-                        # Преобразуем все столбцы в строки, чтобы избежать ошибок с типами данных
-                        for col in leaderboard_excel.columns:
-                            if col == 'model':
-                                continue  # Пропускаем столбец с именами моделей
-                            leaderboard_excel[col] = leaderboard_excel[col].astype(str)
-                        
-                        # Сохраняем в Excel
+                        # Запись данных в Excel
                         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-                            # Сохраняем лидерборд на отдельном листе
-                            leaderboard_excel.to_excel(writer, sheet_name='Leaderboard', index=True)
-                            
-                            # Сохраняем метрики обучения на отдельном листе
-                            metrics_df = pd.DataFrame([metadata])
-                            metrics_df.to_excel(writer, sheet_name='Metrics', index=False)
-                            
-                            # Если есть информация о тестовых метриках, сохраняем и их
-                            if 'test_performance' in model_summary:
-                                test_metrics = model_summary['test_performance']
-                                test_df = pd.DataFrame(test_metrics, index=[0])
-                                test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                            st.dataframe(leaderboard_df)
+                            leaderboard_df.to_excel(writer, sheet_name='Leaderboard', index=False)
+                            forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
+                            ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
+                            test_df.to_excel(writer, sheet_name='Test Performance', index=False)
                                 
                         logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
                         
@@ -631,20 +651,51 @@ def main():
                         # Преобразуем строку моделей в список, если нужно
                         if isinstance(training_params["selected_models"], str):
                             if training_params["selected_models"] == "all":
-                                # Случай "all" - не указываем модели, используем пресет
-                                training_params["selected_models"] = []
-                                logging.info("Выбраны все модели (all), будет использоваться пресет")
+                                # Если выбрано "все модели", создаем словарь для всех доступных моделей
+                                all_models = {
+                                    # Базовые модели
+                                    "Naive": {},
+                                    "SeasonalNaive": {},
+                                    "Average": {},
+                                    "SeasonalAverage": {},
+                                    "Zero": {},
+                                    # Статистические модели
+                                    "ETS": {},
+                                    "AutoETS": {},
+                                    "AutoARIMA": {},
+                                    "AutoCES": {},
+                                    "Theta": {},
+                                    "NPTS": {},
+                                    # Глубокие обучающие модели
+                                    "DeepAR": {},
+                                    "DLinear": {},
+                                    "PatchTST": {},
+                                    "SimpleFeedForward": {},
+                                    "TemporalFusionTransformer": {},
+                                    "TiDE": {},
+                                    "WaveNet": {},
+                                    # Табличные модели
+                                    "DirectTabular": {},
+                                    "RecursiveTabular": {}
+                                }
+                                
+                                # Если используется Chronos, добавляем его
+                                if training_params["use_gpu"] and training_params["preset"] == "chronos":
+                                    # Используем переданную модель Chronos или bolt_small по умолчанию
+                                    chronos_preset = training_params["preset"] if training_params["preset"] in ["bolt_tiny", "bolt_mini", "bolt_small", "bolt_base",
+                                                                                                      "chronos_tiny", "chronos_mini", "chronos_small", 
+                                                                                                      "chronos_base", "chronos_large", "chronos"] else "bolt_small"
+                                    all_models["Chronos"] = {'model_path': chronos_preset}
+                                    logging.info(f"Добавлена Chronos модель {chronos_preset} в список всех моделей")
+                                
+                                hyperparameters = all_models
+                                logging.info(f"Выбраны все модели (* (все)), будет использоваться {len(hyperparameters)} моделей")
+                                training_params["selected_models"] = []  # Отключаем отдельную обработку Chronos, так как она уже добавлена
                             else:
                                 training_params["selected_models"] = [model.strip() for model in training_params["selected_models"].split(',')]
                                 
                         logging.info("Исходный список выбранных моделей: %s", training_params['selected_models'])
                         
-                        # Проверяем наличие специального значения "* (все)"
-                        if training_params["selected_models"] and "* (все)" in training_params["selected_models"]:
-                            # Если выбрано "все модели", не указываем конкретные модели
-                            training_params["selected_models"] = []
-                            logging.info("Выбраны все модели (* (все)), будет использоваться пресет")
-                            
                         # Проверяем, есть ли в списке действительные модели AutoGluon
                         if training_params["selected_models"]:
                             valid_models = [
@@ -752,30 +803,13 @@ def main():
                         # Создаем Excel-отчет с результатами обучения
                         with st.spinner("Сохранение результатов обучения в Excel..."):
                             try:
-                                # Копируем и преобразуем DataFrame лидерборда для Excel
-                                # Исправляем проблему с преобразованием типов данных
-                                leaderboard_excel = leaderboard_df.copy()
-                                
-                                # Преобразуем все столбцы в строки, чтобы избежать ошибок с типами данных
-                                for col in leaderboard_excel.columns:
-                                    if col == 'model':
-                                        continue  # Пропускаем столбец с именами моделей
-                                    leaderboard_excel[col] = leaderboard_excel[col].astype(str)
-                                
-                                # Сохраняем в Excel
+                                # Запись данных в Excel
                                 with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-                                    # Сохраняем лидерборд на отдельном листе
-                                    leaderboard_excel.to_excel(writer, sheet_name='Leaderboard', index=True)
-                                    
-                                    # Сохраняем метрики обучения на отдельном листе
-                                    metrics_df = pd.DataFrame([metadata])
-                                    metrics_df.to_excel(writer, sheet_name='Metrics', index=False)
-                                    
-                                    # Если есть информация о тестовых метриках, сохраняем и их
-                                    if 'test_performance' in model_summary:
-                                        test_metrics = model_summary['test_performance']
-                                        test_df = pd.DataFrame(test_metrics, index=[0])
-                                        test_df.to_excel(writer, sheet_name='Test Performance', index=False)
+                                    st.dataframe(leaderboard_df)
+                                    leaderboard_df.to_excel(writer, sheet_name='Leaderboard', index=False)
+                                    forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
+                                    ensemble_df.to_excel(writer, sheet_name='Ensemble', index=False)
+                                    test_df.to_excel(writer, sheet_name='Test Performance', index=False)
                                         
                                 logging.info(f"Результаты обучения сохранены в Excel: {excel_file}")
                                 

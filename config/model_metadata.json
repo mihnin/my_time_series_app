@@ -145,5 +145,26 @@
                 "eval_metric": "MAE"
             }
         }
+    },
+    "autogluon_model_20250320_114904": {
+        "model_path": "C:\\my_time_series_app\\models\\AutogluonModels\\TimeSeriesModel\\autogluon_model_20250320_114904",
+        "created_at": "2025-03-20 11:51:28",
+        "prediction_length": 2,
+        "time_limit": 600,
+        "eval_metric": "MAE (Mean absolute error)",
+        "data_shape": [
+            63,
+            26
+        ],
+        "num_time_series": 1,
+        "data_frequency": "ME",
+        "metrics": {
+            "error": "Cannot locate autogluon.timeseries.utils.datetime.time_features.month_of_year.",
+            "model_info": {
+                "prediction_length": 2,
+                "freq": "ME",
+                "eval_metric": "MAE"
+            }
+        }
     }
 }

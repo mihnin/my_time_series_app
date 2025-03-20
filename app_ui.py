@@ -41,10 +41,12 @@ FREQ_MAPPING = {
     "auto": "auto (угадать)",
     "D": "D (день)",
     "h": "h (час)",
+    "H": "H (час)",
     "M": "M (месяц)",
     "B": "B (рабочие дни)",
     "W": "W (неделя)",
-    "Q": "Q (квартал)"
+    "Q": "Q (квартал)",
+    "Y": "Y (год)"
 }
 
 # Обратное отображение для получения базового значения из полного описания
@@ -64,30 +66,22 @@ def get_base_freq(freq_display):
     str
         Базовое значение частоты, например "D"
     """
-    # Для обратной совместимости обрабатываем устаревшие алиасы из pandas 2.2.0
-    pandas_aliases_map = {
-        "H": "h",     # час → h
-        "BH": "bh",   # бизнес-час → bh
-        "CBH": "cbh", # кастомный бизнес-час → cbh
-        "T": "min",   # минута → min
-        "S": "s",     # секунда → s
-        "L": "ms",    # миллисекунда → ms
-        "U": "us",    # микросекунда → us
-        "N": "ns",     # наносекунда → ns
-        "M": "ME"     # месяц → ME (с конца месяца)
-    }
+    # Если freq_display уже базовое значение, вернуть его
+    if freq_display in FREQ_MAPPING:
+        return freq_display
+        
+    # Если freq_display есть в обратном маппинге, используем его
+    if freq_display in FREQ_REVERSE_MAPPING:
+        return FREQ_REVERSE_MAPPING[freq_display]
     
-    # Проверяем, является ли входное значение устаревшим алиасом
-    if freq_display in pandas_aliases_map:
-        return pandas_aliases_map[freq_display]
+    # Иначе извлекаем значение до пробела или скобки
+    if " " in freq_display:
+        return freq_display.split(" ")[0]
+    if "(" in freq_display:
+        return freq_display.split("(")[0].strip()
     
-    # Обработка форматов вида "X (описание)"
-    if " (" in freq_display:
-        base_freq = freq_display.split(" ")[0]
-        if base_freq in pandas_aliases_map:
-            return pandas_aliases_map[base_freq]
-    
-    return FREQ_REVERSE_MAPPING.get(freq_display, "auto")
+    # Возвращаем исходное значение, если не удалось распознать
+    return freq_display
 
 def auto_select_fields(df: pd.DataFrame) -> Dict[str, Any]:
     """
