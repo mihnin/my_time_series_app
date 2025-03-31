@@ -1,13 +1,13 @@
 # src/validation/data_validation.py
+# src/validation/data_validation.py
 import pandas as pd
+import numpy as np
 import logging
 import streamlit as st
-from typing import Dict, Any, Optional
+from typing import Tuple, List, Dict, Any, Optional
 import plotly.express as px
 import plotly.graph_objects as go
-import time
-import gc
-from collections import Counter
+from plotly.subplots import make_subplots
 
 def validate_dataset(df: pd.DataFrame, 
                     dt_col: str, 
@@ -47,9 +47,9 @@ def validate_dataset(df: pd.DataFrame,
             try:
                 # Пытаемся преобразовать к datetime
                 pd.to_datetime(df[dt_col], errors='raise')
-            except (ValueError, TypeError, pd.errors.OutOfBoundsDatetime) as e:
+            except Exception:
                 result["is_valid"] = False
-                result["errors"].append(f"Колонка {dt_col} содержит некорректные значения дат: {e}")
+                result["errors"].append(f"Колонка {dt_col} содержит некорректные значения дат.")
                 return result
     
     # Проверка типа данных в колонке target
@@ -148,6 +148,51 @@ def validate_dataset(df: pd.DataFrame,
             logging.info("Проверка непрерывности одного ряда завершена за %.2f сек.", end_time - start_time)
             del df_sorted
             gc.collect()
+    # Проверка временного ряда на непрерывность
+    if dt_col and dt_col != "<нет>" and dt_col in df.columns:
+        if id_col and id_col != "<нет>" and id_col in df.columns:
+            # Для каждого ID проверяем непрерывность
+            for id_value in df[id_col].unique():
+                subset = df[df[id_col] == id_value].sort_values(dt_col)
+                if len(subset) <= 1:
+                    continue
+                    
+                if pd.api.types.is_datetime64_any_dtype(subset[dt_col]):
+                    time_series = subset[dt_col]
+                else:
+                    time_series = pd.to_datetime(subset[dt_col])
+                    
+                # Определяем наиболее вероятную частоту
+                try:
+                    most_common_diff = pd.Series(np.diff(time_series)).value_counts().index[0]
+                    expected_dates = pd.date_range(start=time_series.min(), 
+                                                  end=time_series.max(), 
+                                                  freq=pd.tseries.frequencies.to_offset(most_common_diff))
+                    missing_dates = set(expected_dates) - set(time_series)
+                    
+                    if missing_dates:
+                        result["warnings"].append(f"Для ID={id_value} обнаружены пропуски в датах. Отсутствует {len(missing_dates)} точек.")
+                except Exception as e:
+                    result["warnings"].append(f"Для ID={id_value} не удалось определить частоту временного ряда: {e}")
+        else:
+            # Обрабатываем как единый временной ряд
+            sorted_df = df.sort_values(dt_col)
+            if pd.api.types.is_datetime64_any_dtype(sorted_df[dt_col]):
+                time_series = sorted_df[dt_col]
+            else:
+                time_series = pd.to_datetime(sorted_df[dt_col])
+                
+            try:
+                most_common_diff = pd.Series(np.diff(time_series)).value_counts().index[0]
+                expected_dates = pd.date_range(start=time_series.min(), 
+                                              end=time_series.max(), 
+                                              freq=pd.tseries.frequencies.to_offset(most_common_diff))
+                missing_dates = set(expected_dates) - set(time_series)
+                
+                if missing_dates:
+                    result["warnings"].append(f"Обнаружены пропуски в датах. Отсутствует {len(missing_dates)} точек.")
+            except Exception as e:
+                result["warnings"].append(f"Не удалось определить частоту временного ряда: {e}")
     
     # Рассчитываем и сохраняем статистики
     result["stats"] = {

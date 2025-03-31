@@ -69,6 +69,7 @@ def load_data(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile,
 
 def _load_csv_standard(uploaded_file) -> pd.DataFrame:
     """
+<<<<<<< HEAD
     Стандартная загрузка CSV без разбиения на чанки, оптимизированная.
     """
     # Сбрасываем указатель на начало файла
@@ -96,6 +97,33 @@ def _load_csv_standard(uploaded_file) -> pd.DataFrame:
         return df
     except Exception as e:
         logging.error(f"Полностью не удалось прочитать CSV: {e}")
+=======
+    Стандартная загрузка CSV без разбиения на чанки.
+    """
+    data_bytes = uploaded_file.read()
+    text_obj = StringIO(data_bytes.decode('utf-8', errors='replace'))
+    try:
+        df = pd.read_csv(text_obj, sep=None, engine='python', thousands=' ')
+        if df.shape[1] == 1:
+            logging.warning("Авто-детект нашёл только 1 столбец. Возможно необычный разделитель.")
+        logging.info(f"Успешно прочитан CSV (auto-detect). Колонки: {list(df.columns)}")
+        return df
+    except Exception as e:
+        logging.warning(f"Авто-определение разделителя не сработало: {e}")
+        text_obj.seek(0)
+        try:
+            df_semicolon = pd.read_csv(text_obj, sep=';', encoding='utf-8', thousands=' ')
+            if df_semicolon.shape[1] > 1:
+                logging.info(f"Успешно прочитан CSV (sep=';'). Колонки: {list(df_semicolon.columns)}")
+                return df_semicolon
+        except:
+            pass
+        text_obj.seek(0)
+        df_comma = pd.read_csv(text_obj, sep=',', encoding='utf-8', thousands=' ')
+        if df_comma.shape[1] > 1:
+            logging.info(f"Успешно прочитан CSV (sep=','). Колонки: {list(df_comma.columns)}")
+            return df_comma
+>>>>>>> 4283c45 (new)
         raise ValueError("Не удалось автоматически определить разделитель CSV. Попробуйте ';' или ',' или сохраните файл в UTF-8.")
 
 def _load_csv_in_chunks(uploaded_file, chunk_size):
@@ -154,6 +182,10 @@ def _load_csv_in_chunks(uploaded_file, chunk_size):
             chunksize=chunk_size, 
             encoding=encoding, 
             errors='replace',
+<<<<<<< HEAD
+=======
+            thousands=' ',
+>>>>>>> 4283c45 (new)
             low_memory=True
         ):
             # Отправляем чанк на обработку
