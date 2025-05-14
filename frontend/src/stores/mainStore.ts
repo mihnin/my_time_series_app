@@ -25,6 +25,9 @@ export const useMainStore = defineStore('main', () => {
   const timeLimit = ref<number | null>(null)
   const meanOnly = ref(false)
   const trainPredictSave = ref(false)  // Новое состояние
+  const sessionId = ref<string | null>(null)
+  const trainingStatus = ref<any>(null)
+  const predictionRows = ref<any[]>([])  // Новое состояние для строк прогноза
 
   function setTableData(data: any[]) {
     tableData.value = data
@@ -103,6 +106,18 @@ export const useMainStore = defineStore('main', () => {
     trainPredictSave.value = value
   }
 
+  function setSessionId(id: string | null) {
+    sessionId.value = id
+  }
+
+  function setTrainingStatus(status: any) {
+    trainingStatus.value = status
+  }
+
+  function setPredictionRows(rows: any[]) {  // Новый метод для установки строк прогноза
+    predictionRows.value = rows
+  }
+
   return {
     tableData,
     selectedFile,
@@ -125,6 +140,9 @@ export const useMainStore = defineStore('main', () => {
     timeLimit,
     meanOnly,
     trainPredictSave,
+    sessionId,
+    trainingStatus,
+    predictionRows, // Экспортируем новое свойство
     setTableData,
     setChunkSize,
     setFile,
@@ -143,6 +161,9 @@ export const useMainStore = defineStore('main', () => {
     setPredictionHorizon,
     setTimeLimit,
     setMeanOnly,
-    setTrainPredictSave
+    setTrainPredictSave,
+    setSessionId,
+    setTrainingStatus,
+    setPredictionRows, // Экспортируем новый метод
   }
 })

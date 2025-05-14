@@ -42,38 +42,33 @@ export default defineComponent({
         chart = echarts.init(chartContainer.value)
       }
 
-      let series = []
-      let allDates = Array.from(new Set(props.data.map(row => row[props.dateColumn])))
-      allDates.sort()
+      // Ограничиваем количество отображаемых строк до 1000
+      // ВАЖНО: не группируем по id до ограничения!
+      let limitedData = (props.data as Record<string, any>[]).slice(0, 1000)
 
+      let series = []
       if (props.idColumn) {
-        const groups = new Map()
-        props.data.forEach(row => {
+        // Группировка только по тем строкам, которые попали в первые 1000
+        const groups = new Map<string, Record<string, any>[]>()
+        limitedData.forEach((row: Record<string, any>) => {
           const id = row[props.idColumn]
           if (!groups.has(id)) {
             groups.set(id, [])
           }
-          groups.get(id).push(row)
+          groups.get(id)!.push(row)
         })
-
         series = Array.from(groups.entries()).map(([id, rows]) => ({
           name: `${props.idColumn}: ${id}`,
           type: 'line',
-          data: rows.map(row => [row[props.dateColumn], row[props.targetColumn]]),
+          data: rows.map((row: Record<string, any>) => [row[props.dateColumn], row[props.targetColumn]]),
           smooth: false,
           showSymbol: false
         }))
       } else {
-        const dateMap = new Map()
-        props.data.forEach(row => {
-          if (!dateMap.has(row[props.dateColumn])) {
-            dateMap.set(row[props.dateColumn], row[props.targetColumn])
-          }
-        })
-
+        // Без idColumn — просто строим одну серию
         series = [{
           type: 'line',
-          data: Array.from(dateMap.entries()),
+          data: limitedData.map((row: Record<string, any>) => [row[props.dateColumn], row[props.targetColumn]]),
           smooth: false,
           showSymbol: false
         }]
@@ -138,6 +133,18 @@ export default defineComponent({
       chart?.resize()
     }
 
+    // Очистка правой панели при выводе графика
+    watch([() => props.data, () => props.dateColumn, () => props.targetColumn, () => props.idColumn], () => {
+      // Очищаем все элементы с классом 'app-logs', 'leaderboard-table-main', 'save-results', 'model-export', 'prediction', 'training-status', 'data-table', 'app-logs', 'metrics-and-models', 'missing-value-handler', 'frequency-settings', 'column-selector', 'file-uploader'
+      const rightPanel = document.querySelector('.main-content') || document.body;
+      const selectors = [
+        '.app-logs', '.leaderboard-table-main', '.save-results', '.model-export', '.prediction', '.training-status', '.data-table', '.metrics-and-models', '.missing-value-handler', '.frequency-settings', '.column-selector', '.file-uploader'
+      ];
+      selectors.forEach(sel => {
+        rightPanel.querySelectorAll(sel).forEach(el => el.remove());
+      });
+    });
+
     watch(() => [props.data, props.dateColumn, props.targetColumn, props.idColumn], updateChart, { deep: true })
 
     onMounted(() => {
@@ -162,7 +169,7 @@ export default defineComponent({
 <style scoped>
 .time-series-chart {
   width: 100%;
-  height: 100%;
+  height: 400px;
   background: white;
   border-radius: 8px;
   padding: 1rem;

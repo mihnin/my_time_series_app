@@ -30,7 +30,8 @@ def generate_excel_buffer(preds, leaderboard, static_train, ensemble_info_df):
                     cell = sheet_lb.cell(row=row_excel, column=col_idx)
                     cell.fill = fill_green
             except Exception as e:
-                print(f"Ошибка при подсветке лучшей модели в Leaderboard: {e}")
+                import logging
+                logging.error(f"Ошибка при подсветке лучшей модели в Leaderboard: {e}")
         # Лист со статическими признаками
         if static_train is not None and not static_train.empty:
             static_train.to_excel(writer, sheet_name="StaticTrainFeatures", index=False)

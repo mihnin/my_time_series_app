@@ -2,7 +2,7 @@
   <div class="file-uploader">
     <h3 class="section-title">Настройка обучения</h3>
     
-    <details class="settings-panel" open>
+    <details class="settings-panel">
       <summary class="settings-summary">Настройки для больших файлов</summary>
       <div class="settings-content">
         <label class="input-label">
@@ -29,7 +29,7 @@
           @change="handleFileChange"
           style="display: none"
         >
-        <button @click="$refs.fileInput.click()">
+        <button @click="fileInput && fileInput.click()">
           📂 Выбрать файл
         </button>
         <p>или перетащите файл сюда</p>
@@ -42,7 +42,9 @@
         class="upload-button" 
         :disabled="!selectedFile"
       >
-        <span v-if="isLoading">Загрузка...</span>
+        <span v-if="isLoading" class="spinner-wrap">
+          <span class="spinner"></span>Загрузка...
+        </span>
         <span v-else>📂 Загрузить данные</span>
       </button>
     </div>
@@ -71,10 +73,40 @@ export default defineComponent({
 
     const processFile = async (file: File) => {
       try {
-        store.setFile(file) // Сохраняем файл в хранилище
-        const data = await readFileData(file)
-        store.setTableData(data)
-        emit('file-loaded', data)
+        store.setFile(file)
+        // Используем Web Worker для Excel
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              // Вставляем код воркера как строку
+              const workerCode = `importScripts('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');\nself.onmessage = ${String(function(e) { const { fileData, fileName, maxRows } = e.data; try { const workbook = XLSX.read(fileData, { type: 'binary' }); const firstSheet = workbook.Sheets[workbook.SheetNames[0]]; let jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }); if (maxRows && jsonData.length > maxRows) { jsonData = jsonData.slice(0, maxRows); } const [header, ...rows] = jsonData; const result = rows.map(row => { const obj = {}; header.forEach((key, idx) => { obj[key] = row[idx]; }); return obj; }); self.postMessage({ success: true, data: result }); } catch (error) { self.postMessage({ success: false, error: error.message }); } })}`;
+              const blob = new Blob([workerCode], { type: 'application/javascript' });
+              const worker = new Worker(URL.createObjectURL(blob));
+              worker.onmessage = function(event) {
+                if (event.data.success) {
+                  store.setTableData(event.data.data)
+                  emit('file-loaded', event.data.data)
+                  resolve(null)
+                } else {
+                  reject(event.data.error)
+                }
+                worker.terminate();
+              };
+              worker.postMessage({
+                fileData: e.target?.result ?? '',
+                fileName: file.name,
+                maxRows: 1000000 // или chunkSize.value, если нужно ограничение
+              });
+            };
+            reader.onerror = (err) => reject(err);
+            reader.readAsBinaryString(file);
+          });
+        } else {
+          const data = await readFileData(file)
+          store.setTableData(data)
+          emit('file-loaded', data)
+        }
       } catch (error) {
         console.error('Error processing file:', error)
       }
@@ -86,7 +118,7 @@ export default defineComponent({
         
         reader.onload = (e) => {
           try {
-            const data = e.target?.result
+            const data = e.target?.result ?? ''
             const workbook = XLSX.read(data, { type: 'binary' })
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
             const jsonData = XLSX.utils.sheet_to_json(firstSheet)
@@ -252,5 +284,28 @@ button:hover {
   font-size: 1rem;
   color: #666;
   margin: 1rem 0 0.5rem;
+}
+
+.spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2196F3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

@@ -41,7 +41,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed } from 'vue'
 import { useMainStore } from '../stores/mainStore'
 
 export default defineComponent({
@@ -56,9 +56,8 @@ export default defineComponent({
 
   setup() {
     const store = useMainStore()
-    const currentSessionId = ref<string | null>(null)
-    const trainingStatus = ref<any>(null)
-    const statusCheckInterval = ref<number | null>(null)
+    // statusCheckInterval должен быть глобальным для компонента
+    let statusCheckInterval: number | null = null
 
     const trainPredictSave = computed({
       get: () => store.trainPredictSave,
@@ -66,7 +65,7 @@ export default defineComponent({
     })
 
     const isTraining = computed(() => {
-      return trainingStatus.value && ['initializing', 'running'].includes(trainingStatus.value.status)
+      return store.trainingStatus && ['initializing', 'running'].includes(store.trainingStatus.status)
     })
 
     const buttonText = computed(() => {
@@ -75,11 +74,10 @@ export default defineComponent({
     })
 
     const getStatusMessage = computed(() => {
-      if (!trainingStatus.value) return ''
-      
-      const status = trainingStatus.value.status
+      if (!store.trainingStatus) return ''
+      const status = store.trainingStatus.status
       if (status === 'initializing') return 'Инициализация обучения...'
-      if (status === 'running') return `Обучение в процессе (${trainingStatus.value.progress}%)`
+      if (status === 'running') return `Обучение в процессе (${store.trainingStatus.progress ?? 0}%)`
       if (status === 'completed') return 'Обучение успешно завершено!'
       if (status === 'failed') return 'Ошибка при обучении'
       return status
@@ -94,29 +92,19 @@ export default defineComponent({
     })
 
     const checkTrainingStatus = async () => {
-      if (!currentSessionId.value) return
-      
+      if (!store.sessionId) return
       try {
-        const response = await fetch(`http://localhost:8000/training_status/${currentSessionId.value}`)
+        const response = await fetch(`http://localhost:8000/training_status/${store.sessionId}`)
         if (!response.ok) {
           throw new Error('Failed to fetch training status')
         }
-        
         const status = await response.json()
-        trainingStatus.value = status
-
-        // Stop checking if training is complete or failed
-        if (['completed', 'failed'].includes(status.status)) {
-          if (statusCheckInterval.value) {
-            clearInterval(statusCheckInterval.value)
-            statusCheckInterval.value = null
-          }
-
-          // Show final status
-          if (status.status === 'completed') {
-            alert('Обучение модели успешно завершено!')
-          } else if (status.status === 'failed') {
-            alert(`Ошибка при обучении: ${status.error}`)
+        store.setTrainingStatus(status)
+        // Обновляем прогресс даже если статус initializing
+        if (["completed", "failed"].includes(status.status)) {
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval)
+            statusCheckInterval = null
           }
         }
       } catch (error) {
@@ -126,16 +114,27 @@ export default defineComponent({
 
     const startTraining = async () => {
       try {
-        const formData = new FormData();
+        // Сразу выставляем статус initializing и progress 0
+        store.setTrainingStatus({ status: 'initializing', progress: 0 })
+        if (statusCheckInterval) {
+          clearInterval(statusCheckInterval)
+        }
+        statusCheckInterval = setInterval(checkTrainingStatus, 2000) as unknown as number
         
+        const formData = new FormData();
         if (store.selectedFile) {
           formData.append('training_file', store.selectedFile);
         } else {
           console.error('No file selected - please upload a file first');
           alert('Ошибка: Файл не выбран. Пожалуйста, загрузите файл перед обучением модели.');
+          // Сбрасываем статус, так как обучение не началось
+          store.setTrainingStatus(null);
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+            statusCheckInterval = null;
+          }
           return;
         }
-
         const params = {
           datetime_column: store.dateColumn,
           target_column: store.targetColumn,
@@ -152,10 +151,8 @@ export default defineComponent({
           training_time_limit: store.timeLimit,
           static_feature_columns: store.staticFeatures
         };
-
         const paramsJson = JSON.stringify(params);
         formData.append('params', paramsJson);
-
         const response = await fetch('http://localhost:8000/train_timeseries_model/', {
           method: 'POST',
           body: formData,
@@ -163,7 +160,6 @@ export default defineComponent({
             'Accept': 'application/json',
           }
         });
-
         if (!response.ok) {
           const errorText = await response.text();
           let errorData;
@@ -172,30 +168,36 @@ export default defineComponent({
           } catch (e) {
             errorData = { detail: errorText };
           }
-          
           const errorMessage = errorData.detail || 'Failed to train model';
           console.error('Training error:', errorMessage);
           alert(`Ошибка обучения: ${errorMessage}`);
+          // Устанавливаем статус ошибки
+          store.setTrainingStatus({ status: 'failed', progress: 0, error: errorMessage });
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+            statusCheckInterval = null;
+          }
           throw new Error(errorMessage);
         }
-
         const result = await response.json();
         console.log('Training started successfully:', result);
-        
-        // Save session ID and start status checking
-        currentSessionId.value = result.session_id
-        trainingStatus.value = { status: 'initializing', progress: 0 }
-        
-        // Start checking status periodically
-        if (statusCheckInterval.value) {
-          clearInterval(statusCheckInterval.value)
-        }
-        statusCheckInterval.value = setInterval(checkTrainingStatus, 2000) as unknown as number
-
+        store.setSessionId(result.session_id)
+        // Обновляем статус на running после успешного старта
+        store.setTrainingStatus({ status: 'running', progress: 0 })
       } catch (error) {
         console.error('Error during training:', error);
         if (error instanceof Error && !error.message.includes('Файл не выбран')) {
           alert('Произошла ошибка при обучении модели. Подробности в консоли.');
+          // Устанавливаем статус ошибки, если что-то пошло не так
+          store.setTrainingStatus({ 
+            status: 'failed', 
+            progress: 0, 
+            error: error instanceof Error ? error.message : 'Неизвестная ошибка' 
+          });
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+            statusCheckInterval = null;
+          }
         }
       }
     }
@@ -204,7 +206,7 @@ export default defineComponent({
       trainPredictSave,
       canStartTraining,
       startTraining,
-      trainingStatus,
+      trainingStatus: computed(() => store.trainingStatus),
       isTraining,
       buttonText,
       getStatusMessage
@@ -216,6 +218,12 @@ export default defineComponent({
 <style scoped>
 .training {
   margin-top: 2rem;
+  /* убираем рамку, фон и паддинг */
+  max-width: none;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
 }
 
 .section-title {
@@ -223,85 +231,65 @@ export default defineComponent({
   font-weight: bold;
   margin-bottom: 1.5rem;
   color: #333;
+  text-align: left;
 }
 
 .training-checkbox {
-  margin-bottom: 1rem;
+  margin-bottom: 20px;
 }
 
-.training-checkbox label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  color: #666;
-}
-
-.training-checkbox input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  cursor: pointer;
-}
-
-.train-button {
-  width: 100%;
-  padding: 0.75rem;
-  font-size: 1rem;
-  font-weight: 500;
-  color: white;
-  background-color: #d32f2f;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.train-button:hover:not(:disabled) {
-  background-color: #b71c1c;
-}
-
-.train-button:disabled {
-  background-color: #ffcdd2;
-  cursor: not-allowed;
+.training-status {
+  margin-bottom: 20px;
 }
 
 .progress-container {
   width: 100%;
-  height: 8px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
-  margin: 1rem 0;
+  height: 10px;
+  background-color: #f3f3f3;
+  border-radius: 5px;
   overflow: hidden;
+  position: relative;
 }
 
 .progress-bar {
   height: 100%;
   background-color: #4caf50;
-  transition: width 0.3s ease;
+  transition: width 0.4s ease;
 }
 
-.progress-bar.progress-error {
-  background-color: #f44336;
+.progress-error {
+  background-color: #f44336 !important;
 }
 
 .status-text {
+  margin-top: 5px;
   text-align: center;
-  color: #666;
-  margin-bottom: 1rem;
 }
 
 .error-message {
   color: #f44336;
-  margin-top: 0.5rem;
+  margin-top: 10px;
   text-align: center;
-  font-size: 0.9rem;
 }
 
-.training-status {
-  margin: 1rem 0;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border: 1px solid #e9ecef;
+.train-button {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.train-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.train-button:not(:disabled):hover {
+  background-color: #0056b3;
 }
 </style>

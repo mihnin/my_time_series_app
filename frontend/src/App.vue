@@ -1,45 +1,75 @@
 <template>
   <div class="app">
-    <div class="sidebar">
-      <Navigation @page-change="handlePageChange" />
-      <TrainingSettings v-if="currentPage === 'Главная'" />
-    </div>
-    
+    <Sidebar :currentPage="currentPage" :handlePageChange="handlePageChange" />
     <div class="main-content">
       <div class="header">
         <h1>Версия 3.0</h1>
         <h2>Бизнес-приложение для прогнозирования временных рядов</h2>
       </div>
-      
       <div class="page-content">
-        <TimeSeriesChart
-          v-if="store.tableData.length && store.dateColumn !== '<нет>' && store.targetColumn !== '<нет>'"
-          :data="store.tableData"
-          :dateColumn="store.dateColumn"
-          :targetColumn="store.targetColumn"
-          :idColumn="store.idColumn !== '<нет>' ? store.idColumn : null"
-        />
-        <div v-else>
-          <DataTable v-if="store.tableData.length" :data="store.tableData" />
+
+        <template v-if="store.predictionRows.length && store.predictionRows[0]">
+          <div class="prediction-table">
+            <h4>Первые 10 строк прогноза</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th v-for="headerKey in Object.keys(store.predictionRows[0])" :key="headerKey">{{ headerKey }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in store.predictionRows" :key="row.item_id + '-' + row.timestamp">
+                  <td v-for="cellHeaderKey in Object.keys(row)" :key="cellHeaderKey">{{ row[cellHeaderKey] }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <template v-else-if="store.tableData.length && store.dateColumn !== '<нет>' && store.targetColumn !== '<нет>'">
+          <TimeSeriesChart
+            :data="store.tableData.slice(0, 1000)"
+            :dateColumn="store.dateColumn"
+            :targetColumn="store.targetColumn"
+            :idColumn="store.idColumn !== '<нет>' ? store.idColumn : undefined"
+          />
+          <div v-if="store.sessionId && store.trainingStatus && store.trainingStatus.status === 'completed' && store.trainingStatus.leaderboard" class="leaderboard-table-main">
+             <h4>Лидерборд моделей</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th v-for="(value, key) in store.trainingStatus.leaderboard[0]" :key="key">{{ key }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, idx) in store.trainingStatus.leaderboard" :key="idx">
+                  <td v-for="(value, key) in row" :key="key">{{ value }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <template v-else-if="store.tableData.length">
+           <DataTable :data="store.tableData" />
+        </template>
+
         </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, watch } from 'vue'
 import { useMainStore } from './stores/mainStore'
-import Navigation from './components/Navigation.vue'
-import TrainingSettings from './components/TrainingSettings.vue'
+import Sidebar from './components/Sidebar.vue'
 import DataTable from './components/DataTable.vue'
 import TimeSeriesChart from './components/TimeSeriesChart.vue'
 
 export default defineComponent({
   name: 'App',
   components: {
-    Navigation,
-    TrainingSettings,
+    Sidebar,
     DataTable,
     TimeSeriesChart
   },
@@ -50,6 +80,14 @@ export default defineComponent({
     const handlePageChange = (page: string) => {
       currentPage.value = page
     }
+
+    watch(
+      () => store.predictionRows,
+      (val) => {
+        console.log('App.vue predictionRows watch triggered:', val);
+      },
+      { deep: true } // Add deep watch to detect changes in array elements
+    )
 
     return {
       store,
@@ -147,5 +185,83 @@ html, body {
 .chart-section {
   flex: 1;
   min-width: 0;
+}
+
+.leaderboard-table-main {
+  margin-top: 2rem;
+  background-color: #fff;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  overflow-x: auto;
+  padding: 1.5rem 1rem 1.5rem 1rem;
+}
+.leaderboard-table-main h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1976d2;
+  letter-spacing: 0.5px;
+}
+.leaderboard-table-main table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+.leaderboard-table-main th, .leaderboard-table-main td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+.leaderboard-table-main th {
+  background-color: #f5f7fa;
+  font-weight: 700;
+  color: #333;
+  border-top: 1px solid #e0e0e0;
+}
+.leaderboard-table-main tr:hover {
+  background-color: #f0f7ff;
+}
+.leaderboard-table-main td {
+  color: #222;
+}
+
+.prediction-table {
+  margin-top: 2rem;
+  background-color: #fff;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  overflow-x: auto;
+  padding: 1.5rem 1rem 1.5rem 1rem;
+}
+.prediction-table h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1976d2;
+  letter-spacing: 0.5px;
+}
+.prediction-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+.prediction-table th, .prediction-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+.prediction-table th {
+  background-color: #f5f7fa;
+  font-weight: 700;
+  color: #333;
+  border-top: 1px solid #e0e0e0;
+}
+.prediction-table tr:hover {
+  background-color: #f0f7ff;
+}
+.prediction-table td {
+  color: #222;
 }
 </style>

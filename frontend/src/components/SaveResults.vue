@@ -6,7 +6,7 @@
       <button 
         @click="saveToCsv"
         class="save-button"
-        :disabled="!canSaveResults"
+        :disabled="!canSaveButton"
       >
         💾 Сохранить результаты в CSV
       </button>
@@ -14,7 +14,7 @@
       <button 
         @click="saveToExcel"
         class="save-button"
-        :disabled="!canSaveResults"
+        :disabled="!canSaveButton"
       >
         💾 Сохранить результаты в Excel
       </button>
@@ -33,29 +33,61 @@ export default defineComponent({
     isVisible: {
       type: Boolean,
       default: false
+    },
+    canSave: {
+      type: Boolean,
+      default: false
     }
   },
 
-  setup() {
+  setup(props) {
     const store = useMainStore()
 
-    const canSaveResults = computed(() => {
-      // TODO: Add condition when predictions are available
-      return store.tableData.length > 0
+    const canSaveButton = computed(() => {
+      // Кнопки должны быть активны, если есть sessionId и predictionRows (даже если canSave всегда true)
+      return !!store.sessionId && store.predictionRows.length > 0
     })
 
-    const saveToCsv = () => {
-      console.log('Saving to CSV...')
+    const saveToCsv = async () => {
+      if (!store.sessionId) return
+      const url = `http://localhost:8000/download_prediction_csv/${store.sessionId}`
+      try {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Ошибка скачивания CSV')
+        const blob = await response.blob()
+        const link = document.createElement('a')
+        link.href = window.URL.createObjectURL(blob)
+        link.download = `prediction_${store.sessionId}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } catch (e) {
+        alert('Ошибка при скачивании CSV')
+      }
     }
 
-    const saveToExcel = () => {
-      console.log('Saving to Excel...')
+    const saveToExcel = async () => {
+      if (!store.sessionId) return
+      const url = `http://localhost:8000/download_prediction/${store.sessionId}`
+      try {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Ошибка скачивания Excel')
+        const blob = await response.blob()
+        const link = document.createElement('a')
+        link.href = window.URL.createObjectURL(blob)
+        link.download = `prediction_${store.sessionId}.xlsx`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } catch (e) {
+        alert('Ошибка при скачивании Excel')
+      }
     }
 
     return {
-      canSaveResults,
       saveToCsv,
-      saveToExcel
+      saveToExcel,
+      canSaveButton
     }
   }
 })
