@@ -2,7 +2,7 @@
   <div class="file-uploader">
     <h3 class="section-title">Настройка обучения</h3>
     
-    <details class="settings-panel">
+    <!-- <details class="settings-panel">
       <summary class="settings-summary">Настройки для больших файлов</summary>
       <div class="settings-content">
         <label class="input-label">
@@ -17,7 +17,7 @@
           />
         </label>
       </div>
-    </details>
+    </details> -->
 
     <div class="upload-section">
       <h4 class="subsection-title">Загрузка данных</h4>

@@ -2,7 +2,6 @@
   <div class="sidebar">
     <Navigation @page-change="handlePageChange" />
     <TrainingSettings v-if="currentPage === 'Главная'" />
-    <SaveResults :isVisible="store.predictionRows.length > 0" />
   </div>
 </template>
 
@@ -10,15 +9,13 @@
 import { defineComponent } from 'vue'
 import Navigation from './Navigation.vue'
 import TrainingSettings from './TrainingSettings.vue'
-import SaveResults from './SaveResults.vue'
 import { useMainStore } from '../stores/mainStore'
 
 export default defineComponent({
   name: 'Sidebar',
   components: {
     Navigation,
-    TrainingSettings,
-    SaveResults
+    TrainingSettings
   },
   props: {
     currentPage: {
