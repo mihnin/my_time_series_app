@@ -53,7 +53,7 @@ async def run_training_async(
     session_id: str,
     df_train: pd.DataFrame,
     training_params: TrainingParameters,
-    original_filename: str
+    original_filename: str,
 ):
     """Асинхронный запуск процесса обучения."""
     try:
@@ -94,12 +94,23 @@ async def run_training_async(
         logging.info(f"[run_training_async] Каталог модели создан: {model_path}")
 
         # Run the actual training process in a thread pool
+
+        text_to_progress = {
+            'preparation': 20,
+            'holidays': 30,
+            'missings': 40,
+            'dataframe': 50,
+            'training': 60,
+            'metadata': 90
+        }
+
         train_func = partial(
             train_model,
             df_train=df_train,
             training_params=training_params,
             model_path=model_path,
-            session_id=session_id
+            session_id=session_id,
+            text_to_progress=text_to_progress
         )
         logging.info(f"[run_training_async] Передача задачи обучения в пул потоков...")
         await asyncio.to_thread(train_func)
@@ -133,7 +144,8 @@ def train_model(
     df_train: pd.DataFrame,
     training_params: TrainingParameters,
     model_path: str,
-    session_id: str
+    session_id: str,
+    text_to_progress: dict | None
 ) -> None:
     """Основная функция обучения (запускается в отдельном потоке)."""
     try:
@@ -142,7 +154,7 @@ def train_model(
         # 3. Data Preparation
         df2 = df_train.copy()
         df2[training_params.datetime_column] = pd.to_datetime(df2[training_params.datetime_column], errors="coerce")
-        status.update({"progress": 20})
+        status.update({"progress": text_to_progress['preparation']}) 
         save_session_metadata(session_id, status)
 
         # Add holidays if requested
@@ -153,7 +165,7 @@ def train_model(
                 holiday_col="russian_holiday"
             )
             logging.info(f"[train_model] Добавлен признак российских праздников.")
-        status.update({"progress": 30})
+        status.update({"progress": text_to_progress['holidays']})
         save_session_metadata(session_id, status)
 
         # Fill missing values
@@ -163,7 +175,7 @@ def train_model(
             training_params.fill_group_columns
         )
         logging.info(f"[train_model] Пропущенные значения обработаны методом: {training_params.fill_missing_method}")
-        status.update({"progress": 40})
+        status.update({"progress": text_to_progress['missings']})
         save_session_metadata(session_id, status)
 
         # Handle static features
@@ -184,7 +196,7 @@ def train_model(
             training_params.target_column
         )
         ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-        status.update({"progress": 50})
+        status.update({"progress": text_to_progress['dataframe']})
         save_session_metadata(session_id, status)
         logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
 
@@ -198,7 +210,6 @@ def train_model(
             logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
 
         # Create predictor
-        status.update({"progress": 60})
         save_session_metadata(session_id, status)
         logging.info(f"[train_model] Создание объекта TimeSeriesPredictor...")
         predictor = TimeSeriesPredictor(
@@ -212,7 +223,7 @@ def train_model(
         )
 
         # Train the model
-        status.update({"progress": 60})
+        status.update({"progress": text_to_progress['training']})
         save_session_metadata(session_id, status)
         logging.info(f"[train_model] Запуск обучения модели...")
         predictor.fit(
@@ -236,7 +247,7 @@ def train_model(
         logging.info(f"[train_model] Лидерборд сохранён: {leaderboard_path}")
 
         status.update({"progress": 90})
-        save_session_metadata(session_id, status)
+        save_session_metadata(session_id, text_to_progress['metadata'])
 
         # Clean up
         del predictor

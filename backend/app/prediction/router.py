@@ -15,9 +15,8 @@ import logging
 
 router = APIRouter()
 
-@router.get("/predict/{session_id}")
 def predict_timeseries(session_id: str):
-    """Сделать прогноз по id сессии и вернуть xlsx файл с результатом."""
+
     logging.info(f"[predict_timeseries] Начало прогноза для session_id={session_id}")
     # 1. Проверяем, что сессия существует
     session_path = get_session_path(session_id)
@@ -98,18 +97,34 @@ def predict_timeseries(session_id: str):
     except Exception as e:
         logging.error(f"Ошибка при прогнозировании: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {e}")
+    
+    return preds
 
-    # 7. Сохраняем результат в xlsx в память и на диск
+def save_prediction(output, session_id):
+
+    session_path = get_session_path(session_id)
+    
+    prediction_file_path = os.path.join(session_path, f"prediction_{session_id}.xlsx")
+    with open(prediction_file_path, "wb") as f:
+
+        f.write(output.getvalue())
+    logging.info(f"[predict_timeseries] Прогноз сохранён в файл: {prediction_file_path}")
+
+@router.get("/predict/{session_id}")
+def predict_timeseries_endpoint(session_id: str):
+    """Сделать прогноз по id сессии и вернуть xlsx файл с результатом."""
+    
+    preds = predict_timeseries(session_id)
+
     output = BytesIO()
     preds.reset_index().to_excel(output, index=False)
     output.seek(0)
 
-    prediction_file_path = os.path.join(session_path, f"prediction_{session_id}.xlsx")
-    with open(prediction_file_path, "wb") as f:
-        f.write(output.getvalue())
-    logging.info(f"[predict_timeseries] Прогноз сохранён в файл: {prediction_file_path}")
 
-    # 8. Возвращаем файл
+    save_prediction(output, session_id)
+    
+
+    # Возвращаем файл
     logging.info(f"[predict_timeseries] Отправка файла пользователю (session_id={session_id})")
     return Response(
         content=output.getvalue(),
