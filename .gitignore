@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+my_env
 
 # Spyder project settings
 .spyderproject
@@ -173,3 +174,6 @@ cython_debug/
 AutogluonModels/
 /results.xlsx
 results.xlsx
+
+backend/app/training_sessions
+.vscode

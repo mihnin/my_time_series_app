@@ -41,7 +41,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue'
+import { defineComponent, computed, watch } from 'vue'
 import { useMainStore } from '../stores/mainStore'
 
 export default defineComponent({
@@ -101,7 +101,7 @@ export default defineComponent({
         const status = await response.json()
         store.setTrainingStatus(status)
         // Обновляем прогресс даже если статус initializing
-        if (["completed", "failed"].includes(status.status)) {
+        if (["completed", "failed", "complete"].includes(status.status)) {
           if (statusCheckInterval) {
             clearInterval(statusCheckInterval)
             statusCheckInterval = null
@@ -114,13 +114,17 @@ export default defineComponent({
 
     const startTraining = async () => {
       try {
-        // Сразу выставляем статус initializing и progress 0
-        store.setTrainingStatus({ status: 'initializing', progress: 0 })
+        // Полностью сбрасываем trainingStatus, predictionRows и sessionId перед новым обучением
+        store.setTrainingStatus(null)
+        store.setPredictionRows([])
+        store.setSessionId(null)
         if (statusCheckInterval) {
           clearInterval(statusCheckInterval)
+          statusCheckInterval = null
         }
-        statusCheckInterval = setInterval(checkTrainingStatus, 2000) as unknown as number
-        
+        // Сразу выставляем статус initializing и progress 0
+        store.setTrainingStatus({ status: 'initializing', progress: 0 })
+
         const formData = new FormData();
         if (store.selectedFile) {
           formData.append('training_file', store.selectedFile);
@@ -153,6 +157,92 @@ export default defineComponent({
         };
         const paramsJson = JSON.stringify(params);
         formData.append('params', paramsJson);
+
+        if (trainPredictSave.value) {
+          // Новый сценарий: обучение+прогноз+сохранение
+          const response = await fetch('http://localhost:8000/train_prediction_save/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorData;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (e) {
+              errorData = { detail: errorText };
+            }
+            const errorMessage = errorData.detail || 'Failed to train and predict';
+            console.error('Training+Prediction error:', errorMessage);
+            alert(`Ошибка обучения+прогноза: ${errorMessage}`);
+            store.setTrainingStatus({ status: 'failed', progress: 0, error: errorMessage });
+            return;
+          }
+          const result = await response.json();
+          store.setSessionId(result.session_id)
+          store.setTrainingStatus({ status: 'running', progress: 0 })
+
+          // Опрос статуса
+          const pollStatus = async () => {
+            if (!store.sessionId) return;
+            try {
+              const statusResp = await fetch(`http://localhost:8000/training_status/${store.sessionId}`);
+              if (!statusResp.ok) throw new Error('Failed to fetch training status');
+              const status = await statusResp.json();
+              store.setTrainingStatus(status);
+              if (["completed", "complete", "failed"].includes(status.status)) {
+                if (statusCheckInterval) {
+                  clearInterval(statusCheckInterval);
+                  statusCheckInterval = null;
+                }
+                if (["completed", "complete"].includes(status.status)) {
+                  // Получаем прогноз
+                  try {
+                    const fileResp = await fetch(`http://localhost:8000/download_prediction/${store.sessionId}`);
+                    if (!fileResp.ok) throw new Error('Ошибка скачивания прогноза');
+                    const blob = await fileResp.blob();
+                    // Парсим первые 10 строк xlsx
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const XLSX = await import('xlsx');
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    const headers = rows[0];
+                    const dataRows = rows.slice(1, 11); // первые 10 строк
+                    const parsedRows = dataRows.map(row => {
+                      const obj: Record<string, any> = {};
+                      headers.forEach((h: string, idx: number) => { obj[h] = row[idx]; });
+                      return obj;
+                    });
+                    store.setPredictionRows(parsedRows);
+                    // Автоматическая загрузка файла
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `prediction_${store.sessionId}.xlsx`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } catch (e) {
+                    alert('Ошибка при обработке прогноза: ' + (e instanceof Error ? e.message : e));
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error checking training+prediction status:', error);
+            }
+          };
+          // Запускаем опрос статуса
+          statusCheckInterval = setInterval(pollStatus, 2000) as unknown as number;
+          // Первый вызов сразу
+          pollStatus();
+          return;
+        }
+        // --- Обычная логика (старая) ---
+        statusCheckInterval = setInterval(checkTrainingStatus, 2000) as unknown as number
         const response = await fetch('http://localhost:8000/train_timeseries_model/', {
           method: 'POST',
           body: formData,
@@ -184,6 +274,20 @@ export default defineComponent({
         store.setSessionId(result.session_id)
         // Обновляем статус на running после успешного старта
         store.setTrainingStatus({ status: 'running', progress: 0 })
+
+        // --- Скрываем лидерборд после получения прогноза (старый сценарий) ---
+        watch(
+          () => store.predictionRows,
+          (val) => {
+            if (val && val.length > 0) {
+              // Скрываем лидерборд
+              if (store.trainingStatus && store.trainingStatus.leaderboard) {
+                store.setTrainingStatus({ ...store.trainingStatus, leaderboard: [] });
+              }
+            }
+          },
+          { deep: true, immediate: false }
+        );
       } catch (error) {
         console.error('Error during training:', error);
         if (error instanceof Error && !error.message.includes('Файл не выбран')) {

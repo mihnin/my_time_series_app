@@ -6,6 +6,8 @@ from datetime import datetime
 
 # Base path for all training sessions - now relative to backend/app directory
 SESSIONS_BASE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "training_sessions")
+training_sessions: Dict[str, Dict] = {}
+
 
 def get_session_path(session_id: str) -> str:
     """Get the full path to a session directory."""

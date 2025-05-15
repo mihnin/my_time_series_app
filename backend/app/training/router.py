@@ -12,6 +12,7 @@ from typing import Dict, Optional
 from datetime import datetime
 from io import BytesIO
 
+import modin.pandas as modin_pd
 from autogluon.timeseries import TimeSeriesPredictor
 from .model import TrainingParameters
 from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
@@ -25,10 +26,11 @@ from sessions.utils import (
     cleanup_old_sessions,
     save_training_file,
     get_model_path,
+    training_sessions
 )
 
 # Global training status tracking
-training_sessions: Dict[str, Dict] = {}
+
 
 # Run cleanup of old sessions at startup
 cleanup_old_sessions()
@@ -210,7 +212,7 @@ def train_model(
         )
 
         # Train the model
-        status.update({"progress": 40})
+        status.update({"progress": 60})
         save_session_metadata(session_id, status)
         logging.info(f"[train_model] Запуск обучения модели...")
         predictor.fit(
@@ -310,9 +312,9 @@ async def train_model_endpoint(
         # Используем to_thread для блокирующих операций pandas
         def read_data_from_stream(stream, filename):
             if filename.endswith('.csv'):
-                return pd.read_csv(stream)
+                return modin_pd.read_csv(stream)._to_pandas()
             else:  # Excel file
-                return pd.read_excel(stream, engine='openpyxl' if filename.endswith('.xlsx') else None)
+                return modin_pd.read_excel(stream)._to_pandas() # engine='openpyxl' if filename.endswith('.xlsx') else None
 
         try:
             logging.info(f"[train_model_endpoint] Начало загрузки данных в DataFrame для session_id={session_id}...")

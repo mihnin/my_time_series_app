@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from training.router import router as training_router
 from prediction.router import router as prediction_router
+from train_prediciton_save.router import router as train_prediction_save_router
 import logging
+
 
 app = FastAPI(
     title="Time Series Analysis API",
@@ -37,4 +39,5 @@ async def root():
     }
 
 app.include_router(training_router)
+app.include_router(train_prediction_save_router)
 app.include_router(prediction_router)

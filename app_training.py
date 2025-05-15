@@ -17,6 +17,7 @@ from app_saving import save_model_metadata
 from src.validation.data_validation import validate_dataset, display_validation_results
 
 def run_training():
+    start = time.time()
     """Функция для запуска обучения модели."""
     df_train = st.session_state.get("df")
     if df_train is None:
@@ -494,7 +495,8 @@ def run_training():
         st.info(f"Начинаем обучение с parametros: preset={presets_val}, time_limit={t_limit}s, prediction_length={p_length}")
         if hyperparams:
             st.info(f"Выбранные модели: {', '.join(hyperparams.keys())}")
-        
+        end = time.time()
+        print(f'Подготовка данных завершена за {end - start} секунд.')
         start_time = time.time()
         status_text.text("Запуск обучения модели...")
         progress_bar.progress(50)

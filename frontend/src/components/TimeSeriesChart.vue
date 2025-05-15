@@ -133,18 +133,6 @@ export default defineComponent({
       chart?.resize()
     }
 
-    // Очистка правой панели при выводе графика
-    watch([() => props.data, () => props.dateColumn, () => props.targetColumn, () => props.idColumn], () => {
-      // Очищаем все элементы с классом 'app-logs', 'leaderboard-table-main', 'save-results', 'model-export', 'prediction', 'training-status', 'data-table', 'app-logs', 'metrics-and-models', 'missing-value-handler', 'frequency-settings', 'column-selector', 'file-uploader'
-      const rightPanel = document.querySelector('.main-content') || document.body;
-      const selectors = [
-        '.app-logs', '.leaderboard-table-main', '.save-results', '.model-export', '.prediction', '.training-status', '.data-table', '.metrics-and-models', '.missing-value-handler', '.frequency-settings', '.column-selector', '.file-uploader'
-      ];
-      selectors.forEach(sel => {
-        rightPanel.querySelectorAll(sel).forEach(el => el.remove());
-      });
-    });
-
     watch(() => [props.data, props.dateColumn, props.targetColumn, props.idColumn], updateChart, { deep: true })
 
     onMounted(() => {
