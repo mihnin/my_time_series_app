@@ -202,10 +202,10 @@ def train_model(
 
         # Handle frequency
         actual_freq = None
+        print(training_params.frequency)
         if training_params.frequency and training_params.frequency.lower() != "auto":
             freq_short = training_params.frequency.split(" ")[0]
             ts_df = ts_df.convert_frequency(freq_short)
-            ts_df = ts_df.fill_missing_values(method="ffill")
             actual_freq = freq_short
             logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
 
@@ -222,19 +222,19 @@ def train_model(
             verbosity=2
         )
 
-        print(training_params.models_to_train)
         hyperparams = {}
 
-        for model in training_params.models_to_train:
-            if model == 'Chronos':
-                print("Chronos is using pre-installed" )
-                hyperparams["Chronos"] = [
-                    {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
-                    {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
-                    {"model_path": "autogluon/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
-                ]
-            else:
-                hyperparams[model] = {}
+        if training_params.models_to_train:
+            for model in training_params.models_to_train:
+                if model == 'Chronos':
+                    print("Chronos is using pre-installed" )
+                    hyperparams["Chronos"] = [
+                        {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
+                        {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
+                        {"model_path": "autogluon/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
+                    ]
+                else:
+                    hyperparams[model] = {}
 
         # Train the model
         status.update({"progress": text_to_progress['training']})

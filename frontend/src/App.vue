@@ -6,73 +6,23 @@
         <h1>Версия 3.0</h1>
         <h2>Бизнес-приложение для прогнозирования временных рядов</h2>
       </div>
-      <div class="page-content">
-        <template v-if="store.dateColumn !== '<нет>' && store.targetColumn !== '<нет>' && store.tableData.length">
-          <TimeSeriesChart
-            :data="store.tableData.slice(0, 1000)"
-            :dateColumn="store.dateColumn"
-            :targetColumn="store.targetColumn"
-            :idColumn="store.idColumn !== '<нет>' ? store.idColumn : undefined"
-          />
-
-          <div v-if="store.sessionId && store.trainingStatus && Array.isArray(store.trainingStatus.leaderboard) && store.trainingStatus.leaderboard.length > 0 && typeof store.trainingStatus.leaderboard[0] === 'object' && store.trainingStatus.leaderboard[0] !== null">
-            <div class="leaderboard-table-main">
-              <h4>Лидерборд моделей</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th v-for="(value, key) in store.trainingStatus.leaderboard[0]" :key="key">{{ key }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, idx) in store.trainingStatus.leaderboard" :key="idx">
-                    <td v-for="(value, key) in row" :key="key">{{ value }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div v-if="Array.isArray(store.predictionRows) && store.predictionRows.length > 0 && typeof store.predictionRows[0] === 'object' && store.predictionRows[0] !== null">
-            <div class="prediction-table limited-height">
-              <h4>Первые 10 строк прогноза</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th v-for="headerKey in Object.keys(store.predictionRows[0])" :key="headerKey">{{ headerKey }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in store.predictionRows" :key="row.item_id + '-' + row.timestamp">
-                    <td v-for="cellHeaderKey in Object.keys(row)" :key="cellHeaderKey">{{ row[cellHeaderKey] }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-
-        <template v-else-if="store.tableData.length && (store.dateColumn === '<нет>' || store.targetColumn === '<нет>')">
-          <DataTable :data="store.tableData" />
-        </template>
-      </div>
+      <MainPage />
+      <!-- <FrequencySettings :isVisible="currentPage === 'train'" /> -->
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watch } from 'vue'
+import { defineComponent, ref, watch, onMounted } from 'vue'
 import { useMainStore } from './stores/mainStore'
 import Sidebar from './components/Sidebar.vue'
-import DataTable from './components/DataTable.vue'
-import TimeSeriesChart from './components/TimeSeriesChart.vue'
+import MainPage from './components/MainPage.vue'
 
 export default defineComponent({
   name: 'App',
   components: {
     Sidebar,
-    DataTable,
-    TimeSeriesChart
+    MainPage
   },
   setup() {
     const store = useMainStore()
@@ -82,12 +32,16 @@ export default defineComponent({
       currentPage.value = page
     }
 
+    onMounted(() => {
+      document.title = 'Прогнозирование временных рядов';
+    });
+
     watch(
       () => store.predictionRows,
       (val) => {
         console.log('App.vue predictionRows watch triggered:', val);
       },
-      { deep: true } // Add deep watch to detect changes in array elements
+      { deep: true }
     )
 
     return {

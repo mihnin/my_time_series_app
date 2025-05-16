@@ -17,7 +17,6 @@ export const useMainStore = defineStore('main', () => {
   const considerRussianHolidays = ref(false)  // New state for holidays checkbox
   const fillMethod = ref('None (оставить как есть)')
   const groupingColumns = ref<string[]>([])
-  const frequency = ref('auto (угадать)')  // добавляем новое состояние
   const selectedMetric = ref('SQL (Scaled quantile loss)')
   const selectedModels = ref<string[]>(['*'])  // по умолчанию выбраны все модели
   const selectedPreset = ref('high_quality')
@@ -28,6 +27,7 @@ export const useMainStore = defineStore('main', () => {
   const sessionId = ref<string | null>(null)
   const trainingStatus = ref<any>(null)
   const predictionRows = ref<any[]>([])  // Новое состояние для строк прогноза
+  const horizonUnit = ref("D (день)")
 
   function setTableData(data: any[]) {
     tableData.value = data
@@ -74,10 +74,6 @@ export const useMainStore = defineStore('main', () => {
     fillMethod.value = method
   }
 
-  function setFrequency(value: string) {
-    frequency.value = value
-  }
-
   function setSelectedMetric(metric: string) {
     selectedMetric.value = metric
   }
@@ -118,6 +114,10 @@ export const useMainStore = defineStore('main', () => {
     predictionRows.value = rows
   }
 
+  function setHorizonUnit(value: string) {
+    horizonUnit.value = value
+  }
+
   return {
     tableData,
     selectedFile,
@@ -132,7 +132,6 @@ export const useMainStore = defineStore('main', () => {
     considerRussianHolidays, // Экспортируем новое свойство
     fillMethod,
     groupingColumns,
-    frequency,
     selectedMetric,
     selectedModels,
     selectedPreset,
@@ -143,6 +142,7 @@ export const useMainStore = defineStore('main', () => {
     sessionId,
     trainingStatus,
     predictionRows, // Экспортируем новое свойство
+    horizonUnit,
     setTableData,
     setChunkSize,
     setFile,
@@ -154,7 +154,6 @@ export const useMainStore = defineStore('main', () => {
     setConsiderRussianHolidays, // Экспортируем новый метод
     setGroupingColumns,
     setFillMethod,
-    setFrequency,
     setSelectedMetric,
     setSelectedModels,
     setSelectedPreset,
@@ -165,5 +164,6 @@ export const useMainStore = defineStore('main', () => {
     setSessionId,
     setTrainingStatus,
     setPredictionRows, // Экспортируем новый метод
+    setHorizonUnit,
   }
 })

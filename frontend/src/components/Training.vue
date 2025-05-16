@@ -143,7 +143,7 @@ export default defineComponent({
           datetime_column: store.dateColumn,
           target_column: store.targetColumn,
           item_id_column: store.idColumn,
-          frequency: store.frequency === 'auto (угадать)' ? 'auto' : store.frequency,
+          frequency: store.horizonUnit.split(' ')[0],
           fill_missing_method: store.fillMethod === 'None (оставить как есть)' ? 'None' : store.fillMethod,
           fill_group_columns: store.groupingColumns,
           use_russian_holidays: store.considerRussianHolidays,

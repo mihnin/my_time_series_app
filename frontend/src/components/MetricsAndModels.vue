@@ -60,17 +60,6 @@
       </select>
     </div>
 
-    <!-- Горизонт прогнозирования -->
-    <div class="horizon-input">
-      <label>Горизонт прогнозирования</label>
-      <input 
-        type="number" 
-        v-model.number="predictionHorizon"
-        min="1"
-        :class="{ invalid: !isValidHorizon }"
-      >
-    </div>
-
     <!-- Лимит по времени -->
     <div class="time-limit-input">
       <label>Лимит по времени (сек)</label>
@@ -90,6 +79,28 @@
           v-model="meanOnly"
         > Прогнозировать только среднее (mean)
       </label>
+    </div>
+
+    <!-- Горизонт прогнозирования -->
+    <div class="horizon-settings">
+      <h3 class="section-title">Горизонт прогнозирования</h3>
+      <div class="horizon-fields-vertical">
+        <div class="horizon-input">
+          <label>Горизонт</label>
+          <input 
+            type="number" 
+            v-model.number="predictionHorizon"
+            min="1"
+            :class="{ invalid: !isValidHorizon }"
+          >
+        </div>
+        <div class="horizon-unit-select">
+          <label>Единица измерения</label>
+          <select v-model="selectedHorizonUnit">
+            <option v-for="option in frequencyOptions" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -190,6 +201,20 @@ export default defineComponent({
       return Number.isInteger(value) && value > 0
     })
 
+    const frequencyOptions = [
+      "D (день)",
+      "H (час)",
+      "M (месяц)",
+      "B (рабочие дни)",
+      "W (неделя)",
+      "Q (квартал)"
+    ]
+
+    const selectedHorizonUnit = computed({
+      get: () => store.horizonUnit,
+      set: (value: string) => store.setHorizonUnit(value)
+    })
+
     const getModelDescription = (modelName: string): string => {
       return modelName in agModels ? agModels[modelName] : modelName
     }
@@ -223,6 +248,8 @@ export default defineComponent({
       timeLimit,
       meanOnly,
       isValidHorizon,
+      frequencyOptions,
+      selectedHorizonUnit,
       getModelDescription,
       addModel,
       removeModel
@@ -327,5 +354,30 @@ input:disabled {
   width: 1rem;
   height: 1rem;
   cursor: pointer;
+}
+
+.horizon-settings {
+  margin-top: 1.5rem;
+}
+
+.horizon-fields {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.horizon-fields-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.horizon-input,
+.horizon-unit-select {
+  flex: 1;
+}
+
+.horizon-unit-select {
+  display: flex;
+  flex-direction: column;
 }
 </style>

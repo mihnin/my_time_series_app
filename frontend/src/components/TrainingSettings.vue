@@ -62,7 +62,7 @@ export default defineComponent({
       store.setStaticFeatures([])
       store.setFillMethod('None (оставить как есть)')
       store.setGroupingColumns([])
-      store.setFrequency('auto (угадать)')
+      store.setHorizonUnit('D (день)') // сбрасываем единицу измерения по умолчанию
       store.setSelectedMetric('SQL (Scaled quantile loss)')
       store.setSelectedModels(['*'])
       store.setSelectedPreset('high_quality')
