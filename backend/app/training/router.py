@@ -222,6 +222,20 @@ def train_model(
             verbosity=2
         )
 
+        print(training_params.models_to_train)
+        hyperparams = {}
+
+        for model in training_params.models_to_train:
+            if model == 'Chronos':
+                print("Chronos is using pre-installed" )
+                hyperparams["Chronos"] = [
+                    {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
+                    {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
+                    {"model_path": "autogluon/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
+                ]
+            else:
+                hyperparams[model] = {}
+
         # Train the model
         status.update({"progress": text_to_progress['training']})
         save_session_metadata(session_id, status)
@@ -230,7 +244,7 @@ def train_model(
             train_data=ts_df,
             time_limit=training_params.training_time_limit,
             presets=training_params.autogluon_preset,
-            hyperparameters=None if not training_params.models_to_train else {m: {} for m in training_params.models_to_train},
+            hyperparameters=None if not hyperparams else hyperparams,
         )
         logging.info(f"[train_model] Обучение модели завершено.")
 
