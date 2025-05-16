@@ -212,9 +212,28 @@ export default defineComponent({
                     const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                     const headers = rows[0];
                     const dataRows = rows.slice(1, 11); // первые 10 строк
+
+                    // Найти индекс и имя колонки с датой (обычно timestamp/date)
+                    const dateHeader = headers.find(h => h.toLowerCase().includes('timestamp') || h.toLowerCase().includes('date'));
+                    const dateIdx = dateHeader ? headers.indexOf(dateHeader) : -1;
+
                     const parsedRows = dataRows.map(row => {
                       const obj: Record<string, any> = {};
-                      headers.forEach((h: string, idx: number) => { obj[h] = row[idx]; });
+                      headers.forEach((h: string, idx: number) => {
+                        let value = row[idx];
+                        // Если это колонка даты и значение — число, преобразуем в строку даты
+                        if (idx === dateIdx && typeof value === 'number' && XLSX.SSF) {
+                          const dateObj = XLSX.SSF.parse_date_code(value);
+                          if (dateObj) {
+                            const pad = (n: number) => n.toString().padStart(2, '0');
+                            value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
+                            if (dateObj.H !== undefined && dateObj.M !== undefined && dateObj.S !== undefined) {
+                              value += ` ${pad(dateObj.H)}:${pad(dateObj.M)}:${pad(Math.floor(dateObj.S))}`;
+                            }
+                          }
+                        }
+                        obj[h] = value;
+                      });
                       return obj;
                     });
                     store.setPredictionRows(parsedRows);
@@ -276,18 +295,18 @@ export default defineComponent({
         store.setTrainingStatus({ status: 'running', progress: 0 })
 
         // --- Скрываем лидерборд после получения прогноза (старый сценарий) ---
-        watch(
-          () => store.predictionRows,
-          (val) => {
-            if (val && val.length > 0) {
-              // Скрываем лидерборд
-              if (store.trainingStatus && store.trainingStatus.leaderboard) {
-                store.setTrainingStatus({ ...store.trainingStatus, leaderboard: [] });
-              }
-            }
-          },
-          { deep: true, immediate: false }
-        );
+        // watch(
+        //   () => store.predictionRows,
+        //   (val) => {
+        //     if (val && val.length > 0) {
+        //       // Скрываем лидерборд
+        //       if (store.trainingStatus && store.trainingStatus.leaderboard) {
+        //         store.setTrainingStatus({ ...store.trainingStatus, leaderboard: [] });
+        //       }
+        //     }
+        //   },
+        //   { deep: true, immediate: false }
+        // );
       } catch (error) {
         console.error('Error during training:', error);
         if (error instanceof Error && !error.message.includes('Файл не выбран')) {

@@ -78,12 +78,27 @@ export default defineComponent({
         const headers = json[0] as string[];
         const dataRows = json.slice(1, Math.min(json.length, 11)); // Take headers + up to 10 data rows
 
+        // Найти индекс и имя колонки с датой (обычно timestamp/date)
+        const dateHeader = headers.find(h => h.toLowerCase().includes('timestamp') || h.toLowerCase().includes('date'));
+        const dateIdx = dateHeader ? headers.indexOf(dateHeader) : -1;
+
         const processedRows = dataRows.map(rowArray => {
           const obj: Record<string, any> = {};
           headers.forEach((header, i) => {
-            if (i < rowArray.length) {
-              obj[header] = rowArray[i];
+            let value = rowArray[i];
+            // Если это колонка даты и значение — число, преобразуем в строку даты
+            if (i === dateIdx && typeof value === 'number' && XLSX.SSF) {
+              const dateObj = XLSX.SSF.parse_date_code(value);
+              if (dateObj) {
+                // Формат YYYY-MM-DD HH:mm:ss если есть время, иначе только дата
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
+                if (dateObj.H !== undefined && dateObj.M !== undefined && dateObj.S !== undefined) {
+                  value += ` ${pad(dateObj.H)}:${pad(dateObj.M)}:${pad(Math.floor(dateObj.S))}`;
+                }
+              }
             }
+            obj[header] = value;
           });
           return obj;
         });

@@ -9,7 +9,7 @@
       />
 
       <!-- Лидерборд показываем если нет прогноза ИЛИ если trainPredictSave включён -->
-      <div v-if="((!Array.isArray(store.predictionRows) || store.predictionRows.length === 0) || store.trainPredictSave) && store.sessionId && store.trainingStatus && store.trainingStatus.leaderboard && Array.isArray(store.trainingStatus.leaderboard)">
+      <div v-if="store.sessionId && store.trainingStatus && store.trainingStatus.leaderboard && Array.isArray(store.trainingStatus.leaderboard)">
         <div class="leaderboard-table-main">
           <h4>Лидерборд моделей</h4>
           <table v-if="store.trainingStatus.leaderboard.length > 0 && typeof store.trainingStatus.leaderboard[0] === 'object' && store.trainingStatus.leaderboard[0] !== null">
@@ -30,7 +30,12 @@
         </div>
       </div>
 
-      <div v-if="Array.isArray(store.predictionRows) && store.predictionRows.length > 0 && typeof store.predictionRows[0] === 'object' && store.predictionRows[0] !== null">
+      <!-- Уведомление об успешном прогнозе -->
+      <div v-if="Array.isArray(store.predictionRows) && store.predictionRows.length > 0 && typeof store.predictionRows[0] === 'object' && store.predictionRows[0] !== null" class="success-banner">
+        Прогноз успешно выполнен! Можете скачать таблицу с прогнозом в панели слева.
+      </div>
+
+      <div v-if="Array.isArray(store.predictionRows) && store.predictionRows.length > 0 && typeof store.predictionRows[0] === 'object' && store.predictionRows[0] !== null" ref="predictionTableBlock">
         <div class="prediction-table limited-height">
           <h4>Первые 10 строк прогноза</h4>
           <table>
@@ -56,7 +61,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, nextTick, ref, watch } from 'vue'
 import { useMainStore } from '../stores/mainStore'
 import DataTable from '../components/DataTable.vue'
 import TimeSeriesChart from '../components/TimeSeriesChart.vue'
@@ -69,8 +74,23 @@ export default defineComponent({
   },
   setup() {
     const store = useMainStore()
-    // watch для очистки leaderboard больше не нужен
-    return { store }
+    const predictionTableBlock = ref<HTMLElement | null>(null)
+
+    // Скроллим к таблице прогноза при появлении новых predictionRows
+    watch(
+      () => store.predictionRows,
+      (val) => {
+        if (val && val.length > 0) {
+          nextTick(() => {
+            if (predictionTableBlock.value) {
+              predictionTableBlock.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+          })
+        }
+      },
+      { deep: true }
+    )
+    return { store, predictionTableBlock }
   }
 })
 </script>
@@ -85,5 +105,17 @@ export default defineComponent({
 .page-content > div {
   display: flex;
   flex-direction: column;
+}
+.success-banner {
+  width: 100%;
+  padding: 1rem;
+  background-color: #4CAF50;
+  color: white;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 1.5rem 0 1.5rem 0;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 </style>
