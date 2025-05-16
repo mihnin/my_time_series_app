@@ -36,10 +36,9 @@
       >
         <option value="">Выберите колонку</option>
         <option 
-          v-for="column in availableStaticFeatures" 
+          v-for="column in availableStaticFeatures.filter(col => !groupingColumns.includes(col))" 
           :key="column" 
           :value="column"
-          v-if="!groupingColumns.includes(column)"
         >
           {{ column }}
         </option>
@@ -90,7 +89,7 @@ export default defineComponent({
     })
 
     const addGroupingColumn = () => {
-      if (selectedGroupingColumn.value) {
+      if (selectedGroupingColumn.value && !groupingColumns.value.includes(selectedGroupingColumn.value)) {
         store.setGroupingColumns([...groupingColumns.value, selectedGroupingColumn.value])
         selectedGroupingColumn.value = ''
       }

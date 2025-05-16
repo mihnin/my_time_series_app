@@ -380,4 +380,19 @@ input:disabled {
   display: flex;
   flex-direction: column;
 }
+
+.horizon-unit-select label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #666;
+}
+
+.horizon-unit-select select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 1rem;
+}
 </style>
