@@ -120,7 +120,7 @@ async def run_training_prediction_async(
 
         logging.info(f"[predict_timeseries] Начало прогноза для session_id={session_id}")
 
-        preds = predict_timeseries(session_id)
+        preds = await asyncio.to_thread(predict_timeseries, session_id)
 
         output = BytesIO()
         preds.reset_index().to_excel(output, index=False)

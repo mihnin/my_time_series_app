@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Response
 import os
 import pandas as pd
@@ -12,6 +13,10 @@ from src.features.feature_engineering import add_russian_holiday_feature, fill_m
 from src.data.data_processing import convert_to_timeseries
 from src.models.forecasting import make_timeseries_dataframe
 import logging
+from AutoML.manager import automl_manager
+import asyncio
+
+from pandas import ExcelWriter
 
 router = APIRouter()
 
@@ -34,19 +39,7 @@ def predict_timeseries(session_id: str):
         logging.error(f"Параметры обучения не найдены в metadata.json для session_id={session_id}")
         raise HTTPException(status_code=400, detail="Параметры обучения не найдены в metadata.json")
 
-    # 3. Загружаем обученный предиктор
-    model_path = os.path.join(session_path, "model")
-    if not os.path.exists(model_path):
-        logging.error(f"Папка с моделью не найдена: {model_path}")
-        raise HTTPException(status_code=404, detail="Папка с моделью не найдена")
-    try:
-        predictor = TimeSeriesPredictor.load(model_path)
-        logging.info(f"Модель успешно загружена из {model_path}")
-    except Exception as e:
-        logging.error(f"Ошибка загрузки модели: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки модели: {e}")
-
-    # 4. Загружаем исходный train файл (теперь только parquet)
+    # 3. Загружаем исходный train файл (теперь только parquet)
     parquet_file = os.path.join(session_path, "training_data.parquet")
     if not os.path.exists(parquet_file):
         logging.error(f"Файл с обучающими данными (parquet) не найден для session_id={session_id}")
@@ -58,7 +51,7 @@ def predict_timeseries(session_id: str):
         logging.error(f"Ошибка чтения parquet файла данных: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка чтения parquet файла данных: {e}")
 
-    # 5. Подготовка данных (аналогично обучению)
+    # 4. Подготовка данных (аналогично обучению)
     dt_col = params["datetime_column"]
     tgt_col = params["target_column"]
     id_col = params["item_id_column"]
@@ -90,14 +83,13 @@ def predict_timeseries(session_id: str):
         ts_df = ts_df.fill_missing_values(method="ffill")
         logging.info(f"Частота временного ряда установлена: {freq_short}")
 
-    # 6. Прогноз
-    try:
-        preds = predictor.predict(ts_df)
-        logging.info(f"Прогноз успешно выполнен для session_id={session_id}")
-    except Exception as e:
-        logging.error(f"Ошибка при прогнозировании: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {e}")
-    
+    print(2)
+
+    best_strategy = automl_manager.get_best_strategy(session_id)
+    preds = best_strategy.predict(ts_df, session_id)
+
+    print(1)
+
     return preds
 
 def save_prediction(output, session_id):
@@ -111,19 +103,17 @@ def save_prediction(output, session_id):
     logging.info(f"[predict_timeseries] Прогноз сохранён в файл: {prediction_file_path}")
 
 @router.get("/predict/{session_id}")
-def predict_timeseries_endpoint(session_id: str):
+async def predict_timeseries_endpoint(session_id: str):
     """Сделать прогноз по id сессии и вернуть xlsx файл с результатом."""
     
-    preds = predict_timeseries(session_id)
+    preds = await asyncio.to_thread(predict_timeseries, session_id)
 
     output = BytesIO()
     preds.reset_index().to_excel(output, index=False)
     output.seek(0)
 
-
     save_prediction(output, session_id)
     
-
     # Возвращаем файл
     logging.info(f"[predict_timeseries] Отправка файла пользователю (session_id={session_id})")
     return Response(
@@ -137,16 +127,15 @@ def predict_timeseries_endpoint(session_id: str):
 @router.get("/download_prediction/{session_id}")
 def download_prediction_file(session_id: str):
     """Скачать ранее сохранённый файл прогноза по id сессии с добавлением leaderboard, параметров и весов."""
-    import json
-    import pandas as pd
-    from pandas import ExcelWriter
+
+
 
     logging.info(f"[download_prediction_file] Запрос на скачивание xlsx для session_id={session_id}")
     session_path = get_session_path(session_id)
     prediction_file_path = os.path.join(session_path, f"prediction_{session_id}.xlsx")
-    leaderboard_path = os.path.join(session_path, "model", "leaderboard.csv")
+    leaderboard_path = os.path.join(session_path, "leaderboard.csv")
     metadata_path = os.path.join(session_path, "metadata.json")
-    model_metadata_path = os.path.join(session_path, "model", "model_metadata.json")
+
 
     # Проверяем наличие файла прогноза
     if not os.path.exists(prediction_file_path):
@@ -181,15 +170,20 @@ def download_prediction_file(session_id: str):
             params_dict = None
 
     # Читаем веса WeightedEnsemble
+
+    
     weights_dict = None
-    if os.path.exists(model_metadata_path):
-        try:
-            with open(model_metadata_path, "r", encoding="utf-8") as f:
-                model_metadata = json.load(f)
-            weights_dict = model_metadata.get("weightedEnsemble", None)
-        except Exception as e:
-            logging.warning(f"Не удалось прочитать веса WeightedEnsemble: {e}")
-            weights_dict = None
+
+    if 'autogluon' in [strategy.name for strategy in automl_manager.get_strategies()]:
+        autogluon_metadata = os.path.join(session_path, "autogluon", "model_metadata.json")
+        if os.path.exists(autogluon_metadata):
+            try:
+                with open(autogluon_metadata, "r", encoding="utf-8") as f:
+                    model_metadata = json.load(f)
+                weights_dict = model_metadata.get("weightedEnsemble", None)
+            except Exception as e:
+                logging.warning(f"Не удалось прочитать веса WeightedEnsemble: {e}")
+                weights_dict = None
 
     # Формируем новый Excel-файл с несколькими листами
     from io import BytesIO

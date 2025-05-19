@@ -11,6 +11,7 @@ from functools import partial
 from typing import Dict, Optional
 from datetime import datetime
 from io import BytesIO
+from AutoML.manager import automl_manager
 
 import modin.pandas as modin_pd
 from autogluon.timeseries import TimeSeriesPredictor
@@ -211,69 +212,16 @@ def train_model(
             logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
 
         # Create predictor
-        save_session_metadata(session_id, status)
-        logging.info(f"[train_model] Создание объекта TimeSeriesPredictor...")
-        predictor = TimeSeriesPredictor(
-            target="target",
-            prediction_length=training_params.prediction_length,
-            eval_metric=training_params.evaluation_metric.split(" ")[0],
-            freq=actual_freq,
-            quantile_levels=[0.5] if training_params.predict_mean_only else None,
-            path=model_path,
-            verbosity=2
-        )
-
-        hyperparams = {}
-
-        if training_params.models_to_train:
-            for model in training_params.models_to_train:
-                if model == 'Chronos':
-                    print("Chronos is using pre-installed" )
-                    hyperparams["Chronos"] = [
-                        {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
-                        {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
-                        {"model_path": "autogluon/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
-                    ]
-                else:
-                    hyperparams[model] = {}
-
-        # Train the model
         status.update({"progress": text_to_progress['training']})
         save_session_metadata(session_id, status)
-        logging.info(f"[train_model] Запуск обучения модели...")
-        predictor.fit(
-            train_data=ts_df,
-            time_limit=training_params.training_time_limit,
-            presets=training_params.autogluon_preset,
-            hyperparameters=None if not hyperparams else hyperparams,
-        )
-        logging.info(f"[train_model] Обучение модели завершено.")
 
-        # Save leaderboard to CSV
-        leaderboard_df = predictor.leaderboard(silent=True)
-        leaderboard_path = os.path.join(model_path, "leaderboard.csv")
-        leaderboard_df.to_csv(leaderboard_path, index=False)
-        logging.info(f"[train_model] Лидерборд сохранён: {leaderboard_path}")
 
-        # Save model metadata, including WeightedEnsemble weights if present
-        model_metadata = training_params.model_dump()
-        # Check for WeightedEnsemble in leaderboard
-        if "WeightedEnsemble" in leaderboard_df["model"].values:
-            try:
-                weighted_ensemble_model = predictor._trainer.load_model("WeightedEnsemble")
-                model_to_weight = getattr(weighted_ensemble_model, "model_to_weight", None)
-                if model_to_weight is not None:
-                    print(model_to_weight)
-                    model_metadata["weightedEnsemble"] = model_to_weight
-            except Exception as e:
-                logging.warning(f"[train_model] Не удалось получить веса WeightedEnsemble: {e}")
+        for strategy in automl_manager.get_strategies():
+            strategy.train(ts_df, training_params, session_id)
 
-        with open(os.path.join(model_path, "model_metadata.json"), "w", encoding="utf-8") as f:
-            json.dump(model_metadata, f, indent=2)
-        logging.info(f"[train_model] Метаданные модели сохранены.")
-
-        # Clean up
-        del predictor
+        session_path = get_session_path(session_id)
+        combined_leaderboard = automl_manager.combine_leaderboards(session_id, [strategy.name for strategy in automl_manager.get_strategies()])
+        combined_leaderboard.to_csv(os.path.join(session_path, 'leaderboard.csv'), index=False)
         gc.collect()
         logging.info(f"[train_model] Очистка памяти завершена.")
 
@@ -291,8 +239,8 @@ async def get_session_status(session_id: str):
         logging.error(f"Сессия не найдена: {session_id}")
         raise HTTPException(status_code=404, detail="Training session not found")
     if status.get("status") == "completed":
-        model_path = status.get("model_path")
-        leaderboard_path = os.path.join(model_path, "leaderboard.csv")
+        session_path = get_session_path(session_id)
+        leaderboard_path = os.path.join(session_path, "leaderboard.csv")
         leaderboard = None
         if os.path.exists(leaderboard_path):
             import pandas as pd
