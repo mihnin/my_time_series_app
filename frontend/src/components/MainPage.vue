@@ -41,12 +41,20 @@
           <table>
             <thead>
               <tr>
-                <th v-for="headerKey in Object.keys(store.predictionRows[0])" :key="headerKey">{{ headerKey }}</th>
+                <th v-for="headerKey in Object.keys(store.predictionRows[0])" :key="headerKey" style="text-align: center;">{{ headerKey }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in store.predictionRows" :key="row.item_id + '-' + row.timestamp">
-                <td v-for="cellHeaderKey in Object.keys(row)" :key="cellHeaderKey">{{ row[cellHeaderKey] }}</td>
+                <td v-for="cellHeaderKey in Object.keys(row)" :key="cellHeaderKey"
+                    :style="{ minWidth: (getColWidth(cellHeaderKey) * 1.1) + 'ch', textAlign: 'center' }">
+                  <template v-if="cellHeaderKey.toLowerCase().includes('date') || cellHeaderKey.toLowerCase().includes('timestamp')">
+                    {{ typeof row[cellHeaderKey] === 'string' ? row[cellHeaderKey].split(' ')[0] : row[cellHeaderKey] }}
+                  </template>
+                  <template v-else>
+                    {{ row[cellHeaderKey] }}
+                  </template>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -76,6 +84,14 @@ export default defineComponent({
     const store = useMainStore()
     const predictionTableBlock = ref<HTMLElement | null>(null)
 
+    // Функция для оценки ширины столбца по длине заголовка и первой строки
+    function getColWidth(headerKey: string): number {
+      const firstRow = store.predictionRows[0]?.[headerKey];
+      const headerLen = headerKey.length;
+      const valueLen = firstRow ? String(firstRow).length : 0;
+      return Math.max(headerLen, valueLen, 8); // минимум 8 символов
+    }
+
     // Скроллим к таблице прогноза при появлении новых predictionRows
     watch(
       () => store.predictionRows,
@@ -90,7 +106,7 @@ export default defineComponent({
       },
       { deep: true }
     )
-    return { store, predictionTableBlock }
+    return { store, predictionTableBlock, getColWidth }
   }
 })
 </script>

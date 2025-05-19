@@ -71,6 +71,48 @@ export default defineComponent({
       set: (value: number) => store.setChunkSize(value)
     })
 
+    // Преобразование Excel serial date в строку (YYYY-MM-DD или с временем)
+    function convertExcelDates(
+      data: any[],
+      xlsxModule?: typeof import('xlsx')
+    ): any[] {
+      if (!Array.isArray(data) || data.length === 0) return data;
+      // Найти все колонки, которые могут быть датой
+      const dateLikeColumns = Object.keys(data[0]).filter(
+        key => key.toLowerCase().includes('date') || key.toLowerCase().includes('timestamp')
+      );
+      if (dateLikeColumns.length === 0) return data;
+      // Попробовать преобразовать только если значение - число и похоже на Excel serial
+      return data.map(row => {
+        const newRow = { ...row };
+        dateLikeColumns.forEach(col => {
+          const value = row[col];
+          if (
+            typeof value === 'number' &&
+            value > 20000 && value < 90000 &&
+            xlsxModule &&
+            (xlsxModule as any).SSF &&
+            typeof (xlsxModule as any).SSF.parse_date_code === 'function'
+          ) {
+            const dateObj = (xlsxModule as any).SSF.parse_date_code(value);
+            if (dateObj) {
+              const pad = (n: number) => n.toString().padStart(2, '0');
+              // Если есть время и оно не полуночь, добавлять только часы (без минут и секунд)
+              let str = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
+              if (
+                dateObj.H !== undefined &&
+                (dateObj.H !== 0 || dateObj.M !== 0 || dateObj.S !== 0)
+              ) {
+                str += ` ${pad(dateObj.H)}`;
+              }
+              newRow[col] = str;
+            }
+          }
+        });
+        return newRow;
+      });
+    }
+
     const processFile = async (file: File) => {
       try {
         store.setFile(file)
@@ -85,9 +127,13 @@ export default defineComponent({
               const worker = new Worker(URL.createObjectURL(blob));
               worker.onmessage = function(event) {
                 if (event.data.success) {
-                  store.setTableData(event.data.data)
-                  emit('file-loaded', event.data.data)
-                  resolve(null)
+                  // Преобразуем даты после получения данных
+                  import('xlsx').then(XLSX => {
+                    const converted = convertExcelDates(event.data.data, XLSX);
+                    store.setTableData(converted)
+                    emit('file-loaded', converted)
+                    resolve(null)
+                  });
                 } else {
                   reject(event.data.error)
                 }
@@ -104,8 +150,11 @@ export default defineComponent({
           });
         } else {
           const data = await readFileData(file)
-          store.setTableData(data)
-          emit('file-loaded', data)
+          // Преобразуем даты после получения данных
+          const XLSX = await import('xlsx');
+          const converted = convertExcelDates(data, XLSX);
+          store.setTableData(converted)
+          emit('file-loaded', converted)
         }
       } catch (error) {
         console.error('Error processing file:', error)

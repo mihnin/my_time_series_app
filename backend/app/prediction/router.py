@@ -136,18 +136,87 @@ def predict_timeseries_endpoint(session_id: str):
 
 @router.get("/download_prediction/{session_id}")
 def download_prediction_file(session_id: str):
-    """Скачать ранее сохранённый файл прогноза по id сессии."""
+    """Скачать ранее сохранённый файл прогноза по id сессии с добавлением leaderboard, параметров и весов."""
+    import json
+    import pandas as pd
+    from pandas import ExcelWriter
+
     logging.info(f"[download_prediction_file] Запрос на скачивание xlsx для session_id={session_id}")
     session_path = get_session_path(session_id)
     prediction_file_path = os.path.join(session_path, f"prediction_{session_id}.xlsx")
+    leaderboard_path = os.path.join(session_path, "model", "leaderboard.csv")
+    metadata_path = os.path.join(session_path, "metadata.json")
+    model_metadata_path = os.path.join(session_path, "model", "model_metadata.json")
+
+    # Проверяем наличие файла прогноза
     if not os.path.exists(prediction_file_path):
         logging.error(f"Файл прогноза не найден: {prediction_file_path}")
         raise HTTPException(status_code=404, detail="Файл прогноза не найден")
-    with open(prediction_file_path, "rb") as f:
-        file_bytes = f.read()
-    logging.info(f"[download_prediction_file] Файл отправлен: {prediction_file_path}")
+
+    # Читаем прогноз
+    try:
+        df_pred = pd.read_excel(prediction_file_path)
+    except Exception as e:
+        logging.error(f"Ошибка чтения файла прогноза: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка чтения файла прогноза: {e}")
+
+    # Читаем leaderboard
+    df_leaderboard = None
+    if os.path.exists(leaderboard_path):
+        try:
+            df_leaderboard = pd.read_csv(leaderboard_path)
+        except Exception as e:
+            logging.warning(f"Не удалось прочитать leaderboard: {e}")
+            df_leaderboard = None
+
+    # Читаем параметры обучения
+    params_dict = None
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+            params_dict = metadata.get("training_parameters", {})
+        except Exception as e:
+            logging.warning(f"Не удалось прочитать параметры обучения: {e}")
+            params_dict = None
+
+    # Читаем веса WeightedEnsemble
+    weights_dict = None
+    if os.path.exists(model_metadata_path):
+        try:
+            with open(model_metadata_path, "r", encoding="utf-8") as f:
+                model_metadata = json.load(f)
+            weights_dict = model_metadata.get("weightedEnsemble", None)
+        except Exception as e:
+            logging.warning(f"Не удалось прочитать веса WeightedEnsemble: {e}")
+            weights_dict = None
+
+    # Формируем новый Excel-файл с несколькими листами
+    from io import BytesIO
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        # Первый лист — прогноз
+        df_pred.to_excel(writer, sheet_name="Prediction", index=False)
+        # Второй лист — leaderboard
+        if df_leaderboard is not None:
+            df_leaderboard.to_excel(writer, sheet_name="Leaderboard", index=False)
+        else:
+            pd.DataFrame({"info": ["Leaderboard not found"]}).to_excel(writer, sheet_name="Leaderboard", index=False)
+        # Третий лист — параметры обучения
+        if params_dict is not None:
+            pd.DataFrame(list(params_dict.items()), columns=["Parameter", "Value"]).to_excel(writer, sheet_name="TrainingParams", index=False)
+        else:
+            pd.DataFrame({"info": ["Training parameters not found"]}).to_excel(writer, sheet_name="TrainingParams", index=False)
+        # Четвертый лист — веса WeightedEnsemble
+        if weights_dict is not None and isinstance(weights_dict, dict) and len(weights_dict) > 0:
+            pd.DataFrame(list(weights_dict.items()), columns=["Model", "Weight"]).to_excel(writer, sheet_name="WeightedEnsemble", index=False)
+        else:
+            pd.DataFrame({"info": ["WeightedEnsemble weights not found"]}).to_excel(writer, sheet_name="WeightedEnsemble", index=False)
+    output.seek(0)
+
+    logging.info(f"[download_prediction_file] Мульти-листовой Excel-файл отправлен: prediction_{session_id}.xlsx")
     return Response(
-        content=file_bytes,
+        content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f"attachment; filename=prediction_{session_id}.xlsx"

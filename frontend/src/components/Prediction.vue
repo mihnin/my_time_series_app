@@ -90,12 +90,9 @@ export default defineComponent({
             if (i === dateIdx && typeof value === 'number' && XLSX.SSF) {
               const dateObj = XLSX.SSF.parse_date_code(value);
               if (dateObj) {
-                // Формат YYYY-MM-DD HH:mm:ss если есть время, иначе только дата
                 const pad = (n: number) => n.toString().padStart(2, '0');
+                // Только дата, без времени
                 value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
-                if (dateObj.H !== undefined && dateObj.M !== undefined && dateObj.S !== undefined) {
-                  value += ` ${pad(dateObj.H)}:${pad(dateObj.M)}:${pad(Math.floor(dateObj.S))}`;
-                }
               }
             }
             obj[header] = value;

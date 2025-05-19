@@ -207,7 +207,8 @@ export default defineComponent({
       "M (месяц)",
       "B (рабочие дни)",
       "W (неделя)",
-      "Q (квартал)"
+      "Q (квартал)",
+      "Y (год)"
     ]
 
     const selectedHorizonUnit = computed({

@@ -21,6 +21,7 @@ from src.models.forecasting import make_timeseries_dataframe
 from src.validation.data_validation import validate_dataset
 from sessions.utils import (
     create_session_directory,
+    get_session_path,
     save_session_metadata,
     load_session_metadata,
     cleanup_old_sessions,
@@ -59,7 +60,7 @@ async def run_training_async(
     try:
         logging.info(f"[run_training_async] Запуск обучения для session_id={session_id}, файл: {original_filename}")
         # Create session directory and save initial status
-        session_path = create_session_directory(session_id)
+        session_path = get_session_path(session_id)
         status = {
             "status": "running",
             "start_time": datetime.now().isoformat(),
@@ -248,20 +249,28 @@ def train_model(
         )
         logging.info(f"[train_model] Обучение модели завершено.")
 
-        # Save model metadata
-        model_metadata = training_params.model_dump()
-        with open(os.path.join(model_path, "model_metadata.json"), "w", encoding="utf-8") as f:
-            json.dump(model_metadata, f, indent=2)
-        logging.info(f"[train_model] Метаданные модели сохранены.")
-
         # Save leaderboard to CSV
         leaderboard_df = predictor.leaderboard(silent=True)
         leaderboard_path = os.path.join(model_path, "leaderboard.csv")
         leaderboard_df.to_csv(leaderboard_path, index=False)
         logging.info(f"[train_model] Лидерборд сохранён: {leaderboard_path}")
 
-        status.update({"progress": 90})
-        save_session_metadata(session_id, text_to_progress['metadata'])
+        # Save model metadata, including WeightedEnsemble weights if present
+        model_metadata = training_params.model_dump()
+        # Check for WeightedEnsemble in leaderboard
+        if "WeightedEnsemble" in leaderboard_df["model"].values:
+            try:
+                weighted_ensemble_model = predictor._trainer.load_model("WeightedEnsemble")
+                model_to_weight = getattr(weighted_ensemble_model, "model_to_weight", None)
+                if model_to_weight is not None:
+                    print(model_to_weight)
+                    model_metadata["weightedEnsemble"] = model_to_weight
+            except Exception as e:
+                logging.warning(f"[train_model] Не удалось получить веса WeightedEnsemble: {e}")
+
+        with open(os.path.join(model_path, "model_metadata.json"), "w", encoding="utf-8") as f:
+            json.dump(model_metadata, f, indent=2)
+        logging.info(f"[train_model] Метаданные модели сохранены.")
 
         # Clean up
         del predictor
