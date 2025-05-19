@@ -13,7 +13,7 @@
         </thead>
         <tbody>
           <tr v-for="(row, index) in previewData" :key="index">
-            <td v-for="column in columns" :key="column">{{ row[column] }}</td>
+            <td v-for="column in columns" :key="column">{{ formatCellValue(row[column]) }}</td>
           </tr>
         </tbody>
       </table>
@@ -54,7 +54,7 @@
         <tbody v-if="Object.keys(missingValues || {}).length">
           <tr v-for="(count, column) in missingValues" :key="column">
             <td>{{ column }}</td>
-            <td>{{ count }}</td>
+            <td>{{ formatCellValue(count) }}</td>
           </tr>
         </tbody>
         <tbody v-else>
@@ -81,13 +81,13 @@ export default defineComponent({
   },
   setup(props) {
     const columns = computed(() => {
-      return props.data.length > 0 ? Object.keys(props.data[0]) : []
+      return props.data.length > 0 ? Object.keys(props.data[0] as Record<string, any>) : []
     })
 
     const numericColumns = computed(() => {
       if (!props.data.length) return []
       return columns.value.filter(column => {
-        const value = props.data[0][column]
+        const value = (props.data[0] as Record<string, any>)[column]
         return typeof value === 'number' || !isNaN(Number(value))
       })
     })
@@ -95,9 +95,9 @@ export default defineComponent({
     const numericStats = computed(() => {
       if (!props.data.length || !numericColumns.value.length) return null
       
-      const stats = {}
+      const stats: Record<string, any> = {}
       numericColumns.value.forEach(column => {
-        const values = props.data
+        const values = (props.data as Record<string, any>[])
           .map(row => Number(row[column]))
           .filter(val => !isNaN(val))
         
@@ -132,13 +132,21 @@ export default defineComponent({
     const formatStatValue = (value: number) => {
       if (typeof value !== 'number') return value
       if (Number.isInteger(value)) return value
-      return value.toFixed(4)
+      return value.toFixed(2)
+    }
+
+    // Форматирование дробных значений до 2 знаков после запятой
+    const formatCellValue = (val: any) => {
+      if (typeof val === 'number' && !Number.isInteger(val)) {
+        return val.toFixed(2)
+      }
+      return val
     }
 
     const totalRows = computed(() => props.data.length)
 
     const previewData = computed(() => {
-      return props.data.slice(0, 1000)
+      return (props.data as Record<string, any>[]).slice(0, 1000)
     })
 
     const showPreviewInfo = computed(() => {
@@ -147,9 +155,9 @@ export default defineComponent({
 
     const missingValues = computed(() => {
       if (!props.data.length) return null
-      const missing = {}
+      const missing: Record<string, number> = {}
       columns.value.forEach(column => {
-        const nullCount = props.data.filter(row => 
+        const nullCount = (props.data as Record<string, any>[]).filter(row => 
           row[column] === null || 
           row[column] === undefined || 
           row[column] === '' || 
@@ -170,6 +178,7 @@ export default defineComponent({
       previewData,
       showPreviewInfo,
       formatStatValue,
+      formatCellValue,
       missingValues
     }
   }

@@ -20,7 +20,7 @@
             </thead>
             <tbody>
               <tr v-for="(row, idx) in store.trainingStatus.leaderboard" :key="idx">
-                <td v-for="(value, key) in row" :key="key">{{ value }}</td>
+                <td v-for="(value, key) in row" :key="key">{{ formatCellValue(value) }}</td>
               </tr>
             </tbody>
           </table>
@@ -52,7 +52,7 @@
                     {{ typeof row[cellHeaderKey] === 'string' ? row[cellHeaderKey].split(' ')[0] : row[cellHeaderKey] }}
                   </template>
                   <template v-else>
-                    {{ row[cellHeaderKey] }}
+                    {{ formatCellValue(row[cellHeaderKey]) }}
                   </template>
                 </td>
               </tr>
@@ -92,6 +92,14 @@ export default defineComponent({
       return Math.max(headerLen, valueLen, 8); // минимум 8 символов
     }
 
+    // Форматирование дробных значений до 2 знаков после запятой
+    function formatCellValue(val: any) {
+      if (typeof val === 'number' && !Number.isInteger(val)) {
+        return val.toFixed(2)
+      }
+      return val
+    }
+
     // Скроллим к таблице прогноза при появлении новых predictionRows
     watch(
       () => store.predictionRows,
@@ -106,7 +114,7 @@ export default defineComponent({
       },
       { deep: true }
     )
-    return { store, predictionTableBlock, getColWidth }
+    return { store, predictionTableBlock, getColWidth, formatCellValue }
   }
 })
 </script>
