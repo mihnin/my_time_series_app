@@ -63,7 +63,7 @@ export default defineComponent({
       store.setFillMethod('None (оставить как есть)')
       store.setGroupingColumns([])
       store.setHorizonUnit('D (день)') // сбрасываем единицу измерения по умолчанию
-      store.setSelectedMetric('SQL (Scaled quantile loss)')
+      store.setSelectedMetric('MAE (Mean absolute error)')
       store.setSelectedModels(['*'])
       store.setSelectedPreset('high_quality')
       store.setPredictionHorizon(3)

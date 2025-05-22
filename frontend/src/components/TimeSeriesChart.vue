@@ -43,7 +43,6 @@ export default defineComponent({
       }
 
       // Ограничиваем количество отображаемых строк до 1000
-      // ВАЖНО: не группируем по id до ограничения!
       let limitedData = (props.data as Record<string, any>[]).slice(0, 1000)
 
       let series = []
@@ -53,9 +52,12 @@ export default defineComponent({
         limitedData.forEach((row: Record<string, any>) => {
           const id = row[props.idColumn]
           if (!groups.has(id)) {
+            if (groups.size >= 5) return // Ограничиваем до 5 уникальных id
             groups.set(id, [])
           }
-          groups.get(id)!.push(row)
+          if (groups.has(id)) {
+            groups.get(id)!.push(row)
+          }
         })
         series = Array.from(groups.entries()).map(([id, rows]) => ({
           name: `${props.idColumn}: ${id}`,
@@ -79,7 +81,11 @@ export default defineComponent({
           text: props.idColumn 
             ? `Временной ряд с группировкой по ${props.idColumn}`
             : 'Временной ряд',
-          left: 'center'
+          left: 'center',
+          textStyle: {
+            fontWeight: 'normal', // убираем жирность заголовка
+            fontSize: 16
+          }
         },
         tooltip: {
           trigger: 'axis',
@@ -90,30 +96,45 @@ export default defineComponent({
         grid: {
           left: '3%',
           right: '4%',
-          bottom: '3%',
+          bottom: 60, // увеличено для подписи оси X
           containLabel: true
         },
         xAxis: {
           type: 'time',
-          name: props.dateColumn,
-          nameLocation: 'middle',
-          nameGap: 35,
+          name: 'Дата',
+          nameLocation: 'middle', // по центру под осью
+          nameGap: 65, // уменьшено для смещения подписи выше на 5px
           axisLabel: {
             formatter: '{yyyy}-{MM}-{dd}'
+          },
+          nameTextStyle: {
+            fontSize: 14,
+            fontWeight: 'bold'
           }
         },
         yAxis: {
           type: 'value',
-          name: props.targetColumn,
-          nameLocation: 'middle',
-          nameGap: 50
+          name: 'Значение',
+          nameLocation: 'middle', // ECharts: подпись по центру вертикальной оси
+          nameGap: 40, // Оптимальный отступ
+          nameTextStyle: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            padding: [0, 0, 0, 0] // Без лишнего сдвига
+          }
         },
         series,
         legend: {
           show: Boolean(props.idColumn),
           type: 'scroll',
           orient: 'horizontal',
-          top: 25
+          top: 25,
+          textStyle: {
+            fontWeight: 'normal', // убираем жирность id
+            fontSize: 14
+          },
+          itemWidth: 24,
+          itemHeight: 14
         },
         dataZoom: [{
           type: 'inside',
@@ -157,10 +178,10 @@ export default defineComponent({
 <style scoped>
 .time-series-chart {
   width: 100%;
-  height: 400px;
+  height: 440px; /* увеличено для подписи */
   background: white;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.5rem 1rem 0.5rem 1rem; /* уменьшен нижний padding */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
@@ -169,7 +190,8 @@ export default defineComponent({
 .chart-container {
   width: 100%;
   flex: 1;
-  min-height: 0;
+  min-height: 340px; /* увеличено для подписи */
+  height: 100%;
 }
 
 .no-data {

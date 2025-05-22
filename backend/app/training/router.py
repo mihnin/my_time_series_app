@@ -13,7 +13,7 @@ from datetime import datetime
 from io import BytesIO
 from AutoML.manager import automl_manager
 
-import modin.pandas as modin_pd
+import pandas as modin_pd
 from autogluon.timeseries import TimeSeriesPredictor
 from .model import TrainingParameters
 from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
@@ -180,44 +180,10 @@ def train_model(
         status.update({"progress": text_to_progress['missings']})
         save_session_metadata(session_id, status)
 
-        # Handle static features
-        static_df = None
-        if training_params.static_feature_columns:
-            tmp = df2[[training_params.item_id_column] + training_params.static_feature_columns].drop_duplicates(
-                subset=[training_params.item_id_column]
-            ).copy()
-            tmp.rename(columns={training_params.item_id_column: "item_id"}, inplace=True)
-            static_df = tmp
-            logging.info(f"[train_model] Добавлены статические признаки: {training_params.static_feature_columns}")
-
-        # Convert to TimeSeriesDataFrame
-        df_ready = safely_prepare_timeseries_data(
-            df2,
-            training_params.datetime_column,
-            training_params.item_id_column,
-            training_params.target_column
-        )
-        ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-        status.update({"progress": text_to_progress['dataframe']})
-        save_session_metadata(session_id, status)
-        logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
-
-        # Handle frequency
-        actual_freq = None
-        print(training_params.frequency)
-        if training_params.frequency and training_params.frequency.lower() != "auto":
-            freq_short = training_params.frequency.split(" ")[0]
-            ts_df = ts_df.convert_frequency(freq_short)
-            actual_freq = freq_short
-            logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
-
-        # Create predictor
-        status.update({"progress": text_to_progress['training']})
-        save_session_metadata(session_id, status)
-
 
         for strategy in automl_manager.get_strategies():
-            strategy.train(ts_df, training_params, session_id)
+            strategy.train(df2, training_params, session_id)
+
 
         session_path = get_session_path(session_id)
         combined_leaderboard = automl_manager.combine_leaderboards(session_id, [strategy.name for strategy in automl_manager.get_strategies()])
@@ -243,10 +209,24 @@ async def get_session_status(session_id: str):
         leaderboard_path = os.path.join(session_path, "leaderboard.csv")
         leaderboard = None
         if os.path.exists(leaderboard_path):
-            import pandas as pd
             leaderboard = pd.read_csv(leaderboard_path).to_dict(orient="records")
             logging.info(f"[get_training_status] Лидерборд добавлен к статусу для session_id={session_id}")
         status["leaderboard"] = leaderboard
+
+        # Добавляем pycaret/id_leaderboards
+        pycaret_leaderboards_dir = os.path.join(session_path, 'pycaret', 'id_leaderboards')
+        pycaret_leaderboards = {}
+        if os.path.exists(pycaret_leaderboards_dir):
+            for fname in os.listdir(pycaret_leaderboards_dir):
+                if fname.endswith('.csv'):
+                    unique_id = fname.replace('leaderboard_', '').replace('.csv', '')
+                    fpath = os.path.join(pycaret_leaderboards_dir, fname)
+                    try:
+                        df = pd.read_csv(fpath)
+                        pycaret_leaderboards[unique_id] = df.to_dict(orient="records")
+                    except Exception as e:
+                        logging.error(f"Ошибка чтения pycaret leaderboard для {unique_id}: {e}")
+        status["pycaret"] = pycaret_leaderboards
     return status
 
 
@@ -256,6 +236,7 @@ async def train_model_endpoint(
     training_file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None,
 ):
+    
     """Запуск асинхронного процесса обучения и возврат session_id для отслеживания статуса."""
     session_id = str(uuid.uuid4()) # Генерируем ID сессии в начале для логирования ошибок
     try:
@@ -294,9 +275,9 @@ async def train_model_endpoint(
         # Используем to_thread для блокирующих операций pandas
         def read_data_from_stream(stream, filename):
             if filename.endswith('.csv'):
-                return modin_pd.read_csv(stream)._to_pandas()
+                return modin_pd.read_csv(stream)
             else:  # Excel file
-                return modin_pd.read_excel(stream)._to_pandas() # engine='openpyxl' if filename.endswith('.xlsx') else None
+                return modin_pd.read_excel(stream) # engine='openpyxl' if filename.endswith('.xlsx') else None
 
         try:
             logging.info(f"[train_model_endpoint] Начало загрузки данных в DataFrame для session_id={session_id}...")

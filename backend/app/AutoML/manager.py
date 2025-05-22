@@ -1,11 +1,12 @@
 import os
 
 import pandas as pd
+from AutoML.pycaret_strategy import pycaret_strategy
 from sessions.utils import get_session_path
 from AutoML.autogluon_strategy import autogluon_strategy
 
 class AutoMLManager:
-    strategies = [autogluon_strategy]
+    strategies = [pycaret_strategy, autogluon_strategy]
     def combine_leaderboards(self, session_id, strategies):
         session_path = get_session_path(session_id)
         dfs = []
@@ -21,7 +22,7 @@ class AutoMLManager:
 
         if dfs:
             combined_df = pd.concat(dfs, ignore_index=True)
-            combined_df = combined_df.sort_values(by="score_val", ascending=True)
+            combined_df = combined_df.sort_values(by="score_val", ascending=False)
             return combined_df
         else:
             print("Нет данных для объединения")
@@ -34,6 +35,8 @@ class AutoMLManager:
         best_strategy = leaderboard.iloc[0]["strategy"]
         if best_strategy == 'autogluon':
             return autogluon_strategy
+        elif best_strategy == "pycaret":
+            return pycaret_strategy
 
     def get_strategies(self):
         return self.strategies

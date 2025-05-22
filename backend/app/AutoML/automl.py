@@ -24,7 +24,8 @@ class AutoMLStrategy(ABC):
     def predict(
         self,
         ts_df,
-        session_id: str
+        session_id: str,
+        training_params: TrainingParameters
     ) -> pd.DataFrame: # Returns predictions
         """Makes predictions using a trained model."""
         pass

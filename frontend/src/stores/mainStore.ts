@@ -17,7 +17,7 @@ export const useMainStore = defineStore('main', () => {
   const considerRussianHolidays = ref(false)  // New state for holidays checkbox
   const fillMethod = ref('None (оставить как есть)')
   const groupingColumns = ref<string[]>([])
-  const selectedMetric = ref('SQL (Scaled quantile loss)')
+  const selectedMetric = ref('MAE (Mean absolute error)')
   const selectedModels = ref<string[]>(['*'])  // по умолчанию выбраны все модели
   const selectedPreset = ref('high_quality')
   const predictionHorizon = ref(3)
@@ -28,6 +28,9 @@ export const useMainStore = defineStore('main', () => {
   const trainingStatus = ref<any>(null)
   const predictionRows = ref<any[]>([])  // Новое состояние для строк прогноза
   const horizonUnit = ref("D (день)")
+
+  // PyCaret models selection
+  const selectedPycaretModels = ref<string[]>(['*'])  // по умолчанию выбраны все модели
 
   function setTableData(data: any[]) {
     tableData.value = data
@@ -118,6 +121,10 @@ export const useMainStore = defineStore('main', () => {
     horizonUnit.value = value
   }
 
+  function setSelectedPycaretModels(models: string[]) {
+    selectedPycaretModels.value = models
+  }
+
   return {
     tableData,
     selectedFile,
@@ -143,6 +150,7 @@ export const useMainStore = defineStore('main', () => {
     trainingStatus,
     predictionRows, // Экспортируем новое свойство
     horizonUnit,
+    selectedPycaretModels, // Экспортируем новое свойство
     setTableData,
     setChunkSize,
     setFile,
@@ -165,5 +173,6 @@ export const useMainStore = defineStore('main', () => {
     setTrainingStatus,
     setPredictionRows, // Экспортируем новый метод
     setHorizonUnit,
+    setSelectedPycaretModels, // Экспортируем новый метод
   }
 })

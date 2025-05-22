@@ -36,10 +36,40 @@
         <option value="">Выберите модель</option>
         <option value="*" v-if="!selectedModels.includes('*')">Все модели</option>
         <option 
-          v-for="(description, name) in agModels" 
-          :key="name" 
-          :value="name"
-          v-if="!selectedModels.includes(name)"
+          v-for="(description, key) in agModels" 
+          :key="key" 
+          :value="key"
+          :disabled="selectedModels.includes(key)"
+        >
+          {{ description }}
+        </option>
+      </select>
+    </div>
+
+    <!-- Выбор моделей PyCaret -->
+    <div class="models-select">
+      <label>Модели PyCaret</label>
+      <div class="selected-models">
+        <div 
+          v-for="model in selectedPycaretModels" 
+          :key="model" 
+          class="model-tag"
+        >
+          {{ model === '*' ? 'Все модели' : getPycaretModelDescription(model) }}
+          <button @click="removePycaretModel(model)" class="remove-model">×</button>
+        </div>
+      </div>
+      <select 
+        v-model="selectedPycaretModel"
+        @change="addPycaretModel"
+      >
+        <option value="">Выберите модель</option>
+        <option value="*" v-if="!selectedPycaretModels.includes('*')">Все модели</option>
+        <option 
+          v-for="(description, key) in pycaretModels" 
+          :key="key" 
+          :value="key"
+          :disabled="selectedPycaretModels.includes(key)"
         >
           {{ description }}
         </option>
@@ -48,7 +78,7 @@
 
     <!-- Пресет -->
     <div class="preset-select">
-      <label>Пресет</label>
+      <label>Пресет AutoGluon</label>
       <select v-model="selectedPreset">
         <option 
           v-for="preset in presetsList" 
@@ -122,19 +152,15 @@ export default defineComponent({
   setup() {
     const store = useMainStore()
     const selectedModel = ref('')
-
+    const selectedPycaretModel = ref('')
     const metricsDict = {
-      "SQL (Scaled quantile loss)": "SQL",
-      "WQL (Weighted quantile loss)": "WQL",
       "MAE (Mean absolute error)": "MAE",
       "MAPE (Mean absolute percentage error)": "MAPE",
       "MASE (Mean absolute scaled error)": "MASE",
       "MSE (Mean squared error)": "MSE",
       "RMSE (Root mean squared error)": "RMSE",
-      "RMSLE (Root mean squared logarithmic error)": "RMSLE",
       "RMSSE (Root mean squared scaled error)": "RMSSE",
-      "SMAPE (Symmetric mean absolute percentage error)": "SMAPE",
-      "WAPE (Weighted absolute percentage error)": "WAPE"
+      "SMAPE (Symmetric mean absolute percentage error)": "SMAPE"
     }
 
     const agModels: Record<string, string> = {
@@ -164,10 +190,52 @@ export default defineComponent({
       "Chronos": "Chronos Bolt model pretrained"
     }
 
-    const presetsList = ["fast_training", "medium_quality", "high_quality", "best_quality"]
+    // PyCaret models (id: display name)
+    const pycaretModels: Record<string, string> = {
+      '*': 'Все модели',
+      'naive': 'Naive Forecaster',
+      'grand_means': 'Grand Means Forecaster',
+      'snaive': 'Seasonal Naive Forecaster',
+      'polytrend': 'Polynomial Trend Forecaster',
+      'arima': 'ARIMA',
+      'exp_smooth': 'Exponential Smoothing',
+      'ets': 'ETS',
+      'theta': 'Theta Forecaster',
+      'stlf': 'STLF',
+      'croston': 'Croston',
+      'bats': 'BATS',
+      'tbats': 'TBATS',
+      'lr_cds_dt': 'Linear w/ Cond. Deseasonalize & Detrending',
+      'en_cds_dt': 'Elastic Net w/ Cond. Deseasonalize & Detrending',
+      'ridge_cds_dt': 'Ridge w/ Cond. Deseasonalize & Detrending',
+      'lasso_cds_dt': 'Lasso w/ Cond. Deseasonalize & Detrending',
+      'llar_cds_dt': 'Lasso Least Angular Regressor w/ Cond. Deseasonalize & Detrending',
+      'br_cds_dt': 'Bayesian Ridge w/ Cond. Deseasonalize & Detrending',
+      'huber_cds_dt': 'Huber w/ Cond. Deseasonalize & Detrending',
+      'omp_cds_dt': 'Orthogonal Matching Pursuit w/ Cond. Deseasonalize & Detrending',
+      'knn_cds_dt': 'K Neighbors w/ Cond. Deseasonalize & Detrending',
+      'dt_cds_dt': 'Decision Tree w/ Cond. Deseasonalize & Detrending',
+      'rf_cds_dt': 'Random Forest w/ Cond. Deseasonalize & Detrending',
+      'et_cds_dt': 'Extra Trees w/ Cond. Deseasonalize & Detrending',
+      'gbr_cds_dt': 'Gradient Boosting w/ Cond. Deseasonalize & Detrending',
+      'ada_cds_dt': 'AdaBoost w/ Cond. Deseasonalize & Detrending',
+      'xgboost_cds_dt': 'Extreme Gradient Boosting w/ Cond. Deseasonalize & Detrending',
+      'lightgbm_cds_dt': 'Light Gradient Boosting w/ Cond. Deseasonalize & Detrending',
+      'catboost_cds_dt': 'CatBoost Regressor w/ Cond. Deseasonalize & Detrending',
+    }
+
+    const presetsList = [
+      "fast_training",
+      "medium_quality",
+      "high_quality",
+      "best_quality"
+    ]
 
     const selectedMetric = computed({
-      get: () => store.selectedMetric,
+      get: () => {
+        console.log('Current selectedMetric from store:', store.selectedMetric); // Add this line
+        return store.selectedMetric || 'MAE (Mean absolute error)';
+      },
       set: (value: string) => store.setSelectedMetric(value)
     })
 
@@ -237,13 +305,39 @@ export default defineComponent({
       store.setSelectedModels(selectedModels.value.filter(m => m !== model))
     }
 
+    const addPycaretModel = () => {
+      if (selectedPycaretModel.value) {
+        if (selectedPycaretModel.value === '*') {
+          store.setSelectedPycaretModels(['*'])
+        } else if (selectedPycaretModels.value.includes('*')) {
+          store.setSelectedPycaretModels([selectedPycaretModel.value])
+        } else {
+          store.setSelectedPycaretModels([...selectedPycaretModels.value, selectedPycaretModel.value])
+        }
+        selectedPycaretModel.value = ''
+      }
+    }
+    const removePycaretModel = (model: string) => {
+      store.setSelectedPycaretModels(selectedPycaretModels.value.filter(m => m !== model))
+    }
+    const getPycaretModelDescription = (modelId: string): string => {
+      return modelId in pycaretModels ? pycaretModels[modelId] : modelId
+    }
+
+    const selectedPycaretModels = computed({
+      get: () => store.selectedPycaretModels,
+      set: (value: string[]) => store.setSelectedPycaretModels(value)
+    })
+
     return {
       metricsDict,
       agModels,
+      pycaretModels,
       presetsList,
       selectedMetric,
       selectedModel,
       selectedModels,
+      selectedPycaretModel,
       selectedPreset,
       predictionHorizon,
       timeLimit,
@@ -253,7 +347,11 @@ export default defineComponent({
       selectedHorizonUnit,
       getModelDescription,
       addModel,
-      removeModel
+      removeModel,
+      getPycaretModelDescription,
+      addPycaretModel,
+      removePycaretModel,
+      selectedPycaretModels
     }
   }
 })

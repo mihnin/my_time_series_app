@@ -12,7 +12,7 @@ from typing import Dict, Optional
 from datetime import datetime
 from io import BytesIO
 
-import modin.pandas as modin_pd
+import pandas as modin_pd
 from autogluon.timeseries import TimeSeriesPredictor
 from prediction.router import predict_timeseries, save_prediction
 from training.model import TrainingParameters
@@ -123,9 +123,10 @@ async def run_training_prediction_async(
         preds = await asyncio.to_thread(predict_timeseries, session_id)
 
         output = BytesIO()
-        preds.reset_index().to_excel(output, index=False)
-        output.seek(0)
 
+        
+        preds.to_excel(output, index=False)
+        output.seek(0)
         save_prediction(output, session_id)
 
         status.update({"progress": 100, 'status': 'completed'})
@@ -193,9 +194,9 @@ async def train_model_endpoint(
         # Используем to_thread для блокирующих операций pandas
         def read_data_from_stream(stream, filename):
             if filename.endswith('.csv'):
-                return modin_pd.read_csv(stream)._to_pandas()
+                return modin_pd.read_csv(stream)
             else:  # Excel file
-                return modin_pd.read_excel(stream)._to_pandas() # engine='openpyxl' if filename.endswith('.xlsx') else None
+                return modin_pd.read_excel(stream) # engine='openpyxl' if filename.endswith('.xlsx') else None
 
         try:
             logging.info(f"[train_model_endpoint] Начало загрузки данных в DataFrame для session_id={session_id}...")

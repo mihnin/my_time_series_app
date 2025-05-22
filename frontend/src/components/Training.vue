@@ -99,6 +99,7 @@ export default defineComponent({
           throw new Error('Failed to fetch training status')
         }
         const status = await response.json()
+        console.log(status)
         store.setTrainingStatus(status)
         // Обновляем прогресс даже если статус initializing
         if (["completed", "failed", "complete"].includes(status.status)) {
@@ -148,12 +149,13 @@ export default defineComponent({
           fill_group_columns: store.groupingColumns,
           use_russian_holidays: store.considerRussianHolidays,
           evaluation_metric: store.selectedMetric.split(' ')[0],
-          models_to_train: store.selectedModels[0] === '*' ? null : store.selectedModels,
+          models_to_train: store.selectedModels[0] === '*' && store.selectedModels.length === 1 ? '*' : (store.selectedModels.length === 0 ? null : store.selectedModels),
           autogluon_preset: store.selectedPreset,
           predict_mean_only: store.meanOnly,
           prediction_length: store.predictionHorizon,
           training_time_limit: store.timeLimit,
-          static_feature_columns: store.staticFeatures
+          static_feature_columns: store.staticFeatures,
+          pycaret_models: store.selectedPycaretModels[0] === '*' && store.selectedPycaretModels.length === 1 ? '*' : (store.selectedPycaretModels.length === 0 ? null : store.selectedPycaretModels)
         };
         const paramsJson = JSON.stringify(params);
         formData.append('params', paramsJson);
@@ -293,20 +295,6 @@ export default defineComponent({
         store.setSessionId(result.session_id)
         // Обновляем статус на running после успешного старта
         store.setTrainingStatus({ status: 'running', progress: 0 })
-
-        // --- Скрываем лидерборд после получения прогноза (старый сценарий) ---
-        // watch(
-        //   () => store.predictionRows,
-        //   (val) => {
-        //     if (val && val.length > 0) {
-        //       // Скрываем лидерборд
-        //       if (store.trainingStatus && store.trainingStatus.leaderboard) {
-        //         store.setTrainingStatus({ ...store.trainingStatus, leaderboard: [] });
-        //       }
-        //     }
-        //   },
-        //   { deep: true, immediate: false }
-        // );
       } catch (error) {
         console.error('Error during training:', error);
         if (error instanceof Error && !error.message.includes('Файл не выбран')) {

@@ -6,6 +6,9 @@ from typing import Any
 from fastapi import HTTPException
 
 from AutoML.automl import AutoMLStrategy
+from src.data.data_processing import convert_to_timeseries
+from src.data.data_processing import safely_prepare_timeseries_data
+from src.models.forecasting import make_timeseries_dataframe
 from sessions.utils import get_session_path
 from training.model import TrainingParameters
 from autogluon.timeseries import TimeSeriesPredictor
@@ -17,6 +20,37 @@ class AutoGluonStrategy(AutoMLStrategy):
         training_params: TrainingParameters,
         session_id: str, # For logging/status updates # To update overall progress
         ):
+        
+        # Handle static features
+        static_df = None
+        if training_params.static_feature_columns:
+            tmp = ts_df[[training_params.item_id_column] + training_params.static_feature_columns].drop_duplicates(
+                subset=[training_params.item_id_column]
+            ).copy()
+            tmp.rename(columns={training_params.item_id_column: "item_id"}, inplace=True)
+            static_df = tmp
+            logging.info(f"[train_model] Добавлены статические признаки: {training_params.static_feature_columns}")
+
+        # Convert to TimeSeriesDataFrame
+        df_ready = safely_prepare_timeseries_data(
+            ts_df,
+            training_params.datetime_column,
+            training_params.item_id_column,
+            training_params.target_column
+        )
+        ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
+
+        logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
+
+        # Handle frequency
+        actual_freq = None
+
+        if training_params.frequency and training_params.frequency.lower() != "auto":
+            freq_short = training_params.frequency.split(" ")[0]
+            ts_df = ts_df.convert_frequency(freq_short)
+            actual_freq = freq_short
+            logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
+
 
         session_path = get_session_path(session_id)
         
@@ -34,12 +68,18 @@ class AutoGluonStrategy(AutoMLStrategy):
             verbosity=2
         )
 
-        hyperparams = {}
+        # --- Логика выбора моделей ---
+        models_to_train = training_params.models_to_train
+        if not models_to_train or (isinstance(models_to_train, list) and len(models_to_train) == 0):
+            logging.warning('[AutoGluonStrategy train] Не выбрано ни одной модели для обучения. Пропуск.')
+            return
+        use_all_models = models_to_train == '*' or (isinstance(models_to_train, str) and models_to_train.strip() == '*')
 
-        if training_params.models_to_train:
-            for model in training_params.models_to_train:
+        hyperparams = {}
+        if not use_all_models:
+            for model in models_to_train:
                 if model == 'Chronos':
-                    print("Chronos is using pre-installed" )
+                    print("Chronos is using pre-installed")
                     hyperparams["Chronos"] = [
                         {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
                         {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
@@ -47,6 +87,8 @@ class AutoGluonStrategy(AutoMLStrategy):
                     ]
                 else:
                     hyperparams[model] = {}
+        else:
+            hyperparams = None
 
         # Train the model
         logging.info(f"[train_model] Запуск обучения модели...")
@@ -54,7 +96,7 @@ class AutoGluonStrategy(AutoMLStrategy):
             train_data=ts_df,
             time_limit=training_params.training_time_limit,
             presets=training_params.autogluon_preset,
-            hyperparameters=None if not hyperparams else hyperparams,
+            hyperparameters=hyperparams,
         )
         self.save_data(predictor, model_path, training_params)
 
@@ -83,7 +125,32 @@ class AutoGluonStrategy(AutoMLStrategy):
 
         logging.info(f"[train_model] Метаданные модели сохранены.")
     
-    def predict(self, ts_df, session_id):
+    def predict(self, ts_df, session_id, training_params):
+        
+        session_path = get_session_path(session_id)
+        autogluon_model_dir = os.path.join(session_path, 'autogluon')
+        static_feats = training_params.get("static_feature_columns")
+        id_col = training_params.get("item_id_column")
+        dt_col = training_params.get("datetime_column")
+        tgt_col = training_params.get("target_column")
+        freq = training_params.get("frequency")
+        static_df = None
+
+
+        if static_feats:
+            tmp = ts_df[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
+            tmp.rename(columns={id_col: "item_id"}, inplace=True)
+            static_df = tmp
+            logging.info(f"Добавлены статические признаки: {static_feats}")
+
+        df_ready = convert_to_timeseries(ts_df, id_col, dt_col, tgt_col)
+        ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
+        if freq and freq.lower() != "auto":
+            freq_short = freq.split(" ")[0]
+            ts_df = ts_df.convert_frequency(freq_short)
+            ts_df = ts_df.fill_missing_values(method="ffill")
+            logging.info(f"Частота временного ряда установлена: {freq_short}")
+
         session_path = get_session_path(session_id)
         model_path = os.path.join(session_path, "autogluon")
         if not os.path.exists(model_path):
@@ -101,10 +168,28 @@ class AutoGluonStrategy(AutoMLStrategy):
         try:
             preds = predictor.predict(ts_df)
             logging.info(f"Прогноз успешно выполнен для session_id={session_id}")
+            # Переименование колонок или индексов item_id и timestamp
+            if hasattr(preds, 'rename'):
+                rename_dict = {}
+                if 'item_id' in getattr(preds, 'columns', []):
+                    rename_dict['item_id'] = id_col
+                if 'timestamp' in getattr(preds, 'columns', []):
+                    rename_dict['timestamp'] = dt_col
+                if rename_dict:
+                    preds = preds.rename(columns=rename_dict)
+                # Если item_id или timestamp в индексе
+                if hasattr(preds, 'index') and hasattr(preds.index, 'names'):
+                    index_rename = {}
+                    if 'item_id' in preds.index.names:
+                        index_rename['item_id'] = id_col
+                    if 'timestamp' in preds.index.names:
+                        index_rename['timestamp'] = dt_col
+                    if index_rename:
+                        preds = preds.rename_axis(index=index_rename)
         except Exception as e:
             logging.error(f"Ошибка при прогнозировании: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {e}")
         
-        return preds
+        return preds.reset_index()
 
 autogluon_strategy = AutoGluonStrategy()
