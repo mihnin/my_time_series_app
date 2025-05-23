@@ -14,23 +14,29 @@ export const useMainStore = defineStore('main', () => {
   const idColumn = ref('<нет>')
   const staticFeatures = ref<string[]>([])
   const selectedColumns = ref<string[]>([])
-  const considerRussianHolidays = ref(false)  // New state for holidays checkbox
+  const considerRussianHolidays = ref(false)
   const fillMethod = ref('None (оставить как есть)')
   const groupingColumns = ref<string[]>([])
   const selectedMetric = ref('MAE (Mean absolute error)')
-  const selectedModels = ref<string[]>(['*'])  // по умолчанию выбраны все модели
+  const selectedModels = ref<string[]>(['*'])
   const selectedPreset = ref('high_quality')
   const predictionHorizon = ref(3)
   const timeLimit = ref<number | null>(null)
   const meanOnly = ref(false)
-  const trainPredictSave = ref(false)  // Новое состояние
+  const trainPredictSave = ref(false)
   const sessionId = ref<string | null>(null)
   const trainingStatus = ref<any>(null)
-  const predictionRows = ref<any[]>([])  // Новое состояние для строк прогноза
+  const predictionRows = ref<any[]>([])
   const horizonUnit = ref("D (день)")
 
   // PyCaret models selection
-  const selectedPycaretModels = ref<string[]>(['*'])  // по умолчанию выбраны все модели
+  const selectedPycaretModels = ref<string[]>(['*'])
+
+  // --- DB connection state (обновлено) ---
+  const authToken = ref<string | null>(null) // Теперь храним только токен
+  const dbConnected = ref(false)
+  const dbCheckResult = ref<{ success: boolean; detail: string; access_token?: string } | null>(null)
+  const dbTables = ref<string[]>([]) // Новое: для хранения списка таблиц из БД
 
   function setTableData(data: any[]) {
     tableData.value = data
@@ -61,11 +67,11 @@ export const useMainStore = defineStore('main', () => {
     staticFeatures.value = features
   }
 
-  function setSelectedColumns(columns: string[]) { // Новый метод для установки выбранных колонок
+  function setSelectedColumns(columns: string[]) {
     selectedColumns.value = columns
   }
 
-  function setConsiderRussianHolidays(value: boolean) { // Новый метод для установки значения чекбокса
+  function setConsiderRussianHolidays(value: boolean) {
     considerRussianHolidays.value = value
   }
 
@@ -113,7 +119,7 @@ export const useMainStore = defineStore('main', () => {
     trainingStatus.value = status
   }
 
-  function setPredictionRows(rows: any[]) {  // Новый метод для установки строк прогноза
+  function setPredictionRows(rows: any[]) {
     predictionRows.value = rows
   }
 
@@ -123,6 +129,24 @@ export const useMainStore = defineStore('main', () => {
 
   function setSelectedPycaretModels(models: string[]) {
     selectedPycaretModels.value = models
+  }
+
+  // Методы для JWT и подключения к БД
+  function setAuthToken(token: string | null) {
+    authToken.value = token
+    // УДАЛЕНО: localStorage.setItem/removeItem
+  }
+
+  function setDbConnected(connected: boolean) {
+    dbConnected.value = connected
+  }
+
+  function setDbCheckResult(result: { success: boolean; detail: string; access_token?: string } | null) {
+    dbCheckResult.value = result
+  }
+
+  function setDbTables(tables: string[]) {
+    dbTables.value = tables
   }
 
   return {
@@ -135,8 +159,8 @@ export const useMainStore = defineStore('main', () => {
     targetColumn,
     idColumn,
     staticFeatures,
-    selectedColumns, // Экспортируем новое свойство
-    considerRussianHolidays, // Экспортируем новое свойство
+    selectedColumns,
+    considerRussianHolidays,
     fillMethod,
     groupingColumns,
     selectedMetric,
@@ -148,9 +172,14 @@ export const useMainStore = defineStore('main', () => {
     trainPredictSave,
     sessionId,
     trainingStatus,
-    predictionRows, // Экспортируем новое свойство
+    predictionRows,
     horizonUnit,
-    selectedPycaretModels, // Экспортируем новое свойство
+    selectedPycaretModels,
+    // Новые экспорты для DB connection
+    authToken,
+    dbConnected,
+    dbCheckResult,
+    dbTables,
     setTableData,
     setChunkSize,
     setFile,
@@ -158,8 +187,8 @@ export const useMainStore = defineStore('main', () => {
     setTargetColumn,
     setIdColumn,
     setStaticFeatures,
-    setSelectedColumns, // Экспортируем новый метод
-    setConsiderRussianHolidays, // Экспортируем новый метод
+    setSelectedColumns,
+    setConsiderRussianHolidays,
     setGroupingColumns,
     setFillMethod,
     setSelectedMetric,
@@ -171,8 +200,13 @@ export const useMainStore = defineStore('main', () => {
     setTrainPredictSave,
     setSessionId,
     setTrainingStatus,
-    setPredictionRows, // Экспортируем новый метод
+    setPredictionRows,
     setHorizonUnit,
-    setSelectedPycaretModels, // Экспортируем новый метод
+    setSelectedPycaretModels,
+    // Новые методы для DB connection
+    setAuthToken,
+    setDbConnected,
+    setDbCheckResult,
+    setDbTables,
   }
 })

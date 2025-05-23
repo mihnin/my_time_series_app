@@ -175,6 +175,8 @@ class AutoGluonStrategy(AutoMLStrategy):
                     rename_dict['item_id'] = id_col
                 if 'timestamp' in getattr(preds, 'columns', []):
                     rename_dict['timestamp'] = dt_col
+                if 'mean' in getattr(preds, 'columns', []):
+                    rename_dict['mean'] = tgt_col
                 if rename_dict:
                     preds = preds.rename(columns=rename_dict)
                 # Если item_id или timestamp в индексе
@@ -189,7 +191,13 @@ class AutoGluonStrategy(AutoMLStrategy):
         except Exception as e:
             logging.error(f"Ошибка при прогнозировании: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {e}")
-        
-        return preds.reset_index()
+        preds = preds.reset_index()
+        preds[dt_col] = preds[dt_col].dt.strftime('%Y-%m-%d')
 
+        # Удалить колонку 'index' из preds, если она появилась после reset_index
+        if 'index' in preds.columns:
+            preds = preds.drop(columns=['index'])
+
+        return preds
+# datetime64[ns]
 autogluon_strategy = AutoGluonStrategy()

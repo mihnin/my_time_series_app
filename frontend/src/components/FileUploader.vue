@@ -29,7 +29,7 @@
           @change="handleFileChange"
           style="display: none"
         >
-        <button @click="fileInput && fileInput.click()">
+        <button @click="fileInput && fileInput.click()" class="choose-file-btn">
           📂 Выбрать файл
         </button>
         <p>или перетащите файл сюда</p>
@@ -45,14 +45,104 @@
         <span v-if="isLoading" class="spinner-wrap">
           <span class="spinner"></span>Загрузка...
         </span>
-        <span v-else>📂 Загрузить данные</span>
+        <span v-else>📂 Загрузить данные из файла</span>
       </button>
+      <button
+        v-if="dbConnected"
+        class="db-load-btn"
+        @click="openDbModal"
+        style="margin-top: 0.5rem; background: #388e3c;"
+      >
+        🗄️ Загрузить из БД
+      </button>
+      <button
+        v-if="dbConnected && fileLoaded"
+        class="upload-to-db-btn"
+        @click="openUploadToDbModal"
+        :disabled="isLoading"
+        style="margin-top: 0.5rem;"
+      >
+        ⬆️ Загрузить файл в БД
+      </button>
+    </div>
+
+    <!-- Модальное окно выбора таблицы из БД -->
+    <div v-if="dbModalVisible" class="db-modal-overlay" @click="closeDbModal">
+      <div class="db-modal" @click.stop>
+        <button class="close-btn" @click="closeDbModal">×</button>
+        <h3 style="margin-bottom:1rem">Выберите таблицу из БД</h3>
+        <div class="db-modal-table-area">
+          <div v-if="dbTablesLoading" style="color:#888;">Загрузка таблиц...</div>
+          <div v-else-if="dbTables.length === 0" style="color:#f44336;">Нет доступных таблиц</div>
+          <div v-else class="db-modal-content">
+            <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
+              <option value="" disabled selected>Выберите таблицу...</option>
+              <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
+            </select>
+            <div class="table-preview-fixed">
+              <div v-if="tablePreviewLoading" class="table-preview-loader">
+                <span class="table-preview-spinner"></span>
+              </div>
+              <div v-else-if="tablePreviewError" class="error-message" style="display:flex;align-items:center;justify-content:center;height:100%;">{{ tablePreviewError }}</div>
+              <div v-else-if="tablePreview && tablePreview.length" class="table-preview-scroll">
+                <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
+                  <thead>
+                    <tr>
+                      <th v-for="key in Object.keys(tablePreview[0])" :key="key" style="border-bottom:1px solid #e0e0e0; padding:0.3rem 0.5rem; background:#f5f5f5;">{{ key }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in tablePreview" :key="idx">
+                      <td v-for="key in Object.keys(tablePreview[0])" :key="key" style="padding:0.3rem 0.5rem; border-bottom:1px solid #f0f0f0;">{{ row[key] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">Выберите таблицу для предпросмотра</div>
+            </div>
+          </div>
+        </div>
+        <div class="db-modal-footer">
+          <button class="connect-btn" style="width:100%;" :disabled="!selectedDbTable || isLoadingFromDb" @click="loadTableFromDb">
+            <span v-if="isLoadingFromDb" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
+            <span v-else>Загрузить таблицу</span>
+          </button>
+          <div v-if="dbError" class="error-message">{{ dbError }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно для загрузки файла в БД -->
+    <div v-if="uploadToDbModalVisible" class="db-modal-overlay" @click="closeUploadToDbModal">
+      <div class="db-modal" @click.stop>
+        <button class="close-btn" @click="closeUploadToDbModal">×</button>
+        <h3 style="margin-bottom:1rem">Загрузка файла в БД</h3>
+        <input v-model="uploadTableName" class="db-input db-input-full" placeholder="Введите название таблицы" style="margin-bottom:1rem;" />
+        <button class="upload-to-db-btn" style="margin-bottom:0;" :disabled="!uploadTableName || uploadToDbLoading" @click="uploadFileToDb">
+          <span v-if="uploadToDbLoading" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
+          <span v-else>Загрузить в БД</span>
+        </button>
+        <div v-if="uploadToDbError" class="error-message">{{ uploadToDbError }}</div>
+      </div>
+    </div>
+
+    <!-- Модальное окно успешной загрузки файла в БД -->
+    <div v-if="uploadSuccessModalVisible" class="success-modal-overlay">
+      <div class="success-modal">
+        <div class="success-icon">
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="40" cy="40" r="40" fill="#4CAF50"/>
+            <path d="M24 42L36 54L56 34" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="success-text">Файл успешно загружен в БД</div>
+      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed } from 'vue'
+import { defineComponent, ref, computed, watch } from 'vue'
 import { useMainStore } from '../stores/mainStore'
 import * as XLSX from 'xlsx'
 
@@ -65,6 +155,26 @@ export default defineComponent({
     const fileInput = ref<HTMLInputElement | null>(null)
     const selectedFile = ref<File | null>(null)
     const isLoading = ref(false)
+    const fileLoaded = ref(false)
+    // --- DB upload modal state ---
+    const dbModalVisible = ref(false)
+    const dbTablesLoading = ref(false) // <--- add loading state
+    const selectedDbTable = ref('')
+    const isLoadingFromDb = ref(false)
+    const dbError = ref('')
+    const tablePreview = ref<any[] | null>(null)
+    const tablePreviewLoading = ref(false)
+    const tablePreviewError = ref('')
+    // --- Upload to DB modal state ---
+    const uploadToDbModalVisible = ref(false)
+    const uploadTableName = ref('')
+    const uploadToDbLoading = ref(false)
+    const uploadToDbError = ref('')
+    const uploadSuccessModalVisible = ref(false)
+
+    // Для шаблона
+    const dbConnected = computed(() => store.dbConnected)
+    const dbTables = computed(() => store.dbTables)
 
     const chunkSize = computed({
       get: () => store.chunkSize,
@@ -188,6 +298,7 @@ export default defineComponent({
       if (file) {
         selectedFile.value = file
         store.setFile(file) // Сохраняем файл в хранилище
+        fileLoaded.value = false // сброс при выборе нового файла
       }
     }
 
@@ -196,6 +307,7 @@ export default defineComponent({
       if (file) {
         selectedFile.value = file
         store.setFile(file) // Сохраняем файл в хранилище
+        fileLoaded.value = false // сброс при выборе нового файла
       }
     }
 
@@ -205,9 +317,156 @@ export default defineComponent({
       try {
         store.setFile(selectedFile.value) // Убедимся, что файл сохранен в хранилище перед загрузкой
         await processFile(selectedFile.value)
+        fileLoaded.value = true // только после успешной загрузки
       } finally {
         isLoading.value = false
       }
+    }
+
+    const openDbModal = async () => {
+      dbModalVisible.value = true
+      dbError.value = ''
+      selectedDbTable.value = '' // По умолчанию ничего не выбрано
+      // Загружаем таблицы при открытии модального окна
+      if (store.dbConnected && store.authToken) {
+        dbTablesLoading.value = true
+        try {
+          const response = await fetch('http://localhost:8000/get-tables', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${store.authToken}`
+            },
+          });
+          const result = await response.json();
+          if (result.success) {
+            store.setDbTables(result.tables);
+            dbError.value = '';
+          } else {
+            dbError.value = result.detail || 'Не удалось загрузить таблицы из БД.';
+            store.setDbTables([]);
+          }
+        } catch (e: any) {
+          dbError.value = 'Ошибка при загрузке таблиц: ' + (e && typeof e === 'object' && 'message' in e ? (e as any).message : String(e));
+          store.setDbTables([]);
+        } finally {
+          dbTablesLoading.value = false
+        }
+      }
+    }
+    function closeDbModal() {
+      dbModalVisible.value = false
+      dbError.value = ''
+    }
+
+    async function loadTableFromDb() {
+      if (!selectedDbTable.value) return
+      dbError.value = ''
+      isLoadingFromDb.value = true
+      try {
+        const response = await fetch('http://localhost:8000/download-table-from-db', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${store.authToken}`
+          },
+          body: JSON.stringify({ table: selectedDbTable.value })
+        })
+        const result = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          // Создаем фиктивный File для совместимости с TrainingSettings
+          const fakeFile = new File([JSON.stringify(result.data)], `${selectedDbTable.value}.fromdb.json`, { type: 'application/json' })
+          store.setFile(fakeFile)
+          store.setTableData(result.data)
+          emit('file-loaded', result.data)
+          closeDbModal()
+        } else {
+          dbError.value = result.detail || 'Не удалось загрузить данные из таблицы.'
+        }
+      } catch (error: any) {
+        dbError.value = 'Ошибка загрузки данных из БД: ' + (error?.message || error)
+      } finally {
+        isLoadingFromDb.value = false
+      }
+    }
+
+    async function fetchTablePreview(tableName: string) {
+      if (!tableName) {
+        tablePreview.value = null
+        return
+      }
+      tablePreviewLoading.value = true
+      tablePreviewError.value = ''
+      try {
+        const response = await fetch('http://localhost:8000/get-table-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${store.authToken}`
+          },
+          body: JSON.stringify({ table: tableName })
+        })
+        const result = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          tablePreview.value = result.data
+        } else {
+          tablePreview.value = null
+          tablePreviewError.value = result.detail || 'Не удалось получить предпросмотр.'
+        }
+      } catch (e: any) {
+        tablePreview.value = null
+        tablePreviewError.value = 'Ошибка предпросмотра: ' + (e?.message || e)
+      } finally {
+        tablePreviewLoading.value = false
+      }
+    }
+
+    // Следим за изменением выбранной таблицы
+    watch(selectedDbTable, (val) => {
+      if (val) fetchTablePreview(val)
+      else tablePreview.value = null
+    })
+
+    // Добавляем обработчик для загрузки файла в БД
+    async function uploadFileToDb() {
+      if (!selectedFile.value || !uploadTableName.value) return
+      uploadToDbLoading.value = true
+      uploadToDbError.value = ''
+      try {
+        const formData = new FormData()
+        formData.append('file', selectedFile.value)
+        formData.append('table_name', uploadTableName.value)
+        const response = await fetch('http://localhost:8000/upload-excel-to-db', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${store.authToken}`
+          },
+          body: formData
+        })
+        const result = await response.json()
+        if (result.success) {
+          closeUploadToDbModal()
+          uploadSuccessModalVisible.value = true
+          setTimeout(() => { uploadSuccessModalVisible.value = false }, 1800)
+        } else {
+          uploadToDbError.value = result.detail || 'Ошибка при загрузке файла в БД.'
+        }
+      } catch (e: any) {
+        uploadToDbError.value = 'Ошибка: ' + (e?.message || e)
+      } finally {
+        uploadToDbLoading.value = false
+      }
+    }
+
+    function openUploadToDbModal() {
+      uploadToDbModalVisible.value = true
+      uploadTableName.value = ''
+      uploadToDbError.value = ''
+    }
+    function closeUploadToDbModal() {
+      uploadToDbModalVisible.value = false
+      uploadTableName.value = ''
+      uploadToDbError.value = ''
     }
 
     return {
@@ -215,9 +474,31 @@ export default defineComponent({
       selectedFile,
       isLoading,
       chunkSize,
-      handleFileChange,
       handleDrop,
-      handleUpload
+      handleFileChange,
+      handleUpload,
+      dbModalVisible,
+      openDbModal,
+      closeDbModal,
+      selectedDbTable,
+      isLoadingFromDb,
+      dbError,
+      loadTableFromDb,
+      dbConnected,
+      dbTables,
+      dbTablesLoading, // <--- export
+      tablePreview,
+      tablePreviewLoading,
+      tablePreviewError,
+      uploadToDbModalVisible,
+      uploadTableName,
+      uploadToDbLoading,
+      uploadToDbError,
+      openUploadToDbModal,
+      closeUploadToDbModal,
+      uploadFileToDb,
+      fileLoaded,
+      uploadSuccessModalVisible,
     }
   }
 })
@@ -325,8 +606,23 @@ button {
   transition: background-color 0.2s;
 }
 
-button:hover {
+.choose-file-btn {
+  padding: 10px 20px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+.choose-file-btn:hover {
   background-color: #1976D2;
+}
+
+button:hover {
+  /* убираем глобальный hover-стиль */
+  background-color: unset;
 }
 
 .subsection-title {
@@ -356,5 +652,218 @@ button:hover {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.db-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.db-modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 700px;
+  min-width: 500px;
+  width: 100%;
+  min-height: 600px;
+  max-height: 100vh;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.close-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.7rem;
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #888;
+  cursor: pointer;
+  z-index: 10;
+  /* убираем любые эффекты фона */
+}
+.close-btn:active, .close-btn:focus {
+  background: none !important;
+  outline: none;
+  box-shadow: none;
+}
+
+.db-input {
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.connect-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.connect-btn:hover {
+  background-color: #1976d2;
+}
+
+.error-message {
+  margin-top: 1rem;
+  color: #f44336;
+  font-size: 0.9rem;
+}
+
+.db-load-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #388e3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+.db-load-btn:hover {
+  background-color: #256b27 !important;
+}
+
+.upload-to-db-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+.upload-to-db-btn:hover {
+  background-color: #0d47a1 !important;
+}
+
+/* Стили для анимации загрузки */
+.table-preview-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  width: 100%;
+}
+.table-preview-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #e3e3e3;
+  border-top: 4px solid #2196F3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Новые стили для модального окна */
+.db-modal-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.table-preview-fixed {
+  min-height: 420px;
+  max-height: 420px;
+  height: 420px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  position: relative;
+}
+.table-preview-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fafbfc;
+}
+
+.db-modal-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 1rem;
+  background: white;
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 2;
+}
+
+.db-modal-table-area {
+  min-height: 110px;
+  max-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+}
+
+/* Стили для модального окна успешной загрузки */
+.success-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.success-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2.5rem 2.5rem 2rem 2.5rem;
+  min-width: 340px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(76, 175, 80, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: pop-in 0.18s cubic-bezier(.4,2,.6,1) 1;
+}
+
+.success-icon {
+  margin-bottom: 1.2rem;
+}
+
+.success-text {
+  color: #388e3c;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.7); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 </style>

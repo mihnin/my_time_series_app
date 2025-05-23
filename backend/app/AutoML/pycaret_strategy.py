@@ -46,7 +46,7 @@ class PyCaretStrategy(AutoMLStrategy):
 
         for unique_id in unique_ids:
             id_df = ts_df[ts_df[item_id_col] == unique_id].copy()
-            drop_cols = [c for c in training_params.static_feature_columns + [item_id_col] if c in id_df.columns]
+            drop_cols = [c for c in ['Country', 'City', item_id_col] if c in id_df.columns]
             id_df = id_df.drop(columns=drop_cols, errors='ignore')
             id_df = id_df.set_index(datetime_col)
             id_df = id_df.sort_index()
@@ -65,6 +65,7 @@ class PyCaretStrategy(AutoMLStrategy):
                     fh=fh,
                     session_id=session_seed,
                     numeric_imputation_target='ffill',
+                    numeric_imputation_exogenous='ffill',
                     verbose=False,
                 )
                 if use_all_models:
@@ -160,6 +161,7 @@ class PyCaretStrategy(AutoMLStrategy):
 
         if 'index' in result.columns:
             result = result.drop(columns=['index'])
+        print(result.dtypes)
         return result
     
 pycaret_strategy = PyCaretStrategy()

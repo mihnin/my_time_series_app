@@ -18,3 +18,5 @@ class TrainingParameters(BaseModel):
     training_time_limit: Optional[int] = Field(None, description="Ограничение времени на обучение в секундах. Если None, то без ограничений.")
     static_feature_columns: Optional[List[str]] = Field([], description="Названия колонок, которые будут использоваться как статические признаки.")
     pycaret_models: Optional[Union[str, List[str], None]] = Field(None, description="Названия моделей для pycaret. Если None или пустой список, обучение не запускается. Если '*', обучаются все доступные модели.")
+    download_table_name: Optional[Union[str, None]] = Field(None, description="Название таблицы из которой будет загружен датасет")
+    upload_table_name: Optional[Union[str, None]] = Field(None, description="Название таблицы в которую будет загружен датасет")

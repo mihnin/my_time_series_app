@@ -140,7 +140,35 @@ export default defineComponent({
           }
           return;
         }
-        const params = {
+        // Detect if file was loaded from DB (by extension)
+        let downloadTableName = null;
+        if (store.selectedFile && store.selectedFile.name.endsWith('.fromdb.json')) {
+          // Extract table name from file name: <table>.fromdb.json
+          const match = store.selectedFile.name.match(/^(.*)\.fromdb\.json$/);
+          if (match) {
+            downloadTableName = match[1];
+          }
+        }
+        // Формируем параметры для обучения
+        interface TrainingParams {
+          [key: string]: any;
+          datetime_column: string;
+          target_column: string;
+          item_id_column: string;
+          frequency: string;
+          fill_missing_method: string;
+          fill_group_columns: string[];
+          use_russian_holidays: boolean;
+          evaluation_metric: string;
+          models_to_train: string | string[] | null;
+          autogluon_preset: string;
+          predict_mean_only: boolean;
+          prediction_length: number;
+          training_time_limit: number | null;
+          static_feature_columns: string[];
+          pycaret_models: string | string[] | null;
+        };
+        const params: TrainingParams = {
           datetime_column: store.dateColumn,
           target_column: store.targetColumn,
           item_id_column: store.idColumn,
@@ -157,18 +185,23 @@ export default defineComponent({
           static_feature_columns: store.staticFeatures,
           pycaret_models: store.selectedPycaretModels[0] === '*' && store.selectedPycaretModels.length === 1 ? '*' : (store.selectedPycaretModels.length === 0 ? null : store.selectedPycaretModels)
         };
+        if (downloadTableName) {
+          params.download_table_name = downloadTableName;
+        }
         const paramsJson = JSON.stringify(params);
         formData.append('params', paramsJson);
 
         if (trainPredictSave.value) {
           // Новый сценарий: обучение+прогноз+сохранение
-          const response = await fetch('http://localhost:8000/train_prediction_save/', {
+          const fetchOptions: RequestInit = {
             method: 'POST',
             body: formData,
             headers: {
               'Accept': 'application/json',
+              ...(store.authToken ? { 'Authorization': `Bearer ${store.authToken}` } : {})
             }
-          });
+          };
+          const response = await fetch('http://localhost:8000/train_prediction_save/', fetchOptions);
           if (!response.ok) {
             const errorText = await response.text();
             let errorData;
@@ -264,13 +297,15 @@ export default defineComponent({
         }
         // --- Обычная логика (старая) ---
         statusCheckInterval = setInterval(checkTrainingStatus, 2000) as unknown as number
-        const response = await fetch('http://localhost:8000/train_timeseries_model/', {
+        const fetchOptions: RequestInit = {
           method: 'POST',
           body: formData,
           headers: {
             'Accept': 'application/json',
+            ...(store.authToken ? { 'Authorization': `Bearer ${store.authToken}` } : {})
           }
-        });
+        };
+        const response = await fetch('http://localhost:8000/train_timeseries_model/', fetchOptions);
         if (!response.ok) {
           const errorText = await response.text();
           let errorData;

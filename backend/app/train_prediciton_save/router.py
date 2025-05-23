@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form, BackgroundTasks
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form, BackgroundTasks, Request
 import pandas as pd
 import numpy as np
 import logging
@@ -13,25 +13,17 @@ from datetime import datetime
 from io import BytesIO
 
 import pandas as modin_pd
-from autogluon.timeseries import TimeSeriesPredictor
 from prediction.router import predict_timeseries, save_prediction
 from training.model import TrainingParameters
-from training.router import train_model
-from src.features.feature_engineering import add_russian_holiday_feature, fill_missing_values
-from src.data.data_processing import convert_to_timeseries, safely_prepare_timeseries_data
-from src.models.forecasting import make_timeseries_dataframe
+from training.router import train_model, get_training_status, prepare_training_data_and_status, optional_oauth2_scheme
 from src.validation.data_validation import validate_dataset
 from sessions.utils import (
     create_session_directory,
-    get_session_path,
     save_session_metadata,
-    load_session_metadata,
     cleanup_old_sessions,
-    save_training_file,
     get_model_path,
     training_sessions
 )
-from training.router import get_training_status
 
 # Global training status tracking
 
@@ -152,94 +144,42 @@ def save_df_to_parquet(df, path):
 
 @router.post("/train_prediction_save/")
 async def train_model_endpoint(
+    request: Request,
     params: str = Form(...),
-    training_file: UploadFile = File(...),
+    training_file: UploadFile = File(None),
     background_tasks: BackgroundTasks = None,
+    token: Optional[str] = Depends(optional_oauth2_scheme),
 ):
-    """Запуск асинхронного процесса обучения и возврат session_id для отслеживания статуса."""
-    session_id = str(uuid.uuid4()) # Генерируем ID сессии в начале для логирования ошибок
+    """Запуск асинхронного процесса обучения и возврат session_id для отслеживания статуса.
+    Если в параметрах есть download_table_name, то датасет берется из БД, иначе из файла.
+    Аутентификация требуется только для загрузки из БД.
+    """
+    session_id = str(uuid.uuid4())
     try:
-        logging.info(f"[train_model_endpoint] Получен запрос на обучение. Файл: {training_file.filename}, Session ID: {session_id}")
-        
-        # Parse parameters
+        logging.info(f"[train_model_endpoint] Получен запрос на обучение. Файл: {getattr(training_file, 'filename', None)}, Session ID: {session_id}")
         params_dict = json.loads(params)
         training_params = TrainingParameters(**params_dict)
         logging.info(f"[train_model_endpoint] Параметры обучения для session_id={session_id}: {params_dict}")
 
-        # Validate file type
-        if not training_file.filename.endswith((".csv", ".xlsx", ".xls")):
-            logging.error(f"Неверный тип файла для session_id={session_id}: {training_file.filename}")
-            raise HTTPException(
-                status_code=400, 
-                detail="Неверный тип файла. Пожалуйста, загрузите CSV или Excel файл."
-            )
-
-        # Create session directory
-        session_path = create_session_directory(session_id)
-        logging.info(f"[train_model_endpoint] Создана новая сессия и каталог: {session_id} по пути {session_path}")
-
-        # 1. Чтение файла в память
-        file_content = await training_file.read() # Читаем содержимое файла один раз
-
-        # 2. Сохранение ОРИГИНАЛЬНОГО файла (опционально, но может быть полезно для аудита)
-        original_file_path = os.path.join(session_path, f"original_{training_file.filename}")
-        with open(original_file_path, "wb") as f:
-            f.write(file_content)
-        logging.info(f"[train_model_endpoint] Оригинальный файл сохранён: {original_file_path} для session_id={session_id}")
-        
-        # 3. Загрузка DataFrame из содержимого файла (file_content)
-        # Оборачиваем байты в BytesIO, чтобы pandas мог их прочитать как файл
-        file_like_object = BytesIO(file_content)
-        
-        # Используем to_thread для блокирующих операций pandas
-        def read_data_from_stream(stream, filename):
-            if filename.endswith('.csv'):
-                return modin_pd.read_csv(stream)
-            else:  # Excel file
-                return modin_pd.read_excel(stream) # engine='openpyxl' if filename.endswith('.xlsx') else None
-
-        try:
-            logging.info(f"[train_model_endpoint] Начало загрузки данных в DataFrame для session_id={session_id}...")
-            df_train = await asyncio.to_thread(read_data_from_stream, file_like_object, training_file.filename)
-            logging.info(f"[train_model_endpoint] Данные успешно загружены в DataFrame из файла: {training_file.filename} для session_id={session_id}. Форма DataFrame: {df_train.shape}")
-        except Exception as e:
-            logging.error(f"Ошибка чтения файла в DataFrame для session_id={session_id}: {e}", exc_info=True)
-            raise HTTPException(status_code=400, detail=f"Ошибка чтения данных из файла: {str(e)}")
-        finally:
-            file_like_object.close() # Закрываем BytesIO
-
-        # 4. Сохранение DataFrame в формате Parquet для быстрого доступа в будущем
-        # Это будет файл, который может использоваться для прогнозов или повторного обучения
-        parquet_file_name = "training_data.parquet" # Стандартное имя
-        parquet_file_path = os.path.join(session_path, parquet_file_name)
-        
-      
-        await asyncio.to_thread(save_df_to_parquet, df_train, parquet_file_path)
-        logging.info(f"[train_model_endpoint] DataFrame сохранён в формате Parquet: {parquet_file_path} для session_id={session_id}")
-
-        # Initialize session status
-        initial_status = {
-            "status": "initializing",
-            "create_time": datetime.now().isoformat(),
-            "original_file_name": training_file.filename, # Имя оригинального файла
-            "processed_file_path": parquet_file_path, # Путь к Parquet файлу для дальнейшего использования
-            "session_path": session_path,
-            "progress": 0
-        }
-        training_sessions[session_id] = initial_status
-        save_session_metadata(session_id, initial_status) # Сохраняем метаданные сессии
+        # Используем общую функцию подготовки данных и статуса
+        df_train, original_filename, parquet_file_path, session_path, initial_status = await prepare_training_data_and_status(
+            session_id=session_id,
+            training_params=training_params,
+            training_file=training_file,
+            request=request,
+            token=token
+        )
         logging.info(f"[train_model_endpoint] Статус сессии и метаданные сохранены для session_id={session_id}")
 
         # Start async training
         background_tasks.add_task(
             run_training_prediction_async,
             session_id,
-            df_train, # Передаем уже загруженный DataFrame
+            df_train,
             training_params,
-            training_file.filename # Передаем имя оригинального файла для информации в статусе
+            original_filename
         )
         logging.info(f"[train_model_endpoint] Задача обучения передана в background_tasks для session_id={session_id}")
-        
         return {
             "status": "accepted",
             "message": "Обучение запущено",
@@ -252,17 +192,16 @@ async def train_model_endpoint(
             status_code=400,
             detail=f"Ошибка разбора JSON параметров: {str(e)}"
         )
-    except ValueError as e: # Может быть выброшено TrainingParameters
+    except ValueError as e:
         logging.error(f"Ошибка валидации параметров для session_id={session_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=422, # Unprocessable Entity
+            status_code=422,
             detail=f"Ошибка валидации параметров: {str(e)}"
         )
-    except HTTPException: # Перехватываем HTTPException, чтобы не попасть в общий Exception
+    except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Непредвиденная ошибка при запуске обучения для session_id={session_id}: {e}", exc_info=True)
-        # Обновляем статус сессии на 'failed', если он уже был инициализирован
         if session_id in training_sessions:
             failed_status = {
                 "status": "failed",
@@ -276,5 +215,5 @@ async def train_model_endpoint(
             detail=f"Внутренняя ошибка сервера при запуске обучения: {str(e)}"
         )
     finally:
-        if training_file: # Убедимся, что training_file существует
+        if training_file:
             await training_file.close()
