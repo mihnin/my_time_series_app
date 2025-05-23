@@ -6,9 +6,11 @@ import os
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
 from .jwt_logic import create_access_token, get_current_user_db_creds
 from sessions.utils import get_session_path
+from pydantic import BaseModel
 
 from .model import DBConnectionRequest, DBConnectionResponse, TablesResponse
 from .settings import settings
+from .env_utils import validate_secret_key, update_env_variables
 from .db_manager import (
     get_user_table_names,
     get_table_rows,
@@ -19,7 +21,75 @@ from .db_manager import (
 
 router = APIRouter()
 
+# --- Новые модели для API ---
+class SecretKeyRequest(BaseModel):
+    secret_key: str
+
+class SecretKeyResponse(BaseModel):
+    success: bool
+    message: str
+    
+class EnvUpdateRequest(BaseModel):
+    secret_key: str
+    DB_USER: str
+    DB_PASS: str
+    DB_HOST: str
+    DB_PORT: str
+    DB_NAME: str
+    DB_SCHEMA: str
+
+class EnvUpdateResponse(BaseModel):
+    success: bool
+    message: str
+
 # --- Эндпоинты ---
+
+class EnvVarsResponse(SecretKeyResponse):
+    db_vars: dict = {}
+
+@router.post('/validate-secret-key', response_model=EnvVarsResponse)
+async def validate_key(request: SecretKeyRequest):
+    """
+    Проверяет переданный секретный ключ на соответствие с SECRET_KEY из настроек.
+    Если ключ верный, возвращает также текущие значения переменных окружения.
+    """
+    if validate_secret_key(request.secret_key):
+        # Возвращаем текущие значения переменных окружения
+        env_vars = {
+            "DB_USER": settings.DB_USER,
+            "DB_PASS": settings.DB_PASS,
+            "DB_HOST": settings.DB_HOST,
+            "DB_PORT": settings.DB_PORT,
+            "DB_NAME": settings.DB_NAME,
+            "DB_SCHEMA": settings.SCHEMA
+        }
+        return EnvVarsResponse(success=True, message="Секретный ключ верный", db_vars=env_vars)
+    return EnvVarsResponse(success=False, message="Неверный секретный ключ")
+
+
+@router.post('/update-env-variables', response_model=EnvUpdateResponse)
+async def update_env_vars(request: EnvUpdateRequest):
+    """
+    Обновляет переменные окружения в файле .env, если указан правильный секретный ключ.
+    """
+    if not validate_secret_key(request.secret_key):
+        return EnvUpdateResponse(success=False, message="Неверный секретный ключ")
+    
+    # Создаем словарь с переменными окружения
+    env_vars = {
+        "DB_USER": request.DB_USER,
+        "DB_PASS": request.DB_PASS,
+        "DB_HOST": request.DB_HOST,
+        "DB_PORT": request.DB_PORT,
+        "DB_NAME": request.DB_NAME,
+        "DB_SCHEMA": request.DB_SCHEMA,
+    }
+    
+    # Обновляем переменные окружения
+    success = await update_env_variables(env_vars)
+    if success:
+        return EnvUpdateResponse(success=True, message="Переменные окружения успешно обновлены")
+    return EnvUpdateResponse(success=False, message="Не удалось обновить переменные окружения")
 
 @router.post('/login', response_model=DBConnectionResponse)
 async def login_for_access_token(data: DBConnectionRequest):

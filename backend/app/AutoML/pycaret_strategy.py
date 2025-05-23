@@ -161,7 +161,6 @@ class PyCaretStrategy(AutoMLStrategy):
 
         if 'index' in result.columns:
             result = result.drop(columns=['index'])
-        print(result.dtypes)
         return result
     
 pycaret_strategy = PyCaretStrategy()
