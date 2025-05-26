@@ -2,13 +2,11 @@ import io
 import pandas as pd
 from datetime import timedelta
 import os
-
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
 from .jwt_logic import create_access_token, get_current_user_db_creds
 from sessions.utils import get_session_path
-from pydantic import BaseModel
-
-from .model import DBConnectionRequest, DBConnectionResponse, TablesResponse
+import json
+from .model import DBConnectionRequest, DBConnectionResponse, EnvUpdateRequest, EnvUpdateResponse, EnvVarsResponse, SecretKeyRequest, TablesResponse
 from .settings import settings
 from .env_utils import validate_secret_key, update_env_variables
 from .db_manager import (
@@ -21,31 +19,7 @@ from .db_manager import (
 
 router = APIRouter()
 
-# --- Новые модели для API ---
-class SecretKeyRequest(BaseModel):
-    secret_key: str
 
-class SecretKeyResponse(BaseModel):
-    success: bool
-    message: str
-    
-class EnvUpdateRequest(BaseModel):
-    secret_key: str
-    DB_USER: str
-    DB_PASS: str
-    DB_HOST: str
-    DB_PORT: str
-    DB_NAME: str
-    DB_SCHEMA: str
-
-class EnvUpdateResponse(BaseModel):
-    success: bool
-    message: str
-
-# --- Эндпоинты ---
-
-class EnvVarsResponse(SecretKeyResponse):
-    db_vars: dict = {}
 
 @router.post('/validate-secret-key', response_model=EnvVarsResponse)
 async def validate_key(request: SecretKeyRequest):
@@ -147,10 +121,14 @@ async def get_table_preview(
 async def upload_excel_to_db_endpoint(
     file: UploadFile = File(...),
     table_name: str = Form(...),
+    primary_keys: str = Form(None),  # Новое поле
+    dbSaveMode: str = Form('new'),   # Новое поле: режим сохранения
     db_creds: dict = Depends(get_current_user_db_creds)
 ):
     """
-    Загружает Excel-файл в новую таблицу. Если таблица уже существует — ошибка.
+    Загружает Excel-файл в новую таблицу или в существующую (по выбору пользователя).
+    Если таблица уже существует и выбран режим 'new', будет ошибка.
+    Если выбран режим 'existing', пытается загрузить в существующую таблицу.
     """
     try:
         if not (file.filename and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls'))):
@@ -165,10 +143,28 @@ async def upload_excel_to_db_endpoint(
         if df.empty:
             raise HTTPException(status_code=400, detail='Файл пустой или не содержит данных')
 
-        # Сначала создаём таблицу, затем загружаем данные
-        await create_table_from_df(df, table_name, db_creds['username'], db_creds['password'])
-        await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
-        return {"success": True, "detail": f"Таблица '{table_name}' успешно загружена."}
+        # Парсим первичные ключи
+        pk_list = []
+        if primary_keys:
+            try:
+                pk_list = json.loads(primary_keys)
+                if not isinstance(pk_list, list):
+                    pk_list = []
+            except Exception:
+                pk_list = []
+
+        if dbSaveMode == 'new':
+            # Сначала создаём таблицу, затем загружаем данные
+            await create_table_from_df(df, table_name, db_creds['username'], db_creds['password'], primary_keys=pk_list)
+            await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
+            return {"success": True, "detail": f"Таблица '{table_name}' успешно загружена."}
+        else:
+            # Пытаемся загрузить в существующую таблицу
+            try:
+                await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
+                return {"success": True, "detail": f"Данные успешно загружены в таблицу '{table_name}'."}
+            except Exception as e:
+                return {"success": False, "detail": f"Ошибка при загрузке в существующую таблицу: {str(e)}"}
     except HTTPException as e:
         raise e
     except Exception as e:

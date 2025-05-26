@@ -67,77 +67,115 @@
     </div>
 
     <!-- Модальное окно выбора таблицы из БД -->
-    <div v-if="dbModalVisible" class="db-modal-overlay" @click="closeDbModal">
-      <div class="db-modal" @click.stop>
-        <button class="close-btn" @click="closeDbModal">×</button>
-        <h3 style="margin-bottom:1rem">Выберите таблицу из БД</h3>
-        <div class="db-modal-table-area">
-          <div v-if="dbTablesLoading" style="color:#888;">Загрузка таблиц...</div>
-          <div v-else-if="dbTables.length === 0" style="color:#f44336;">Нет доступных таблиц</div>
-          <div v-else class="db-modal-content">
-            <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
+    <Teleport to="body">
+      <div v-if="dbModalVisible" class="db-modal-overlay" @click="closeDbModal">
+        <div class="db-modal" @click.stop>
+          <button class="close-btn" @click="closeDbModal">×</button>
+          <h3 style="margin-bottom:1rem">Выберите таблицу из БД</h3>
+          <div class="db-modal-table-area">
+            <div v-if="dbTablesLoading" style="color:#888;">Загрузка таблиц...</div>
+            <div v-else-if="dbTables.length === 0" style="color:#f44336;">Нет доступных таблиц</div>
+            <div v-else class="db-modal-content">
+              <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
+                <option value="" disabled selected>Выберите таблицу...</option>
+                <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
+              </select>
+              <div class="table-preview-fixed">
+                <div v-if="tablePreviewLoading" class="table-preview-loader">
+                  <span class="table-preview-spinner"></span>
+                </div>
+                <div v-else-if="tablePreviewError" class="error-message" style="display:flex;align-items:center;justify-content:center;height:100%;">{{ tablePreviewError }}</div>
+                <div v-else-if="tablePreview && tablePreview.length" class="table-preview-scroll">
+                  <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
+                    <thead>
+                      <tr>
+                        <th v-for="key in Object.keys(tablePreview[0])" :key="key" style="border-bottom:1px solid #e0e0e0; padding:0.3rem 0.5rem; background:#f5f5f5;">{{ key }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, idx) in tablePreview" :key="idx">
+                        <td v-for="key in Object.keys(tablePreview[0])" :key="key" style="padding:0.3rem 0.5rem; border-bottom:1px solid #f0f0f0;">{{ row[key] }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">Выберите таблицу для предпросмотра</div>
+              </div>
+            </div>
+          </div>
+          <div class="db-modal-footer">
+            <button class="connect-btn" style="width:100%;" :disabled="!selectedDbTable || isLoadingFromDb" @click="loadTableFromDb">
+              <span v-if="isLoadingFromDb" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
+              <span v-else>Загрузить таблицу</span>
+            </button>
+            <div v-if="dbError" class="error-message">{{ dbError }}</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Модальное окно для загрузки файла в БД -->
+    <Teleport to="body">
+      <div v-if="uploadToDbModalVisible" class="db-modal-overlay" @click="closeUploadToDbModal">
+        <div class="db-modal upload-to-db-modal" id="upload-to-db-modal" @click.stop>
+          <button class="close-btn" @click="closeUploadToDbModal">×</button>
+          <h3 style="margin-bottom:1rem">Загрузка файла в БД</h3>
+          <!-- Выбор режима: новая таблица или существующая -->
+          <div style="margin-bottom:1rem; display:flex; gap:1.5rem; align-items:center;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:500;">
+              <input type="radio" value="new" v-model="dbSaveMode" />
+              Создать новую таблицу
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-weight:500;">
+              <input type="radio" value="existing" v-model="dbSaveMode" />
+              Загрузить в существующую
+            </label>
+          </div>
+          <!-- Новая таблица -->
+          <div v-if="dbSaveMode === 'new'">
+            <input v-model="uploadTableName" class="db-input db-input-full" placeholder="Введите название таблицы" style="margin-bottom:1rem;" />
+            <div v-if="tableData && tableData.length" style="margin-bottom:1rem;">
+              <label style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block;">Выберите первичные ключи (опционально):</label>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <label v-for="col in Object.keys(tableData[0])" :key="col" style="display:flex; align-items:center; gap:4px;">
+                  <input type="checkbox" :value="col" v-model="selectedPrimaryKeys" />
+                  <span>{{ col }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <!-- Существующая таблица -->
+          <div v-if="dbSaveMode === 'existing'">
+            <select v-model="uploadTableName" class="db-input db-input-full" style="margin-bottom:1rem;">
               <option value="" disabled selected>Выберите таблицу...</option>
               <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
             </select>
-            <div class="table-preview-fixed">
-              <div v-if="tablePreviewLoading" class="table-preview-loader">
-                <span class="table-preview-spinner"></span>
-              </div>
-              <div v-else-if="tablePreviewError" class="error-message" style="display:flex;align-items:center;justify-content:center;height:100%;">{{ tablePreviewError }}</div>
-              <div v-else-if="tablePreview && tablePreview.length" class="table-preview-scroll">
-                <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
-                  <thead>
-                    <tr>
-                      <th v-for="key in Object.keys(tablePreview[0])" :key="key" style="border-bottom:1px solid #e0e0e0; padding:0.3rem 0.5rem; background:#f5f5f5;">{{ key }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, idx) in tablePreview" :key="idx">
-                      <td v-for="key in Object.keys(tablePreview[0])" :key="key" style="padding:0.3rem 0.5rem; border-bottom:1px solid #f0f0f0;">{{ row[key] }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">Выберите таблицу для предпросмотра</div>
-            </div>
+          </div>
+          <div class="upload-to-db-footer">
+            <button class="upload-to-db-btn" :disabled="!uploadTableName || uploadToDbLoading" @click="uploadFileToDb">
+              <span v-if="uploadToDbLoading" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
+              <span v-else>Загрузить в БД</span>
+            </button>
+            <div v-if="uploadToDbError" class="error-message upload-to-db-error-area">{{ uploadToDbError }}</div>
           </div>
         </div>
-        <div class="db-modal-footer">
-          <button class="connect-btn" style="width:100%;" :disabled="!selectedDbTable || isLoadingFromDb" @click="loadTableFromDb">
-            <span v-if="isLoadingFromDb" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
-            <span v-else>Загрузить таблицу</span>
-          </button>
-          <div v-if="dbError" class="error-message">{{ dbError }}</div>
-        </div>
       </div>
-    </div>
-
-    <!-- Модальное окно для загрузки файла в БД -->
-    <div v-if="uploadToDbModalVisible" class="db-modal-overlay" @click="closeUploadToDbModal">
-      <div class="db-modal" @click.stop>
-        <button class="close-btn" @click="closeUploadToDbModal">×</button>
-        <h3 style="margin-bottom:1rem">Загрузка файла в БД</h3>
-        <input v-model="uploadTableName" class="db-input db-input-full" placeholder="Введите название таблицы" style="margin-bottom:1rem;" />
-        <button class="upload-to-db-btn" style="margin-bottom:0;" :disabled="!uploadTableName || uploadToDbLoading" @click="uploadFileToDb">
-          <span v-if="uploadToDbLoading" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
-          <span v-else>Загрузить в БД</span>
-        </button>
-        <div v-if="uploadToDbError" class="error-message">{{ uploadToDbError }}</div>
-      </div>
-    </div>
+    </Teleport>
 
     <!-- Модальное окно успешной загрузки файла в БД -->
-    <div v-if="uploadSuccessModalVisible" class="success-modal-overlay">
-      <div class="success-modal">
-        <div class="success-icon">
-          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="40" cy="40" r="40" fill="#4CAF50"/>
-            <path d="M24 42L36 54L56 34" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+    <Teleport to="body">
+      <div v-if="uploadSuccessModalVisible" class="success-modal-overlay">
+        <div class="success-modal">
+          <div class="success-icon">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="40" cy="40" r="40" fill="#4CAF50"/>
+              <path d="M24 42L36 54L56 34" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="success-text">Файл успешно загружен в БД</div>
         </div>
-        <div class="success-text">Файл успешно загружен в БД</div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -171,6 +209,9 @@ export default defineComponent({
     const uploadToDbLoading = ref(false)
     const uploadToDbError = ref('')
     const uploadSuccessModalVisible = ref(false)
+    const selectedPrimaryKeys = ref<string[]>([]) // <--- новое состояние для выбранных первичных ключей
+    const dbSaveMode = ref<'new' | 'existing'>('new') // <--- состояние для режима сохранения в БД
+    const tableData = computed(() => store.tableData)
 
     // Для шаблона
     const dbConnected = computed(() => store.dbConnected)
@@ -436,6 +477,8 @@ export default defineComponent({
         const formData = new FormData()
         formData.append('file', selectedFile.value)
         formData.append('table_name', uploadTableName.value)
+        formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value))
+        formData.append('dbSaveMode', dbSaveMode.value) // Передаем режим new/existing
         const response = await fetch('http://localhost:8000/upload-excel-to-db', {
           method: 'POST',
           headers: {
@@ -462,11 +505,14 @@ export default defineComponent({
       uploadToDbModalVisible.value = true
       uploadTableName.value = ''
       uploadToDbError.value = ''
+      selectedPrimaryKeys.value = [] // Сбрасываем выбранные первичные ключи при открытии модального окна
+      dbSaveMode.value = 'new' // По умолчанию новая таблица
     }
     function closeUploadToDbModal() {
       uploadToDbModalVisible.value = false
       uploadTableName.value = ''
       uploadToDbError.value = ''
+      selectedPrimaryKeys.value = [] // Сбрасываем выбранные первичные ключи при закрытии модального окна
     }
 
     return {
@@ -499,6 +545,9 @@ export default defineComponent({
       uploadFileToDb,
       fileLoaded,
       uploadSuccessModalVisible,
+      selectedPrimaryKeys,
+      dbSaveMode,
+      tableData
     }
   }
 })
@@ -664,7 +713,8 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
+  isolation: isolate;
 }
 
 .db-modal {
@@ -830,12 +880,16 @@ button:hover {
 /* Стили для модального окна успешной загрузки */
 .success-modal-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.35);
-  z-index: 2000;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 9999;
+  isolation: isolate;
 }
 
 .success-modal {
@@ -865,5 +919,35 @@ button:hover {
 @keyframes pop-in {
   0% { transform: scale(0.7); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+#upload-to-db-modal {
+  min-width: 320px;
+  max-width: 420px;
+  min-height: 220px;
+  max-height: 90vh;
+  padding: 1.2rem 1.2rem 1rem 1.2rem;
+  box-sizing: border-box;
+  font-size: 0.98rem;
+  display: flex;
+  flex-direction: column;
+}
+.upload-to-db-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 48px;
+}
+.upload-to-db-btn {
+  margin-bottom: 0;
+}
+.upload-to-db-error-area {
+  min-height: 1.5em;
+  margin-top: 0.7rem;
+  font-size: 0.95rem;
+  color: #f44336;
+  text-align: center;
+  word-break: break-word;
 }
 </style>

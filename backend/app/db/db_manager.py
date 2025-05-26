@@ -59,11 +59,12 @@ async def fetch_table_as_dataframe(table_name: str, username: str, password: str
 
 
 # --- Создание таблицы из DataFrame ---
-async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str, password: str) -> None:
+async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str, password: str, primary_keys: list = None) -> None:
     """
     Создает новую таблицу в базе данных на основе структуры DataFrame.
     Если таблица уже существует, будет вызвана ошибка.
     Эта функция не заполняет таблицу значениями.
+    primary_keys: список колонок, которые будут использоваться как первичный ключ (или пустой список/None)
     """
     async with get_connection(username, password) as conn:
         check_table_exists_query = """
@@ -82,7 +83,12 @@ async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str,
             sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
             columns.append(f'"{col}" {sql_type}')
         columns_sql = ', '.join(columns)
-        create_query = f'CREATE TABLE "{settings.SCHEMA}"."{table_name}" ({columns_sql})'
+        pk_sql = ''
+        if primary_keys and isinstance(primary_keys, list) and len(primary_keys) > 0:
+            pk_cols = ', '.join([f'"{col}"' for col in primary_keys if col in df.columns])
+            if pk_cols:
+                pk_sql = f', PRIMARY KEY ({pk_cols})'
+        create_query = f'CREATE TABLE "{settings.SCHEMA}"."{table_name}" ({columns_sql}{pk_sql})'
         await conn.execute(create_query)
 
 

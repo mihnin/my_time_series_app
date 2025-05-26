@@ -1,7 +1,7 @@
 <template>
   <div class="app">
     <Sidebar :currentPage="currentPage" :handlePageChange="handlePageChange" />
-    <DbSettingsButton />
+    <DbConnection />
     <div class="main-content">
       <div class="header">
         <h1>Версия 3.0</h1>
@@ -18,14 +18,14 @@ import { defineComponent, ref, watch, onMounted } from 'vue'
 import { useMainStore } from './stores/mainStore'
 import Sidebar from './components/Sidebar.vue'
 import MainPage from './components/MainPage.vue'
-import DbSettingsButton from './components/DbSettingsButton.vue'
+import DbConnection from './components/DbConnection.vue'
 
 export default defineComponent({
   name: 'App',
   components: {
     Sidebar,
     MainPage,
-    DbSettingsButton
+    DbConnection
   },
   setup() {
     const store = useMainStore()

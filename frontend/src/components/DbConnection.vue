@@ -1,11 +1,9 @@
 <template>
-  <div class="db-connection">
-    <button v-if="!isConnected" class="toggle-btn" @click="openModal">
-      Подключение к БД
-      <span :class="{'arrow-down': modalVisible, 'arrow-right': !modalVisible}"></span>
+  <div class="db-connection">    <button v-if="!isConnected" class="toggle-btn" @click="openModal" title="Подключение к БД">
+      <span class="db-icon">🛢️</span>
     </button>
-    <button v-else class="toggle-btn disconnect-btn" @click="disconnect">
-      Отключиться от БД
+    <button v-else class="toggle-btn disconnect-btn" @click="disconnect" title="Отключиться от БД">
+      <span class="db-icon">🛢️</span><span class="disconnect-icon">❌</span>
     </button>
     <!-- Модальное окно -->
     <div v-if="modalVisible" class="db-modal-overlay" @click="closeModal">
@@ -191,21 +189,22 @@ export default defineComponent({
 <style scoped>
 /* Ваши стили остаются без изменений */
 .db-connection {
-  margin-bottom: 1rem;
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 50;
 }
 .toggle-btn {
-  width: 100%;
-  background: #2196F3;
-  color: #fff;
-  border: none;
-  padding: 0.85rem 1.2rem;
-  text-align: left;
-  font-size: 1.08rem;
-  font-weight: 600;
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  color: #2196F3;
+  border: 1px solid #e0e0e0;
+  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   border-radius: 8px;
   margin-bottom: 0.5rem;
   box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
@@ -214,20 +213,24 @@ export default defineComponent({
   font-family: inherit;
 }
 .toggle-btn:hover {
-  background: #1976D2;
-  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.15);
-  transform: translateY(-2px) scale(1.01);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
 }
-.arrow-down::after, .arrow-right::after {
-  font-size: 1.1em;
+
+.db-icon {
+  font-size: 1.4rem;
+  line-height: 1;
 }
-.arrow-down::after {
-  content: '▼';
-  margin-left: 0.5rem;
-}
-.arrow-right::after {
-  content: '▶';
-  margin-left: 0.5rem;
+
+.disconnect-icon {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 0.9rem;
+  color: #e53935;
+  background: white;
+  border-radius: 50%;
+  line-height: 1;
 }
 .db-form {
   margin-top: 0.5rem;
@@ -268,28 +271,25 @@ export default defineComponent({
   cursor: not-allowed;
 }
 .disconnect-btn {
-  background: #e53935;
-  color: #fff;
-  border: none;
-  padding: 0.85rem 1.2rem;
-  text-align: left;
-  font-size: 1.08rem;
-  font-weight: 600;
+  background: #fff;
+  color: #e53935;
+  border: 1px solid #e0e0e0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
-  box-shadow: 0 2px 8px rgba(229, 57, 53, 0.08);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
   letter-spacing: 0.5px;
   font-family: inherit;
 }
 .disconnect-btn:hover {
-  background: #b71c1c;
-  box-shadow: 0 4px 16px rgba(229, 57, 53, 0.15);
-  transform: translateY(-2px) scale(1.01);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);
 }
 .error-message {
   color: red;
@@ -327,7 +327,7 @@ export default defineComponent({
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.35);
-  z-index: 1000;
+  z-index: 9998;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -352,13 +352,12 @@ export default defineComponent({
   font-size: 2rem;
   color: #888;
   cursor: pointer;
-  z-index: 10;
 }
 .success-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.35);
-  z-index: 2000;
+  z-index: 9998;
   display: flex;
   align-items: center;
   justify-content: center;

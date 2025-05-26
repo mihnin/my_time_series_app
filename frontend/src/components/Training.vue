@@ -12,6 +12,18 @@
       </label>
     </div>
 
+    <!-- Новая кнопка автосохранения в БД -->
+    <div v-if="showAutoSaveButton" style="margin-bottom: 16px; text-align: left;">
+      <button 
+        class="train-button" 
+        style="margin-top:0; width:100%; min-width:unset; display:flex; align-items:center; justify-content:center; gap:8px;"
+        :disabled="!canAutoSaveToDb"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 20 20" width="20" style="vertical-align:middle;"><g><ellipse cx="10" cy="5.5" rx="8" ry="3.5" fill="#fff" stroke="#007bff" stroke-width="1.2"/><ellipse cx="10" cy="5.5" rx="8" ry="3.5" fill="#007bff" fill-opacity=".15"/><rect x="2" y="5.5" width="16" height="7" rx="4" fill="#fff" stroke="#007bff" stroke-width="1.2"/><rect x="2" y="5.5" width="16" height="7" rx="4" fill="#007bff" fill-opacity=".10"/><rect x="2" y="12.5" width="16" height="3" rx="1.5" fill="#fff" stroke="#007bff" stroke-width="1.2"/><rect x="2" y="12.5" width="16" height="3" rx="1.5" fill="#007bff" fill-opacity=".10"/></g></svg>
+        Автоматическое сохранение в БД
+      </button>
+    </div>
+
     <!-- Блок с прогрессом обучения -->
     <div v-if="trainingStatus" class="training-status">
       <div class="progress-container">
@@ -62,6 +74,20 @@ export default defineComponent({
     const trainPredictSave = computed({
       get: () => store.trainPredictSave,
       set: (value: boolean) => store.setTrainPredictSave(value)
+    })
+
+    // Новое вычисляемое свойство для отображения кнопки автосохранения
+    const showAutoSaveButton = computed(() => {
+      return store.dbConnected && trainPredictSave.value
+    })
+
+    // Новое вычисляемое свойство для активности кнопки автосохранения
+    const canAutoSaveToDb = computed(() => {
+      return (
+        store.targetColumn !== '<нет>' &&
+        store.dateColumn !== '<нет>' &&
+        store.idColumn !== '<нет>'
+      )
     })
 
     const isTraining = computed(() => {
@@ -355,7 +381,9 @@ export default defineComponent({
       trainingStatus: computed(() => store.trainingStatus),
       isTraining,
       buttonText,
-      getStatusMessage
+      getStatusMessage,
+      showAutoSaveButton, // экспортируем новое свойство
+      canAutoSaveToDb // экспортируем новое свойство
     }
   }
 })
@@ -428,6 +456,10 @@ export default defineComponent({
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .train-button:disabled {

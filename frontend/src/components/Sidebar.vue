@@ -2,8 +2,8 @@
   <div class="sidebar">
     <Navigation @page-change="handlePageChange" />
     <div class="sidebar-separator"></div>
-    <DbConnection />
     <TrainingSettings v-if="currentPage === 'Главная'" />
+    <DbSettingsButton />
   </div>
 </template>
 
@@ -11,7 +11,7 @@
 import { defineComponent } from 'vue'
 import Navigation from './Navigation.vue'
 import TrainingSettings from './TrainingSettings.vue'
-import DbConnection from './DbConnection.vue'
+import DbSettingsButton from './DbSettingsButton.vue'
 import { useMainStore } from '../stores/mainStore'
 
 export default defineComponent({
@@ -19,7 +19,7 @@ export default defineComponent({
   components: {
     Navigation,
     TrainingSettings,
-    DbConnection
+    DbSettingsButton
   },
   props: {
     currentPage: {
@@ -50,7 +50,7 @@ export default defineComponent({
   top: 0;
   bottom: 0;
   overflow-y: auto;
-  z-index: 10;
+  z-index: 5;
   box-sizing: border-box;
 }
 .sidebar-separator {

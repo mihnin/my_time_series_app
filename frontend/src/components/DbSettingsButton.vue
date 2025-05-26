@@ -1,73 +1,86 @@
 <template>
   <div class="db-settings-btn-wrap">
-    <button class="db-settings-btn" @click="showDbModal = true" title="Настройки БД">
-      <span class="gear-icon">&#9881;</span>
-    </button>
+    <details class="advanced-settings">
+      <summary>Настройки для продвинутых пользователей</summary>
+      <button class="db-settings-btn" @click="showDbModal = true">
+        <span class="gear-icon">⚙️</span>
+        <span class="btn-text">Настройки БД</span>
+      </button>
+    </details>
+
     <!-- Модальное окно для ввода секретного ключа -->
-    <div v-if="showDbModal" class="modal-overlay">
-      <div class="modal-content">
-        <button class="modal-close" @click="closeDbModal" aria-label="Закрыть">&times;</button>
-        <h4>Подключение к БД</h4>
-        <label for="secret-word">Секретное слово:</label>
-        <input id="secret-word" v-model="secretWord" type="password" class="secret-input" />
-        <button @click="validateSecretKey" class="connect-btn full-width" :disabled="isLoading">
-          {{ isLoading ? 'Подождите...' : 'Подключиться' }}
-        </button>
-        <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+    <Teleport to="body">
+      <div v-if="showDbModal" class="modal-overlay">
+        <div class="modal-content">
+          <button class="modal-close" @click="closeDbModal" aria-label="Закрыть">&times;</button>
+          <h4>Подключение к БД</h4>
+          <label for="secret-word">Секретное слово:</label>        <input id="secret-word" v-model="secretWord" type="password" class="secret-input" />        
+          <button @click="validateSecretKey" class="connect-btn full-width" :disabled="isLoading">
+            {{ isLoading ? 'Подождите...' : 'Подключиться' }}
+          </button>
+          <div class="error-container">
+            <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+          </div>
+        </div>
       </div>
-    </div>
+    </Teleport>
     
     <!-- Модальное окно для настройки окружения -->
-    <div v-if="showEnvModal" class="modal-overlay">
-      <div class="modal-content env-settings-modal">
-        <button class="modal-close" @click="closeEnvModal" aria-label="Закрыть">&times;</button>
-        <h4>Настройки соединения с БД</h4>
-        
-        <div class="form-group">
-          <label for="db-user">Пользователь БД:</label>
-          <input id="db-user" v-model="envVars.DB_USER" class="env-input" />
+    <Teleport to="body">
+      <div v-if="showEnvModal" class="modal-overlay">
+        <div class="modal-content env-settings-modal">
+          <button class="modal-close" @click="closeEnvModal" aria-label="Закрыть">&times;</button>
+          <h4>Настройки соединения с БД</h4>
+          
+          <div class="form-group">
+            <label for="db-user">Пользователь БД:</label>
+            <input id="db-user" v-model="envVars.DB_USER" class="env-input" />
+          </div>
+          
+          <div class="form-group">
+            <label for="db-pass">Пароль БД:</label>
+            <input id="db-pass" v-model="envVars.DB_PASS" type="password" class="env-input" />
+          </div>
+          
+          <div class="form-group">
+            <label for="db-host">Хост:</label>
+            <input id="db-host" v-model="envVars.DB_HOST" class="env-input" />
+          </div>
+          
+          <div class="form-group">
+            <label for="db-port">Порт:</label>
+            <input id="db-port" v-model="envVars.DB_PORT" class="env-input" />
+          </div>
+          
+          <div class="form-group">
+            <label for="db-name">Имя БД:</label>
+            <input id="db-name" v-model="envVars.DB_NAME" class="env-input" />
+          </div>
+          
+          <div class="form-group">
+            <label for="db-schema">Схема:</label>
+            <input id="db-schema" v-model="envVars.DB_SCHEMA" class="env-input" />
+          </div>
+            <button @click="updateEnvVariables" class="connect-btn full-width" :disabled="isLoading">
+            {{ isLoading ? 'Сохранение...' : 'Сохранить настройки' }}
+          </button>
+          
+          <div class="error-container">
+            <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+          </div>
         </div>
-        
-        <div class="form-group">
-          <label for="db-pass">Пароль БД:</label>
-          <input id="db-pass" v-model="envVars.DB_PASS" type="password" class="env-input" />
-        </div>
-        
-        <div class="form-group">
-          <label for="db-host">Хост:</label>
-          <input id="db-host" v-model="envVars.DB_HOST" class="env-input" />
-        </div>
-        
-        <div class="form-group">
-          <label for="db-port">Порт:</label>
-          <input id="db-port" v-model="envVars.DB_PORT" class="env-input" />
-        </div>
-        
-        <div class="form-group">
-          <label for="db-name">Имя БД:</label>
-          <input id="db-name" v-model="envVars.DB_NAME" class="env-input" />
-        </div>
-        
-        <div class="form-group">
-          <label for="db-schema">Схема:</label>
-          <input id="db-schema" v-model="envVars.DB_SCHEMA" class="env-input" />
-        </div>
-        
-        <button @click="updateEnvVariables" class="connect-btn full-width" :disabled="isLoading">
-          {{ isLoading ? 'Сохранение...' : 'Сохранить настройки' }}
-        </button>
-        
-        <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
       </div>
-    </div>
+    </Teleport>
       <!-- Модальное окно успешного обновления -->
-    <div v-if="successModalVisible" class="success-modal-overlay">
-      <div class="success-modal">
-        <div class="success-icon">✓</div>
-        <h3>Успешно!</h3>
-        <p class="success-text">Переменные окружения успешно изменены</p>
+    <Teleport to="body">
+      <div v-if="successModalVisible" class="success-modal-overlay">
+        <div class="success-modal">
+          <div class="success-icon">✓</div>
+          <h3>Успешно!</h3>
+          <p class="success-text">Переменные окружения успешно изменены</p>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -209,24 +222,38 @@ export default defineComponent({
 
 <style scoped>
 .db-settings-btn-wrap {
-  position: absolute;
-  top: 1.2rem;
-  right: 1.2rem;
-  z-index: 1200;
+  margin-bottom: 1rem;
+}
+.advanced-settings {
+  margin-bottom: 1rem;
+  user-select: none;
+}
+.advanced-settings summary {
+  cursor: pointer;
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+.advanced-settings summary:hover {
+  color: #2196F3;
 }
 .db-settings-btn {
   background: #fff;
   border: 1px solid #ddd;
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  transition: box-shadow 0.18s;
-  padding: 0;
+  transition: all 0.18s;
+  font-size: 0.9rem;
+  color: #666;
+}
+.gear-icon {
+  font-size: 1.2rem;
+  line-height: 1;
 }
 .db-settings-btn:hover {
   box-shadow: 0 4px 16px rgba(33,150,243,0.13);
@@ -238,7 +265,8 @@ export default defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 9999;
+  isolation: isolate;
 }
 .modal-content {
   position: relative;
@@ -260,7 +288,6 @@ export default defineComponent({
   font-size: 2rem;
   color: #888;
   cursor: pointer;
-  z-index: 10;
 }
 .modal-close:active, .modal-close:focus {
   background: none !important;
@@ -324,10 +351,18 @@ export default defineComponent({
   max-width: 450px;
 }
 
+.error-container {
+  height: 30px; /* Фиксированная высота контейнера */
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
 .error-message {
   color: #f44336;
-  margin-top: 0.75rem;
   font-size: 0.9rem;
+  display: block;
+  width: 100%;
 }
 
 .success-modal-overlay {
@@ -340,7 +375,8 @@ export default defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
+  isolation: isolate;
 }
 
 .success-modal {
