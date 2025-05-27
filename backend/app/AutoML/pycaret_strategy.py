@@ -69,9 +69,9 @@ class PyCaretStrategy(AutoMLStrategy):
                     verbose=False,
                 )
                 if use_all_models:
-                    best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids), exclude="auto_arima")
+                    best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids) if budget_time else None, exclude="auto_arima")
                 else:
-                    best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids), include=pycaret_models)
+                    best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids) if budget_time else None, include=pycaret_models)
 
                 #
                 leaderboard_df = pull()

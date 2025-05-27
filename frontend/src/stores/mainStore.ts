@@ -38,6 +38,9 @@ export const useMainStore = defineStore('main', () => {
   const dbCheckResult = ref<{ success: boolean; detail: string; access_token?: string } | null>(null)
   const dbTables = ref<string[]>([]) // Новое: для хранения списка таблиц из БД
 
+  // --- Имя таблицы для последней успешной загрузки/сохранения в БД ---
+  const uploadDbName = ref<string | null>(null)
+
   function setTableData(data: any[]) {
     tableData.value = data
   }
@@ -149,6 +152,10 @@ export const useMainStore = defineStore('main', () => {
     dbTables.value = tables
   }
 
+  function setUploadDbName(name: string | null) {
+    uploadDbName.value = name
+  }
+
   return {
     tableData,
     selectedFile,
@@ -180,6 +187,7 @@ export const useMainStore = defineStore('main', () => {
     dbConnected,
     dbCheckResult,
     dbTables,
+    uploadDbName,
     setTableData,
     setChunkSize,
     setFile,
@@ -208,5 +216,6 @@ export const useMainStore = defineStore('main', () => {
     setDbConnected,
     setDbCheckResult,
     setDbTables,
+    setUploadDbName,
   }
 })

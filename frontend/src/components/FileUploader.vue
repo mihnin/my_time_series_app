@@ -76,6 +76,9 @@
             <div v-if="dbTablesLoading" style="color:#888;">Загрузка таблиц...</div>
             <div v-else-if="dbTables.length === 0" style="color:#f44336;">Нет доступных таблиц</div>
             <div v-else class="db-modal-content">
+              <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+                Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
+              </div>
               <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
                 <option value="" disabled selected>Выберите таблицу...</option>
                 <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
@@ -146,9 +149,12 @@
           </div>
           <!-- Существующая таблица -->
           <div v-if="dbSaveMode === 'existing'">
+            <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+              Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
+            </div>
             <select v-model="uploadTableName" class="db-input db-input-full" style="margin-bottom:1rem;">
-              <option value="" disabled selected>Выберите таблицу...</option>
-              <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
+              <option value="" disabled selected>Загрузка списка...</option>
+              <option v-for="table in uploadDbTables" :key="table" :value="table">{{ table }}</option>
             </select>
           </div>
           <div class="upload-to-db-footer">
@@ -212,6 +218,10 @@ export default defineComponent({
     const selectedPrimaryKeys = ref<string[]>([]) // <--- новое состояние для выбранных первичных ключей
     const dbSaveMode = ref<'new' | 'existing'>('new') // <--- состояние для режима сохранения в БД
     const tableData = computed(() => store.tableData)
+    const uploadDbTables = ref<string[]>([])
+    const uploadDbTablesLoading = ref(false)
+    const dbTableCountAvailable = ref<number | null>(null)
+    const dbTableCountTotal = ref<number | null>(null)
 
     // Для шаблона
     const dbConnected = computed(() => store.dbConnected)
@@ -382,14 +392,20 @@ export default defineComponent({
           const result = await response.json();
           if (result.success) {
             store.setDbTables(result.tables);
+            dbTableCountAvailable.value = result.count_available ?? result.tables.length;
+            dbTableCountTotal.value = result.count_total ?? result.tables.length;
             dbError.value = '';
           } else {
             dbError.value = result.detail || 'Не удалось загрузить таблицы из БД.';
             store.setDbTables([]);
+            dbTableCountAvailable.value = null;
+            dbTableCountTotal.value = null;
           }
         } catch (e: any) {
           dbError.value = 'Ошибка при загрузке таблиц: ' + (e && typeof e === 'object' && 'message' in e ? (e as any).message : String(e));
           store.setDbTables([]);
+          dbTableCountAvailable.value = null;
+          dbTableCountTotal.value = null;
         } finally {
           dbTablesLoading.value = false
         }
@@ -413,17 +429,21 @@ export default defineComponent({
           },
           body: JSON.stringify({ table: selectedDbTable.value })
         })
-        const result = await response.json()
-        if (result.success && Array.isArray(result.data)) {
-          // Создаем фиктивный File для совместимости с TrainingSettings
-          const fakeFile = new File([JSON.stringify(result.data)], `${selectedDbTable.value}.fromdb.json`, { type: 'application/json' })
-          store.setFile(fakeFile)
-          store.setTableData(result.data)
-          emit('file-loaded', result.data)
-          closeDbModal()
-        } else {
-          dbError.value = result.detail || 'Не удалось загрузить данные из таблицы.'
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}))
+          dbError.value = err.detail || 'Ошибка загрузки файла из БД.'
+          return
         }
+        // Получаем blob Excel-файла
+        const blob = await response.blob()
+        const file = new File([blob], `${selectedDbTable.value}.xlsx`, { type: blob.type })
+        selectedFile.value = file
+        store.setFile(file)
+        // Обрабатываем файл как обычную загрузку (Excel)
+        await processFile(file)
+        fileLoaded.value = true
+        emit('file-loaded', store.tableData)
+        closeDbModal()
       } catch (error: any) {
         dbError.value = 'Ошибка загрузки данных из БД: ' + (error?.message || error)
       } finally {
@@ -507,6 +527,39 @@ export default defineComponent({
       uploadToDbError.value = ''
       selectedPrimaryKeys.value = [] // Сбрасываем выбранные первичные ключи при открытии модального окна
       dbSaveMode.value = 'new' // По умолчанию новая таблица
+      // Загруем список таблиц для модалки загрузки в БД
+      if (store.dbConnected && store.authToken) {
+        uploadDbTablesLoading.value = true
+        fetch('http://localhost:8000/get-tables', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${store.authToken}`
+          },
+        })
+          .then(res => res.json())
+          .then(result => {
+            if (result.success) {
+              uploadDbTables.value = result.tables
+              dbTableCountAvailable.value = result.count_available ?? result.tables.length
+              dbTableCountTotal.value = result.count_total ?? result.tables.length
+            } else {
+              uploadDbTables.value = []
+              dbTableCountAvailable.value = null
+              dbTableCountTotal.value = null
+            }
+          })
+          .catch(() => {
+            uploadDbTables.value = []
+            dbTableCountAvailable.value = null
+            dbTableCountTotal.value = null
+          })
+          .finally(() => { uploadDbTablesLoading.value = false })
+      } else {
+        uploadDbTables.value = []
+        dbTableCountAvailable.value = null
+        dbTableCountTotal.value = null
+      }
     }
     function closeUploadToDbModal() {
       uploadToDbModalVisible.value = false
@@ -547,7 +600,11 @@ export default defineComponent({
       uploadSuccessModalVisible,
       selectedPrimaryKeys,
       dbSaveMode,
-      tableData
+      tableData,
+      uploadDbTables,
+      uploadDbTablesLoading,
+      dbTableCountAvailable,
+      dbTableCountTotal,
     }
   }
 })

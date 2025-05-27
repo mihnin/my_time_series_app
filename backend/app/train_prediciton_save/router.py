@@ -13,6 +13,8 @@ from datetime import datetime
 from io import BytesIO
 
 import pandas as modin_pd
+from db.db_manager import upload_df_to_db
+from db.jwt_logic import get_current_user_db_creds
 from prediction.router import predict_timeseries, save_prediction
 from training.model import TrainingParameters
 from training.router import train_model, get_training_status, prepare_training_data_and_status, optional_oauth2_scheme
@@ -36,7 +38,8 @@ async def run_training_prediction_async(
     session_id: str,
     df_train: pd.DataFrame,
     training_params: TrainingParameters,
-    original_filename: str
+    original_filename: str,
+    token: str
 ):
     """Асинхронный запуск процесса обучения."""
     try:
@@ -121,6 +124,22 @@ async def run_training_prediction_async(
         output.seek(0)
         save_prediction(output, session_id)
 
+        # Исправлено: используем upload_table_name для сохранения прогноза в БД
+        if getattr(training_params, 'upload_table_name', None):
+            table_name = getattr(training_params, 'upload_table_name')
+            db_creds = None
+            if token is not None:
+                db_creds = await get_current_user_db_creds(token)
+            else:
+                raise ValueError("Не передан токен или request для получения учетных данных БД")
+            username = db_creds["username"]
+            password = db_creds["password"]
+
+            logging.info(f"[run_training_async] Начинается загрузка прогноза в таблицу '{table_name}' базы данных...")
+            await upload_df_to_db(preds, table_name, username, password)
+            logging.info(f"[run_training_async] Прогноз успешно загружен в таблицу '{table_name}' базы данных.")
+
+
         status.update({"progress": 100, 'status': 'completed'})
 
     except Exception as e:
@@ -177,7 +196,8 @@ async def train_model_endpoint(
             session_id,
             df_train,
             training_params,
-            original_filename
+            original_filename,
+            token
         )
         logging.info(f"[train_model_endpoint] Задача обучения передана в background_tasks для session_id={session_id}")
         return {

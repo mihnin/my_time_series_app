@@ -16,7 +16,7 @@ reload_env_vars()
 class Settings:
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 часа
-    
+    MODULE_READ_ONLY = False
     @property
     def DB_USER(self) -> str:
         return os.getenv('DB_USER', '')
@@ -55,5 +55,6 @@ class Settings:
     def refresh(self):
         """Обновляет значения переменных окружения, перезагружая их из файла .env"""
         reload_env_vars()
+
 
 settings = Settings()

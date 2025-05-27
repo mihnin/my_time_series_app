@@ -3,9 +3,10 @@ import pandas as pd
 from datetime import timedelta
 import os
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
+import json
 from .jwt_logic import create_access_token, get_current_user_db_creds
 from sessions.utils import get_session_path
-import json
 from .model import DBConnectionRequest, DBConnectionResponse, EnvUpdateRequest, EnvUpdateResponse, EnvVarsResponse, SecretKeyRequest, TablesResponse
 from .settings import settings
 from .env_utils import validate_secret_key, update_env_variables
@@ -15,7 +16,9 @@ from .db_manager import (
     create_table_from_df,  # добавлено
     upload_df_to_db,
     check_db_connection,
+    check_df_matches_table_schema,  # <--- уже импортировано
 )
+import logging
 
 router = APIRouter()
 
@@ -85,11 +88,37 @@ async def login_for_access_token(data: DBConnectionRequest):
 @router.get('/get-tables', response_model=TablesResponse)
 async def get_tables(db_creds: dict = Depends(get_current_user_db_creds)):
     """
-    Возвращает список таблиц из БД, к которым текущий пользователь имеет привилегию SELECT.
+    Возвращает список таблиц из БД, к которым текущий пользователь имеет привилегию SELECT,
+    а также их количество и общее количество таблиц в схеме.
     """
+    import asyncpg
     try:
-        table_names = await get_user_table_names(db_creds["username"], db_creds["password"])
-        return TablesResponse(success=True, tables=table_names)
+        # Получить все таблицы в схеме
+        conn = await asyncpg.connect(
+            user=db_creds["username"],
+            password=db_creds["password"],
+            database=settings.DB_NAME,
+            host=settings.DB_HOST,
+            port=int(settings.DB_PORT)
+        )
+        all_tables_query = f"""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = '{settings.SCHEMA}'
+        """
+        all_tables = await conn.fetch(all_tables_query)
+        all_table_names = [r['table_name'] for r in all_tables]
+        count_total = len(all_table_names)
+
+        # Получить только те таблицы, к которым есть SELECT
+        user_tables_query = f"""
+            SELECT table_name FROM information_schema.table_privileges
+            WHERE grantee = current_user AND privilege_type = 'SELECT' AND table_schema = '{settings.SCHEMA}'
+        """
+        user_tables = await conn.fetch(user_tables_query)
+        user_table_names = [r['table_name'] for r in user_tables if r['table_name'] in all_table_names]
+        count_available = len(user_table_names)
+        await conn.close()
+        return TablesResponse(success=True, tables=user_table_names, count_available=count_available, count_total=count_total)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve tables: {str(e)}")
 
@@ -159,7 +188,10 @@ async def upload_excel_to_db_endpoint(
             await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
             return {"success": True, "detail": f"Таблица '{table_name}' успешно загружена."}
         else:
-            # Пытаемся загрузить в существующую таблицу
+            # Проверяем соответствие схемы перед загрузкой в существующую таблицу
+            matches = await check_df_matches_table_schema(df, table_name, db_creds['username'], db_creds['password'])
+            if not matches:
+                return {"success": False, "detail": f"Структура DataFrame не совпадает со структурой таблицы '{table_name}' в БД. Проверьте названия и типы столбцов."}
             try:
                 await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
                 return {"success": True, "detail": f"Данные успешно загружены в таблицу '{table_name}'."}
@@ -179,7 +211,7 @@ async def download_table_from_db_endpoint(
     db_creds: dict = Depends(get_current_user_db_creds)
 ):
     """
-    Возвращает все данные из указанной таблицы (для загрузки в приложение).
+    Возвращает все данные из указанной таблицы в виде Excel-файла.
     Тело запроса: {"table": "название_таблицы"}
     """
     table_name = payload.get("table")
@@ -187,9 +219,22 @@ async def download_table_from_db_endpoint(
         raise HTTPException(status_code=400, detail="Table name is required")
 
     try:
-        # Используем get_table_rows без лимита для скачивания всех данных
+        # Получаем все строки таблицы
         result = await get_table_rows(table_name, db_creds['username'], db_creds['password'])
-        return {"success": True, "data": result}
+        if not result or len(result) == 0:
+            raise HTTPException(status_code=404, detail=f"Таблица '{table_name}' пуста или не найдена")
+        df = pd.DataFrame(result)
+        output = io.BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
+        logging.info(f"[download-table-from-db] Таблица '{table_name}' успешно выгружена в Excel.")
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename={table_name}.xlsx"
+            }
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -227,6 +272,10 @@ async def save_prediction_to_db(
             await create_table_from_df(df, table_name, db_creds['username'], db_creds['password'])
             await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
         else:
+            # Проверяем соответствие схемы перед загрузкой в существующую таблицу
+            matches = await check_df_matches_table_schema(df, table_name, db_creds['username'], db_creds['password'])
+            if not matches:
+                raise HTTPException(status_code=400, detail=f"Структура DataFrame не совпадает со структурой таблицы '{table_name}' в БД. Проверьте названия и типы столбцов.")
             # Загрузить в существующую таблицу
             await upload_df_to_db(df, table_name, db_creds['username'], db_creds['password'])
         return {"success": True, "detail": f"Прогноз успешно сохранён в таблицу '{table_name}'"}
@@ -236,3 +285,84 @@ async def save_prediction_to_db(
         if "уже существует" in str(e) or "already exists" in str(e):
             raise HTTPException(status_code=409, detail=f"Ошибка: Таблица '{table_name}' уже существует. Пожалуйста, выберите другое имя.")
         raise HTTPException(status_code=500, detail=f"Ошибка сохранения прогноза в БД: {str(e)}")
+
+
+@router.post('/create-table-from-file')
+async def create_table_from_file_endpoint(
+    file: UploadFile = File(...),
+    table_name: str = Form(...),
+    primary_keys: str = Form(None),
+    create_table_only: str = Form('false'),
+    db_creds: dict = Depends(get_current_user_db_creds)
+):
+    """
+    Создает таблицу в БД по первой строке файла (Excel/CSV). Если таблица уже есть — ошибка.
+    Используется только первая строка данных (после заголовков).
+    """
+    try:
+        print(file.filename)
+        if not (file.filename and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls'))):
+            raise HTTPException(status_code=400, detail='Файл должен быть Excel (.xlsx или .xls)')
+        content = await file.read()
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
+        if df.empty:
+            raise HTTPException(status_code=400, detail='Файл пустой или не содержит данных')
+        # Берём только первую строку (после заголовков)
+        df_first = df.head(1)
+        # Парсим первичные ключи
+        pk_list = []
+        if primary_keys:
+            try:
+                pk_list = json.loads(primary_keys)
+                if not isinstance(pk_list, list):
+                    pk_list = []
+            except Exception:
+                pk_list = []
+        # Проверяем, есть ли таблица
+        try:
+            await create_table_from_df(df_first, table_name, db_creds['username'], db_creds['password'], primary_keys=pk_list)
+        except Exception as e:
+            if "уже существует" in str(e) or "already exists" in str(e):
+                return {"success": False, "detail": f"Ошибка: Таблица '{table_name}' уже существует. Пожалуйста, выберите другое имя."}
+            raise
+        return {"success": True, "detail": f"Таблица '{table_name}' успешно создана по первой строке файла."}
+    except Exception as e:
+        if "уже существует" in str(e) or "already exists" in str(e):
+            return {"success": False, "detail": f"Ошибка: Таблица '{table_name}' уже существует. Пожалуйста, выберите другое имя."}
+        raise HTTPException(status_code=500, detail=f"Ошибка создания таблицы: {str(e)}")
+
+
+@router.post('/check-df-matches-table-schema')
+async def check_df_matches_table_schema_endpoint(
+    file: UploadFile = File(...),
+    table_name: str = Form(...),
+    db_creds: dict = Depends(get_current_user_db_creds)
+):
+    """
+    Проверяет, совпадает ли структура загруженного файла (Excel) со структурой выбранной таблицы в БД.
+    Возвращает {success: True/False, detail: ...}
+    """
+    import pandas as pd
+    import io
+    try:
+        if not (file.filename and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls'))):
+            raise HTTPException(status_code=400, detail='Файл должен быть Excel (.xlsx или .xls)')
+        content = await file.read()
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
+        if df.empty:
+            raise HTTPException(status_code=400, detail='Файл пустой или не содержит данных')
+        matches = await check_df_matches_table_schema(df, table_name, db_creds['username'], db_creds['password'])
+        if matches:
+            return {"success": True, "detail": "Структура совпадает"}
+        else:
+            return {"success": False, "detail": "Структура файла не совпадает с таблицей в БД"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка проверки структуры: {str(e)}")

@@ -33,22 +33,27 @@
       <div class="db-modal" @click.stop>
         <button class="close-btn" @click="closeSaveToDbModal">×</button>
         <h3 style="margin-bottom:1rem">Сохранить результаты в БД</h3>
-        <div style="margin-bottom:1rem;">
-          <label style="display:block;margin-bottom:0.5rem;">
-            <input type="radio" value="new" v-model="dbSaveMode" /> Создать новую таблицу
+        <div style="margin-bottom:1rem; display:flex; gap:1.5rem; align-items:center;">
+          <label style="display:flex; align-items:center; gap:6px; font-weight:500;">
+            <input type="radio" value="new" v-model="dbSaveMode" />
+            Создать новую таблицу
           </label>
-          <label style="display:block;margin-bottom:1rem;">
-            <input type="radio" value="existing" v-model="dbSaveMode" /> Сохранить в существующую таблицу
+          <label style="display:flex; align-items:center; gap:6px; font-weight:500;">
+            <input type="radio" value="existing" v-model="dbSaveMode" />
+            Сохранить в существующую
           </label>
-          <div v-if="dbSaveMode==='new'">
-            <input v-model="newTableName" class="db-input db-input-full" placeholder="Название новой таблицы" style="margin-bottom:1rem;" />
+        </div>
+        <div v-if="dbSaveMode==='new'">
+          <input v-model="newTableName" class="db-input db-input-full" placeholder="Название новой таблицы" style="margin-bottom:1rem;" />
+        </div>
+        <div v-if="dbSaveMode==='existing'">
+          <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+            Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
           </div>
-          <div v-if="dbSaveMode==='existing'">
-            <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
-              <option value="" disabled>Выберите таблицу...</option>
-              <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
-            </select>
-          </div>
+          <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
+            <option value="" disabled>Выберите таблицу...</option>
+            <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
+          </select>
         </div>
         <button class="save-button" style="margin-bottom:0;" :disabled="saveToDbLoading || (dbSaveMode==='new' ? !newTableName : !selectedDbTable)" @click="saveResultsToDb">
           <span v-if="saveToDbLoading" class="spinner-wrap"><span class="spinner"></span>Сохранение...</span>
@@ -109,6 +114,8 @@ export default defineComponent({
     const saveToDbLoading = ref(false)
     const saveToDbError = ref('')
     const saveSuccessModalVisible = ref(false)
+    const dbTableCountAvailable = ref<number | null>(null)
+    const dbTableCountTotal = ref<number | null>(null)
 
     // Получить список таблиц при открытии модалки
     const fetchDbTables = async () => {
@@ -124,11 +131,17 @@ export default defineComponent({
         const result = await response.json()
         if (result.success) {
           store.setDbTables(result.tables)
+          dbTableCountAvailable.value = result.count_available ?? result.tables.length
+          dbTableCountTotal.value = result.count_total ?? result.tables.length
         } else {
           store.setDbTables([])
+          dbTableCountAvailable.value = null
+          dbTableCountTotal.value = null
         }
       } catch (e) {
         store.setDbTables([])
+        dbTableCountAvailable.value = null
+        dbTableCountTotal.value = null
       }
     }
 
@@ -138,6 +151,8 @@ export default defineComponent({
       newTableName.value = ''
       selectedDbTable.value = ''
       saveToDbError.value = ''
+      dbTableCountAvailable.value = null
+      dbTableCountTotal.value = null
       await fetchDbTables()
     }
     const closeSaveToDbModal = () => {
@@ -243,6 +258,8 @@ export default defineComponent({
       saveToDbLoading,
       saveToDbError,
       saveSuccessModalVisible,
+      dbTableCountAvailable,
+      dbTableCountTotal,
       openSaveToDbModal,
       closeSaveToDbModal,
       saveResultsToDb

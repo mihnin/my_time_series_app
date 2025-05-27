@@ -21,6 +21,8 @@ class TokenData(BaseModel):
 class TablesResponse(BaseModel):
     success: bool
     tables: List[str]
+    count_available: int
+    count_total: int
     detail: Optional[str] = None
 
 # Модель для выбора таблицы (понадобится для обучения)

@@ -1,9 +1,13 @@
 <template>
   <div class="db-connection">    <button v-if="!isConnected" class="toggle-btn" @click="openModal" title="Подключение к БД">
-      <span class="db-icon">🛢️</span>
+      <span class="db-icon">
+        <font-awesome-icon :icon="['fas', 'database']" size="lg"/>
+      </span>
     </button>
     <button v-else class="toggle-btn disconnect-btn" @click="disconnect" title="Отключиться от БД">
-      <span class="db-icon">🛢️</span><span class="disconnect-icon">❌</span>
+      <span class="db-icon">
+        <font-awesome-icon :icon="['fas', 'database']" size="lg"/>
+      </span><span class="disconnect-icon">❌</span>
     </button>
     <!-- Модальное окно -->
     <div v-if="modalVisible" class="db-modal-overlay" @click="closeModal">
@@ -56,9 +60,14 @@
 <script lang="ts">
 import { defineComponent, ref, computed } from 'vue'
 import { useMainStore } from '../stores/mainStore'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { library } from '@fortawesome/fontawesome-svg-core'
+import { faDatabase } from '@fortawesome/free-solid-svg-icons'
+library.add(faDatabase)
 
 export default defineComponent({
   name: 'DbConnection',
+  components: { FontAwesomeIcon },
   setup() {
     const open = ref(false)
     const modalVisible = ref(false)

@@ -238,25 +238,27 @@ export default defineComponent({
   color: #2196F3;
 }
 .db-settings-btn {
-  background: #fff;
-  border: 1px solid #ddd;
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
   border-radius: 4px;
-  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  transition: all 0.18s;
-  font-size: 0.9rem;
-  color: #666;
+  transition: background-color 0.2s;
+  font-size: 0.95rem;
+}
+.db-settings-btn:hover {
+  background-color: #1976D2;
 }
 .gear-icon {
   font-size: 1.2rem;
   line-height: 1;
-}
-.db-settings-btn:hover {
-  box-shadow: 0 4px 16px rgba(33,150,243,0.13);
+  color: white;
 }
 .modal-overlay {
   position: fixed;
