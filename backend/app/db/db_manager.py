@@ -29,7 +29,7 @@ async def get_connection(username: str, password: str):
 
 # --- Соответствие типов pandas -> PostgreSQL ---
 DTYPE_MAP = {
-    'int64': 'BIGINT',
+    'int64': 'DOUBLE PRECISION',  # Всегда float
     'float64': 'DOUBLE PRECISION',
     'bool': 'BOOLEAN',
     'datetime64[ns]': 'TIMESTAMP',
@@ -93,9 +93,10 @@ async def fetch_table_as_dataframe(table_name: str, username: str, password: str
 
 # --- Создание таблицы из DataFrame ---
 @read_only_guard
-async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str, password: str, primary_keys: list = None) -> None:
+async def create_table_from_df(df: pd.DataFrame, schema: str, table_name: str, username: str, password: str, primary_keys: list = None) -> None:
     """
     Создает новую таблицу в базе данных на основе структуры DataFrame.
+    Все числовые столбцы будут иметь тип DOUBLE PRECISION (float).
     Если таблица уже существует, будет вызвана ошибка.
     Эта функция не заполняет таблицу значениями.
     primary_keys: список колонок, которые будут использоваться как первичный ключ (или пустой список/None)
@@ -115,14 +116,18 @@ async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str,
                 WHERE table_schema = $1 AND table_name = $2
             )
         """
-        table_exists = await conn.fetchval(check_table_exists_query, settings.SCHEMA, table_name)
+        table_exists = await conn.fetchval(check_table_exists_query, schema, table_name)
         if table_exists:
             raise Exception(f"Таблица '{table_name}' уже существует.")
 
         columns = []
         for col in df.columns:
             pd_type = str(df[col].dtype)
-            sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
+            # Все int и float -> DOUBLE PRECISION
+            if pd_type.startswith('int') or pd_type.startswith('float'):
+                sql_type = 'DOUBLE PRECISION'
+            else:
+                sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
             columns.append(f'"{col}" {sql_type}')
 
         columns_sql = ', '.join(columns)
@@ -133,13 +138,9 @@ async def create_table_from_df(df: pd.DataFrame, table_name: str, username: str,
                 pk_sql = f', PRIMARY KEY ({pk_cols})'
         
         # Формируем запрос для создания таблицы
-        create_query = f'CREATE TABLE "{settings.SCHEMA}"."{table_name}" ({columns_sql}{pk_sql})'
+        create_query = f'CREATE TABLE "{schema}"."{table_name}" ({columns_sql}{pk_sql})'
         await conn.execute(create_query)
 
-
-# Предполагается, что get_connection и settings определены где-то еще
-# import asyncpg
-# from your_module import get_connection, settings
 
 async def _get_pk_columns(conn: asyncpg.Connection, schema: str, table_name: str) -> List[str]:
     """
@@ -166,6 +167,7 @@ async def _get_pk_columns(conn: asyncpg.Connection, schema: str, table_name: str
 @read_only_guard
 async def upload_df_to_db(
     df: pd.DataFrame,
+    schema: str,
     table_name: str,
     username: str,
     password: str,
@@ -179,37 +181,18 @@ async def upload_df_to_db(
     первичный ключ таблицы и выполнить "upsert" (INSERT ON CONFLICT UPDATE).
     Если первичный ключ не найден или не все его столбцы есть в DataFrame,
     будет вызвано исключение.
-
-    Args:
-        df: DataFrame для загрузки.
-        table_name: Имя таблицы в БД.
-        username: Имя пользователя БД.
-        password: Пароль пользователя БД.
-        update_on_pk: Если True, выполняет "upsert". Если False, выполняет
-                      простой INSERT.
-
-    Returns:
-        True в случае успешной загрузки.
-
-    Raises:
-        ValueError: Если update_on_pk=True, но не удалось найти ПК или
-                    столбцы ПК отсутствуют в DataFrame.
     """
     async with get_connection(username, password) as conn:
         if not df.empty:
             pk_columns = []
             if update_on_pk:
                 # Получаем первичный ключ из БД
-                pk_columns = await _get_pk_columns(conn, settings.SCHEMA, table_name)
+                pk_columns = await _get_pk_columns(conn, schema, table_name)
 
                 if not pk_columns:
-                    raise ValueError(
-                        f"Не удалось определить первичный ключ для таблицы "
-                        f'"{settings.SCHEMA}"."{table_name}". '
-                        f"Невозможно выполнить update_on_pk."
-                    )
-
-                if not all(col in df.columns for col in pk_columns):
+                    # Если нет PK, просто делаем обычный insert без upsert
+                    update_on_pk = False
+                elif not all(col in df.columns for col in pk_columns):
                     missing_cols = [col for col in pk_columns if col not in df.columns]
                     raise ValueError(
                         f"DataFrame не содержит столбцы первичного ключа "
@@ -222,10 +205,10 @@ async def upload_df_to_db(
             columns_str = ', '.join([f'"{col}"' for col in df.columns])
             values_template = ', '.join([f'${i+1}' for i in range(len(df.columns))])
 
-            insert_query = f'INSERT INTO "{settings.SCHEMA}"."{table_name}" ({columns_str}) VALUES ({values_template})'
+            insert_query = f'INSERT INTO "{schema}"."{table_name}" ({columns_str}) VALUES ({values_template})'
 
             # Добавляем ON CONFLICT, если нужно
-            if update_on_pk: # pk_columns здесь точно не пустой
+            if update_on_pk and pk_columns: # pk_columns здесь точно не пустой
                 pk_columns_str = ', '.join([f'"{col}"' for col in pk_columns])
                 update_cols = [col for col in df.columns if col not in pk_columns]
 
@@ -242,7 +225,7 @@ async def upload_df_to_db(
 
 # --- Предпросмотр таблицы с лимитом строк ---
 async def get_table_rows(
-    table_name: str, username: str, password: str, limit: int | None = None
+    schema: str, table_name: str, username: str, password: str, limit: int | None = None
 ) -> list[dict]:
     """
     Выбирает ограниченное количество строк из указанной таблицы для предпросмотра.
@@ -254,19 +237,19 @@ async def get_table_rows(
             FROM pg_catalog.pg_tables
             WHERE schemaname = $1
         """
-        valid_tables = await conn.fetch(valid_tables_query, settings.SCHEMA)
+        valid_tables = await conn.fetch(valid_tables_query, schema)
         valid_table_names = {row["tablename"] for row in valid_tables}
 
         if table_name not in valid_table_names:
-            raise ValueError(f"Таблица '{table_name}' не найдена или недоступна в схеме '{settings.SCHEMA}'.")
+            raise ValueError(f"Таблица '{table_name}' не найдена или недоступна в схеме '{schema}'.")
 
         # Формируем SQL-запрос
         if limit is not None:
             if not (1 <= limit <= 10**10): # Разумный диапазон для лимита
                 raise ValueError("Значение лимита вне допустимого диапазона. Должно быть от 1 до 10^10.")
-            query = f'SELECT * FROM "{settings.SCHEMA}"."{table_name}" LIMIT {limit}'
+            query = f'SELECT * FROM "{schema}"."{table_name}" LIMIT {limit}'
         else:
-            query = f'SELECT * FROM "{settings.SCHEMA}"."{table_name}"'
+            query = f'SELECT * FROM "{schema}"."{table_name}"'
 
         rows = await conn.fetch(query)
         return [dict(row) for row in rows]
@@ -288,6 +271,32 @@ async def get_user_table_names(username: str, password: str) -> List[str]:
         return [record['tablename'] for record in tables]
 
 
+# --- Получение доступных пользователю таблиц по всем схемам ---
+async def get_user_table_names_by_schema(username: str, password: str) -> dict:
+    """
+    Возвращает словарь {schema: [table1, table2, ...]} с таблицами, к которым пользователь имеет SELECT.
+    """
+    async with get_connection(username, password) as conn:
+        # Получаем все схемы, кроме служебных
+        schemas_query = """
+            SELECT schema_name FROM information_schema.schemata
+            WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+        """
+        schemas = await conn.fetch(schemas_query)
+        result = {}
+        for row in schemas:
+            schema = row['schema_name']
+            tables_query = f'''
+                SELECT tablename
+                FROM pg_tables
+                WHERE schemaname = $1
+                AND has_table_privilege(current_user, concat(schemaname, '.', tablename), 'SELECT')
+            '''
+            tables = await conn.fetch(tables_query, schema)
+            table_names = [record['tablename'] for record in tables]
+            result[schema] = table_names  # всегда добавляем схему, даже если список пустой
+        return result
+
 # --- Проверка подключения к БД ---
 async def check_db_connection(username: str, password: str) -> bool:
     """
@@ -301,7 +310,7 @@ async def check_db_connection(username: str, password: str) -> bool:
         return False
 
 # --- Проверка БД и DF на соответствие столбцов ---
-async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, username: str, password: str) -> bool:
+async def check_df_matches_table_schema(df: pd.DataFrame, schema: str, table_name: str, username: str, password: str) -> bool:
     """
     Проверяет, соответствует ли структура DataFrame структуре таблицы в базе данных.
     """
@@ -314,7 +323,7 @@ async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, usern
                     WHERE table_schema = $1 AND table_name = $2
                 )
             """
-            exists = await conn.fetchval(check_query, settings.SCHEMA, table_name)
+            exists = await conn.fetchval(check_query, schema, table_name)
             if not exists:
                 return False
 
@@ -325,7 +334,7 @@ async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, usern
                 WHERE table_schema = $1 AND table_name = $2
                 ORDER BY ordinal_position
             """
-            db_columns = await conn.fetch(columns_query, settings.SCHEMA, table_name)
+            db_columns = await conn.fetch(columns_query, schema, table_name)
             
             db_schema = {row['column_name'].lower(): PG_TO_PD_TYPE_MAP.get(row['data_type'].lower(), 'object')
                          for row in db_columns}
@@ -335,7 +344,7 @@ async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, usern
             
             if not df_columns_lower.issubset(db_columns_lower):
                 return False
-            
+            print(df_columns_lower, db_columns_lower)
             for col in df.columns:
                 df_type = str(df[col].dtype)
                 if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -352,6 +361,7 @@ async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, usern
                     (df_type.startswith('float') and expected_type == 'float64') or
                     (df_type in ('object', 'string') and expected_type == 'object')
                 ):
+                    print(expected_type, df_type)
                     return False
             
             return True
@@ -360,3 +370,38 @@ async def check_df_matches_table_schema(df: pd.DataFrame, table_name: str, usern
         # Логируем исключение для отладки
         print(f"Ошибка при проверке соответствия схемы DataFrame: {e}")
         return False
+
+# --- Получение количества всех таблиц в схеме ---
+async def get_total_table_count(username: str, password: str) -> int:
+    """
+    Возвращает количество всех таблиц в схеме (для текущей БД).
+    """
+    async with get_connection(username, password) as conn:
+        query = """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = $1
+        """
+        count = await conn.fetchval(query, settings.SCHEMA)
+        return count
+
+# --- Получение количества всех таблиц по всем схемам ---
+async def get_total_table_count_by_schema(username: str, password: str) -> dict:
+    """
+    Возвращает словарь {schema: count} с количеством таблиц в каждой схеме.
+    """
+    async with get_connection(username, password) as conn:
+        schemas_query = """
+            SELECT schema_name FROM information_schema.schemata
+            WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+        """
+        schemas = await conn.fetch(schemas_query)
+        result = {}
+        for row in schemas:
+            schema = row['schema_name']
+            count_query = '''
+                SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = $1
+            '''
+            count = await conn.fetchval(count_query, schema)
+            result[schema] = count
+        return result

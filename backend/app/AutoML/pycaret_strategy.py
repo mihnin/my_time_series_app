@@ -50,10 +50,7 @@ class PyCaretStrategy(AutoMLStrategy):
             id_df = id_df.drop(columns=drop_cols, errors='ignore')
             id_df = id_df.set_index(datetime_col)
             id_df = id_df.sort_index()
-            min_data_points_for_training = max(fh + 1, 20)
-            # if len(id_df) < min_data_points_for_training:
-            #     logging.warning(f"Skipping {unique_id} due to insufficient data points ({len(id_df)}) for robust training (requires at least {min_data_points_for_training} points).")
-            #     continue
+            
             try:
                 s = setup(
                     data=id_df,
@@ -82,8 +79,11 @@ class PyCaretStrategy(AutoMLStrategy):
                 best_score = leaderboard_to_save[metric_col][0] if metric_col in leaderboard_to_save.columns and not leaderboard_to_save.empty else None
                 if best_score is not None:
                     metrics.append(best_score)
-                preds = predict_model(best_model)
+                finalized_model = finalize_model(best_model)
+                preds = predict_model(finalized_model, fh=3)
                 preds[item_id_col] = unique_id
+                if unique_id == 'Shop A':
+                    print(preds)
                 preds.reset_index(inplace=True)
                 preds.rename(columns={preds.columns[0]: datetime_col}, inplace=True)
                 preds_list.append(preds)

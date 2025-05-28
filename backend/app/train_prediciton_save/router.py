@@ -124,9 +124,10 @@ async def run_training_prediction_async(
         output.seek(0)
         save_prediction(output, session_id)
 
-        # Исправлено: используем upload_table_name для сохранения прогноза в БД
+        # Исправлено: используем upload_table_name и upload_table_schema для сохранения прогноза в БД
         if getattr(training_params, 'upload_table_name', None):
             table_name = getattr(training_params, 'upload_table_name')
+            schema = getattr(training_params, 'upload_table_schema', None)
             db_creds = None
             if token is not None:
                 db_creds = await get_current_user_db_creds(token)
@@ -135,9 +136,12 @@ async def run_training_prediction_async(
             username = db_creds["username"]
             password = db_creds["password"]
 
-            logging.info(f"[run_training_async] Начинается загрузка прогноза в таблицу '{table_name}' базы данных...")
-            await upload_df_to_db(preds, table_name, username, password)
-            logging.info(f"[run_training_async] Прогноз успешно загружен в таблицу '{table_name}' базы данных.")
+            logging.info(f"[run_training_async] Начинается загрузка прогноза в таблицу '{table_name}' базы данных (схема: {schema})...")
+            if schema:
+                await upload_df_to_db(preds, schema, table_name, username, password)
+            else:
+                await upload_df_to_db(preds, table_name, username, password)
+            logging.info(f"[run_training_async] Прогноз успешно загружен в таблицу '{table_name}' базы данных (схема: {schema}).")
 
 
         status.update({"progress": 100, 'status': 'completed'})
@@ -176,6 +180,9 @@ async def train_model_endpoint(
     session_id = str(uuid.uuid4())
     try:
         logging.info(f"[train_model_endpoint] Получен запрос на обучение. Файл: {getattr(training_file, 'filename', None)}, Session ID: {session_id}")
+        # DEBUG: log filename for troubleshooting
+        if training_file:
+            logging.info(f"[train_model_endpoint] training_file.filename: {training_file.filename}")
         params_dict = json.loads(params)
         training_params = TrainingParameters(**params_dict)
         logging.info(f"[train_model_endpoint] Параметры обучения для session_id={session_id}: {params_dict}")

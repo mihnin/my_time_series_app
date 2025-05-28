@@ -241,6 +241,7 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
         if naive_forecast_path:
             status['naive_forecast_path'] = naive_forecast_path
         save_session_metadata(session_id, status)
+    print(df[df['Shop'] == 'Shop A'])
     return df
 
 def train_model(
@@ -357,6 +358,7 @@ async def train_model_endpoint(
     Если в параметрах есть download_table_name, то датасет берется из БД, иначе из файла.
     Аутентификация требуется только для загрузки из БД.
     """
+    print(training_file.filename)
     session_id = str(uuid.uuid4())
     try:
         logging.info(f"[train_model_endpoint] Получен запрос на обучение. Session ID: {session_id}")
@@ -463,6 +465,8 @@ async def prepare_training_data_and_status(
         await asyncio.to_thread(df_train.to_parquet, parquet_file_path)
         original_filename = f"from_db_{table_name}.parquet"
     else:
+        # DEBUG: log filename for troubleshooting
+        logging.info(f"[prepare_training_data_and_status] Received file: {getattr(training_file, 'filename', None)}")
         if not training_file or not training_file.filename.endswith((".csv", ".xlsx", ".xls")):
             raise HTTPException(
                 status_code=400,

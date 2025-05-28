@@ -64,6 +64,15 @@
       >
         ⬆️ Загрузить файл в БД
       </button>
+      <button
+        v-if="dbConnected && fileLoaded"
+        class="download-from-app-btn"
+        :disabled="!dbConnected"
+        @click="downloadFromApp"
+        style="width: 100%; margin-top: 0.5rem; margin-bottom: 10px;"
+      >
+        ⬇️ Скачать из приложения
+      </button>
     </div>
 
     <!-- Модальное окно выбора таблицы из БД -->
@@ -71,18 +80,31 @@
       <div v-if="dbModalVisible" class="db-modal-overlay" @click="closeDbModal">
         <div class="db-modal" @click.stop>
           <button class="close-btn" @click="closeDbModal">×</button>
-          <h3 style="margin-bottom:1rem">Выберите таблицу из БД</h3>
+          <h3 class="section-title" style="margin-bottom:1.5rem; border-bottom: none; font-size: 1.3rem;">Выбор таблицы</h3>
           <div class="db-modal-table-area">
             <div v-if="dbTablesLoading" style="color:#888;">Загрузка таблиц...</div>
-            <div v-else-if="dbTables.length === 0" style="color:#f44336;">Нет доступных таблиц</div>
+            <div v-else-if="Object.values(dbTablesBySchema).flat().length === 0" style="color:#f44336;">Нет доступных таблиц</div>
             <div v-else class="db-modal-content">
-              <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+              <!-- УДАЛЕНО: доступно таблиц -->
+              <!-- Выбор схемы -->
+              <div>
+                <label class="input-label" style="display:block; margin-bottom:0.5rem;">
+                  Выберите схему:
+                </label>
+                <select v-model="selectedDbSchema" class="db-input" style="width:100%;margin-bottom:0.5rem;">
+                  <option v-for="schema in dbSchemas" :key="schema" :value="schema">{{ schema }}</option>
+                </select>
+              </div>
+              <!-- Выбор таблицы -->
+              <label class="input-label" style="display:block; margin-bottom:0.5rem;">Выберите таблицу:</label>
+              <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" class="table-count-info">
                 Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
               </div>
-              <select v-model="selectedDbTable" class="db-input db-input-full" style="margin-bottom:1rem;">
+              <select v-model="selectedDbTable" class="db-input db-input-full">
                 <option value="" disabled selected>Выберите таблицу...</option>
-                <option v-for="table in dbTables" :key="table" :value="table">{{ table }}</option>
+                <option v-for="table in filteredDbTables" :key="table" :value="table">{{ table }}</option>
               </select>
+              
               <div class="table-preview-fixed">
                 <div v-if="tablePreviewLoading" class="table-preview-loader">
                   <span class="table-preview-spinner"></span>
@@ -102,7 +124,7 @@
                     </tbody>
                   </table>
                 </div>
-                <div v-else style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">Выберите таблицу для предпросмотра</div>
+                <div v-else id="table-preview-placeholder" class="table-preview-placeholder">Выберите таблицу для предпросмотра</div>
               </div>
             </div>
           </div>
@@ -136,9 +158,20 @@
           </div>
           <!-- Новая таблица -->
           <div v-if="dbSaveMode === 'new'">
-            <input v-model="uploadTableName" class="db-input db-input-full" placeholder="Введите название таблицы" style="margin-bottom:1rem;" />
+            <!-- Выбор схемы для новой таблицы -->
+            <div>
+              <label class="input-label">Выберите схему:</label>
+              <select v-model="selectedUploadDbSchema" class="db-input">
+                <option v-for="schema in uploadDbSchemas" :key="schema" :value="schema">{{ schema }}</option>
+              </select>
+            </div>
+            <!-- Заголовок и поле для названия таблицы -->
+            <div style="margin-top:0.7rem;">
+              <label class="input-label">Название таблицы:</label>
+              <input v-model="uploadTableName" class="db-input db-input-full" placeholder="Введите название таблицы" />
+            </div>
             <div v-if="tableData && tableData.length" style="margin-bottom:1rem;">
-              <label style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block;">Выберите первичные ключи (опционально):</label>
+              <label style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block; margin-top:1.2rem;">Выберите первичные ключи (опционально):</label>
               <div style="display:flex; flex-wrap:wrap; gap:8px;">
                 <label v-for="col in Object.keys(tableData[0])" :key="col" style="display:flex; align-items:center; gap:4px;">
                   <input type="checkbox" :value="col" v-model="selectedPrimaryKeys" />
@@ -149,14 +182,25 @@
           </div>
           <!-- Существующая таблица -->
           <div v-if="dbSaveMode === 'existing'">
-            <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+            <!-- Выбор схемы для существующей таблицы -->
+            <div style="margin-bottom: 1rem;">
+              <label class="input-label" style="display:block; margin-bottom:0.5rem;">
+                Выберите схему:
+              </label>
+              <select v-model="selectedUploadDbSchema" class="db-input" style="width:100%;margin-bottom:1rem;">
+                <option v-for="schema in uploadDbSchemas" :key="schema" :value="schema">{{ schema }}</option>
+              </select>
+            </div>
+            <label class="input-label" style="display:block; margin-bottom:0.5rem;">Выберите таблицу:</label>
+            <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" class="table-count-info">
               Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
             </div>
             <select v-model="uploadTableName" class="db-input db-input-full" style="margin-bottom:1rem;">
               <option value="" disabled selected>Загрузка списка...</option>
-              <option v-for="table in uploadDbTables" :key="table" :value="table">{{ table }}</option>
+              <option v-for="table in filteredUploadDbTables" :key="table" :value="table">{{ table }}</option>
             </select>
           </div>
+
           <div class="upload-to-db-footer">
             <button class="upload-to-db-btn" :disabled="!uploadTableName || uploadToDbLoading" @click="uploadFileToDb">
               <span v-if="uploadToDbLoading" class="spinner-wrap"><span class="spinner"></span>Загрузка...</span>
@@ -222,6 +266,58 @@ export default defineComponent({
     const uploadDbTablesLoading = ref(false)
     const dbTableCountAvailable = ref<number | null>(null)
     const dbTableCountTotal = ref<number | null>(null)
+    // --- DB schemas state ---
+    const dbSchemas = ref<string[]>([])
+    const dbTablesBySchema = ref<{[schema: string]: string[]}>({})
+    const selectedDbSchema = ref('')
+    const filteredDbTables = computed(() => {
+      if (!selectedDbSchema.value) return []
+      return dbTablesBySchema.value[selectedDbSchema.value] || []
+    })
+    // --- Upload to DB schemas state (добавлено) ---
+    const uploadDbSchemas = ref<string[]>([])
+    const uploadDbTablesBySchema = ref<{[schema: string]: string[]}>({})
+    const selectedUploadDbSchema = ref('')
+    const filteredUploadDbTables = computed(() => {
+      if (!selectedUploadDbSchema.value) return []
+      return uploadDbTablesBySchema.value[selectedUploadDbSchema.value] || []
+    })
+
+    // --- Получение таблиц и схем из БД ---
+    async function fetchDbTables() {
+      dbTablesLoading.value = true
+      try {
+        const response = await fetch('http://localhost:8000/get-tables', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${store.authToken}`
+          },
+        })
+        const result = await response.json()
+        if (result.success) {
+          dbSchemas.value = Object.keys(result.tables)
+          dbTablesBySchema.value = result.tables
+          selectedDbSchema.value = dbSchemas.value[0] || ''
+          dbTableCountAvailable.value = result.count_available ?? 0
+          dbTableCountTotal.value = result.count_total ?? 0
+        } else {
+          dbSchemas.value = []
+          dbTablesBySchema.value = {}
+          selectedDbTable.value = ''
+          dbTableCountAvailable.value = null
+          dbTableCountTotal.value = null
+        }
+      } catch (e) {
+        dbSchemas.value = []
+        dbTablesBySchema.value = {}
+        selectedDbTable.value = ''
+        dbTableCountAvailable.value = null
+        dbTableCountTotal.value = null
+      } finally {
+        dbTablesLoading.value = false
+      }
+    }
 
     // Для шаблона
     const dbConnected = computed(() => store.dbConnected)
@@ -377,8 +473,8 @@ export default defineComponent({
     const openDbModal = async () => {
       dbModalVisible.value = true
       dbError.value = ''
-      selectedDbTable.value = '' // По умолчанию ничего не выбрано
-      // Загружаем таблицы при открытии модального окна
+      selectedDbTable.value = ''
+      selectedDbSchema.value = ''
       if (store.dbConnected && store.authToken) {
         dbTablesLoading.value = true
         try {
@@ -390,22 +486,33 @@ export default defineComponent({
             },
           });
           const result = await response.json();
+          // --- DEBUG LOG ---
+          console.log('result.tables', result.tables)
+          console.log('dbSchemas', Object.keys(result.tables))
+          console.log('count_available', result.count_available)
+          console.log('count_total', result.count_total)
+          // --- END DEBUG LOG ---
           if (result.success) {
-            store.setDbTables(result.tables);
-            dbTableCountAvailable.value = result.count_available ?? result.tables.length;
-            dbTableCountTotal.value = result.count_total ?? result.tables.length;
-            dbError.value = '';
+            dbSchemas.value = Object.keys(result.tables)
+            dbTablesBySchema.value = result.tables
+            selectedDbSchema.value = dbSchemas.value[0] || ''
+            dbTableCountAvailable.value = result.count_available ?? 0
+            dbTableCountTotal.value = result.count_total ?? 0
+            dbError.value = ''
           } else {
-            dbError.value = result.detail || 'Не удалось загрузить таблицы из БД.';
-            store.setDbTables([]);
-            dbTableCountAvailable.value = null;
-            dbTableCountTotal.value = null;
+            dbSchemas.value = []
+            dbTablesBySchema.value = {}
+            selectedDbTable.value = ''
+            dbTableCountAvailable.value = null
+            dbTableCountTotal.value = null
           }
         } catch (e: any) {
           dbError.value = 'Ошибка при загрузке таблиц: ' + (e && typeof e === 'object' && 'message' in e ? (e as any).message : String(e));
-          store.setDbTables([]);
-          dbTableCountAvailable.value = null;
-          dbTableCountTotal.value = null;
+          dbSchemas.value = []
+          dbTablesBySchema.value = {}
+          selectedDbTable.value = ''
+          dbTableCountAvailable.value = null
+          dbTableCountTotal.value = null
         } finally {
           dbTablesLoading.value = false
         }
@@ -417,7 +524,7 @@ export default defineComponent({
     }
 
     async function loadTableFromDb() {
-      if (!selectedDbTable.value) return
+      if (!selectedDbTable.value || !selectedDbSchema.value) return
       dbError.value = ''
       isLoadingFromDb.value = true
       try {
@@ -427,7 +534,7 @@ export default defineComponent({
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${store.authToken}`
           },
-          body: JSON.stringify({ table: selectedDbTable.value })
+          body: JSON.stringify({ schema: selectedDbSchema.value, table: selectedDbTable.value })
         })
         if (!response.ok) {
           const err = await response.json().catch(() => ({}))
@@ -436,6 +543,7 @@ export default defineComponent({
         }
         // Получаем blob Excel-файла
         const blob = await response.blob()
+        // --- FIX: Always use .xlsx extension for DB download ---
         const file = new File([blob], `${selectedDbTable.value}.xlsx`, { type: blob.type })
         selectedFile.value = file
         store.setFile(file)
@@ -452,7 +560,7 @@ export default defineComponent({
     }
 
     async function fetchTablePreview(tableName: string) {
-      if (!tableName) {
+      if (!tableName || !selectedDbSchema.value) {
         tablePreview.value = null
         return
       }
@@ -465,7 +573,7 @@ export default defineComponent({
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${store.authToken}`
           },
-          body: JSON.stringify({ table: tableName })
+          body: JSON.stringify({ schema: selectedDbSchema.value, table: tableName })
         })
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -490,15 +598,16 @@ export default defineComponent({
 
     // Добавляем обработчик для загрузки файла в БД
     async function uploadFileToDb() {
-      if (!selectedFile.value || !uploadTableName.value) return
+      if (!selectedFile.value || !uploadTableName.value || !selectedUploadDbSchema.value) return
       uploadToDbLoading.value = true
       uploadToDbError.value = ''
       try {
         const formData = new FormData()
         formData.append('file', selectedFile.value)
+        formData.append('schema', selectedUploadDbSchema.value)
         formData.append('table_name', uploadTableName.value)
         formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value))
-        formData.append('dbSaveMode', dbSaveMode.value) // Передаем режим new/existing
+        formData.append('dbSaveMode', dbSaveMode.value)
         const response = await fetch('http://localhost:8000/upload-excel-to-db', {
           method: 'POST',
           headers: {
@@ -525,9 +634,9 @@ export default defineComponent({
       uploadToDbModalVisible.value = true
       uploadTableName.value = ''
       uploadToDbError.value = ''
-      selectedPrimaryKeys.value = [] // Сбрасываем выбранные первичные ключи при открытии модального окна
-      dbSaveMode.value = 'new' // По умолчанию новая таблица
-      // Загруем список таблиц для модалки загрузки в БД
+      selectedPrimaryKeys.value = []
+      dbSaveMode.value = 'new'
+      selectedUploadDbSchema.value = ''
       if (store.dbConnected && store.authToken) {
         uploadDbTablesLoading.value = true
         fetch('http://localhost:8000/get-tables', {
@@ -540,23 +649,32 @@ export default defineComponent({
           .then(res => res.json())
           .then(result => {
             if (result.success) {
-              uploadDbTables.value = result.tables
-              dbTableCountAvailable.value = result.count_available ?? result.tables.length
-              dbTableCountTotal.value = result.count_total ?? result.tables.length
+              uploadDbSchemas.value = Object.keys(result.tables)
+              uploadDbTablesBySchema.value = result.tables
+              selectedUploadDbSchema.value = uploadDbSchemas.value[0] || ''
+              uploadTableName.value = ''
+              dbTableCountAvailable.value = result.count_available ?? 0
+              dbTableCountTotal.value = result.count_total ?? 0
             } else {
-              uploadDbTables.value = []
+              uploadDbSchemas.value = []
+              uploadDbTablesBySchema.value = {}
+              uploadTableName.value = ''
               dbTableCountAvailable.value = null
               dbTableCountTotal.value = null
             }
           })
           .catch(() => {
-            uploadDbTables.value = []
+            uploadDbSchemas.value = []
+            uploadDbTablesBySchema.value = {}
+            uploadTableName.value = ''
             dbTableCountAvailable.value = null
             dbTableCountTotal.value = null
           })
           .finally(() => { uploadDbTablesLoading.value = false })
       } else {
-        uploadDbTables.value = []
+        uploadDbSchemas.value = []
+        uploadDbTablesBySchema.value = {}
+        uploadTableName.value = ''
         dbTableCountAvailable.value = null
         dbTableCountTotal.value = null
       }
@@ -566,6 +684,21 @@ export default defineComponent({
       uploadTableName.value = ''
       uploadToDbError.value = ''
       selectedPrimaryKeys.value = [] // Сбрасываем выбранные первичные ключи при закрытии модального окна
+    }
+
+    // Скачать файл, который был загружен вручную или получен из БД
+    const downloadFromApp = () => {
+      if (!selectedFile.value) {
+        alert('Нет файла для скачивания. Сначала загрузите файл вручную или из БД.');
+        return;
+      }
+      const file = selectedFile.value;
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(file);
+      link.download = file.name || 'downloaded_file.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     return {
@@ -605,6 +738,15 @@ export default defineComponent({
       uploadDbTablesLoading,
       dbTableCountAvailable,
       dbTableCountTotal,
+      dbSchemas,
+      selectedDbSchema,
+      dbTablesBySchema,
+      filteredDbTables,
+      uploadDbSchemas,
+      selectedUploadDbSchema,
+      uploadDbTablesBySchema,
+      filteredUploadDbTables,
+      downloadFromApp,
     }
   }
 })
@@ -646,6 +788,20 @@ export default defineComponent({
   display: block;
   color: #666;
   margin-bottom: 0.5rem;
+  font-size: 0.97rem;
+  padding: 0;
+}
+
+.db-modal-content .input-label {
+  margin-top: 0;
+  font-size: 0.97rem;
+  padding: 0;
+}
+
+.db-modal-content .db-input {
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.97rem;
 }
 
 .number-input {
@@ -710,6 +866,10 @@ button {
   cursor: pointer;
   margin-bottom: 10px;
   transition: background-color 0.2s;
+}
+
+.connect-btn {
+  margin-bottom: 0px;
 }
 
 .choose-file-btn {
@@ -781,7 +941,7 @@ button:hover {
   max-width: 700px;
   min-width: 500px;
   width: 100%;
-  min-height: 600px;
+  min-height: 600px; /* was 600px, increased for more rows */
   max-height: 100vh;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   position: relative;
@@ -896,9 +1056,7 @@ button:hover {
 }
 
 .table-preview-fixed {
-  min-height: 420px;
-  max-height: 420px;
-  height: 420px;
+  min-height: 215px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -926,8 +1084,8 @@ button:hover {
 }
 
 .db-modal-table-area {
-  min-height: 110px;
-  max-height: 110px;
+  min-height: 180px; /* was 110px */
+  max-height: 180px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -996,9 +1154,7 @@ button:hover {
   align-items: stretch;
   min-height: 48px;
 }
-.upload-to-db-btn {
-  margin-bottom: 0;
-}
+
 .upload-to-db-error-area {
   min-height: 1.5em;
   margin-top: 0.7rem;
@@ -1006,5 +1162,42 @@ button:hover {
   color: #f44336;
   text-align: center;
   word-break: break-word;
+}
+
+.table-count-info {
+  font-size: 0.88rem;
+  color: #1976d2;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.table-preview-placeholder {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+  font-size: 1.05rem;
+  text-align: center;
+  min-height: 100px;
+}
+
+.download-from-app-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+  box-sizing: border-box;
+  display: block;
+}
+.download-from-app-btn:hover:not(:disabled) {
+  background-color: #0d47a1;
 }
 </style>

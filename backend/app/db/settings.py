@@ -52,6 +52,14 @@ class Settings:
     def asyncpg_url(self):
         return f"postgresql://{self.DB_USER}:{self.DB_PASS}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
+    @property
+    def SUPERUSER_DB_USER(self) -> str:
+        return os.getenv('SUPERUSER_DB_USER', self.DB_USER)
+
+    @property
+    def SUPERUSER_DB_PASS(self) -> str:
+        return os.getenv('SUPERUSER_DB_PASS', self.DB_PASS)
+    
     def refresh(self):
         """Обновляет значения переменных окружения, перезагружая их из файла .env"""
         reload_env_vars()

@@ -20,3 +20,4 @@ class TrainingParameters(BaseModel):
     pycaret_models: Optional[Union[str, List[str], None]] = Field(None, description="Названия моделей для pycaret. Если None или пустой список, обучение не запускается. Если '*', обучаются все доступные модели.")
     download_table_name: Optional[Union[str, None]] = Field(None, description="Название таблицы из которой будет загружен датасет")
     upload_table_name: Optional[Union[str, None]] = Field(None, description="Название таблицы в которую будет загружен датасет")
+    upload_table_schema: Optional[Union[str, None]] = Field(None, description="Схема для сохранения прогноза в БД")

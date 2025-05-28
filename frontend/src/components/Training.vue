@@ -69,11 +69,24 @@
           </div>
           <!-- Новая таблица -->
           <div v-if="dbSaveMode === 'new'">
-            <input v-model="newTableName" class="db-input db-input-full" placeholder="Введите название таблицы" style="margin-bottom:1rem;width:100%;padding:0.75rem;" />
-            <div v-if="tableData && tableData.length && Object.keys(tableData[0] || {}).length" style="margin-bottom:1rem;">
-              <label style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block;">Выберите первичные ключи (опционально):</label>
+            <!-- Выбор схемы для новой таблицы -->
+            <div>
+              <label class="input-label">Выберите схему:</label>
+              <select v-model="selectedDbSchema" class="db-input">
+                <option v-for="schema in dbSchemas" :key="schema" :value="schema">{{ schema }}</option>
+              </select>
+            </div>
+            <!-- Название таблицы -->
+            <div style="margin-top:0.7rem;">
+              <label class="input-label">Название таблицы:</label>
+              <input v-model="newTableName" class="db-input db-input-full" placeholder="Введите название таблицы" />
+            </div>
+            <div v-if="tableData && tableData.length" style="margin-bottom:1rem;">
+              <label class="input-label primary-keys-label" style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block; margin-top:1.2rem;">
+                Выберите первичные ключи (опционально):
+              </label>
               <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                <label v-for="col in Object.keys(tableData[0] || {})" :key="col" style="display:flex; align-items:center; gap:4px;">
+                <label v-for="col in Object.keys(tableData[0])" :key="col" style="display:flex; align-items:center; gap:4px;">
                   <input type="checkbox" :value="col" v-model="selectedPrimaryKeys" />
                   <span>{{ col }}</span>
                 </label>
@@ -82,12 +95,23 @@
           </div>
           <!-- Существующая таблица -->
           <div v-if="dbSaveMode === 'existing'">
-            <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" style="margin-bottom:0.5rem;font-size:0.98rem;color:#1976d2;font-weight:500;">
+            <!-- Выбор схемы для существующей таблицы -->
+            <div style="margin-bottom: 1rem;">
+              <label class="input-label" style="display:block; margin-bottom:0.5rem;">
+                Выберите схему:
+              </label>
+              <select v-model="selectedDbSchema" class="db-input" style="width:100%;margin-bottom:1rem;">
+                <option v-for="schema in dbSchemas" :key="schema" :value="schema">{{ schema }}</option>
+              </select>
+            </div>
+            <label class="input-label" style="display:block; margin-bottom:0.5rem;">Выберите таблицу:</label>
+            <div v-if="dbTableCountAvailable !== null && dbTableCountTotal !== null" class="table-count-info">
               Доступно {{ dbTableCountAvailable }} таблиц из {{ dbTableCountTotal }}
             </div>
+            <!-- Выпадающий список для выбора таблицы -->
             <select v-model="selectedTable" class="db-input db-input-full" style="margin-bottom:1rem;">
               <option value="" disabled selected>Загрузка списка...</option>
-              <option v-for="table in dbTableNames" :key="table" :value="table">{{ table }}</option>
+              <option v-for="table in filteredDbTables" :key="table" :value="table">{{ table }}</option>
             </select>
           </div>
           <div class="upload-to-db-footer">
@@ -187,6 +211,13 @@ export default defineComponent({
     const selectedPrimaryKeys = ref<string[]>([])
     const predictionRows = computed(() => store.predictionRows)
     const tableData = computed(() => store.tableData)
+    const dbSchemas = ref<string[]>([])
+    const selectedDbSchema = ref('')
+    const dbTablesBySchema = ref<{[schema: string]: string[]}>({})
+    const filteredDbTables = computed(() => {
+      if (!selectedDbSchema.value) return []
+      return dbTablesBySchema.value[selectedDbSchema.value] || []
+    })
     
     // Для авторизации используем store.authToken
     const dbToken = computed(() => store.authToken || '')
@@ -207,11 +238,16 @@ export default defineComponent({
         })
         if (!resp.ok) throw new Error('Ошибка загрузки таблиц')
         const data = await resp.json()
-        dbTableNames.value = data.tables || []
-        dbTableCountAvailable.value = data.count_available ?? (data.tables ? data.tables.length : 0)
-        dbTableCountTotal.value = data.count_total ?? (data.tables ? data.tables.length : 0)
+        dbSchemas.value = Object.keys(data.tables)
+        dbTablesBySchema.value = data.tables
+        selectedDbSchema.value = dbSchemas.value[0] || ''
+        dbTableNames.value = []
+        dbTableCountAvailable.value = data.count_available ?? 0
+        dbTableCountTotal.value = data.count_total ?? 0
       } catch (e: any) {
         dbError.value = e.message || 'Ошибка'
+        dbSchemas.value = []
+        dbTablesBySchema.value = {}
         dbTableNames.value = []
         dbTableCountAvailable.value = null
         dbTableCountTotal.value = null
@@ -258,12 +294,8 @@ export default defineComponent({
         store.setTrainingStatus({ status: 'initializing', progress: 0 })
 
         const formData = new FormData();
-        if (store.selectedFile) {
-          formData.append('training_file', store.selectedFile);
-        } else {
-          console.error('No file selected - please upload a file first');
+        if (!store.selectedFile) {
           alert('Ошибка: Файл не выбран. Пожалуйста, загрузите файл перед обучением модели.');
-          // Сбрасываем статус, так как обучение не началось
           store.setTrainingStatus(null);
           if (statusCheckInterval) {
             clearInterval(statusCheckInterval);
@@ -271,6 +303,18 @@ export default defineComponent({
           }
           return;
         }
+        // Проверка расширения файла
+        const allowedExt = /\.(csv|xlsx|xls)$/i;
+        if (!allowedExt.test(store.selectedFile.name)) {
+          alert('Файл должен быть в формате CSV или Excel (.csv, .xlsx, .xls)');
+          store.setTrainingStatus(null);
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+            statusCheckInterval = null;
+          }
+          return;
+        }
+        formData.append('training_file', store.selectedFile as Blob, store.selectedFile.name);
         // Detect if file was loaded from DB (by extension)
         let downloadTableName = null;
         if (store.selectedFile && store.selectedFile.name.endsWith('.fromdb.json')) {
@@ -319,9 +363,12 @@ export default defineComponent({
         if (downloadTableName) {
           params.download_table_name = downloadTableName;
         }
-        // --- добавляем upload_table_name если trainPredictSave и имя таблицы есть ---
+        // --- добавляем upload_table_name и upload_table_schema если trainPredictSave и имя таблицы есть ---
         if (trainPredictSave.value && store.uploadDbName) {
           params.upload_table_name = store.uploadDbName;
+          if (selectedDbSchema.value) {
+            params.upload_table_schema = selectedDbSchema.value;
+          }
         }
         const paramsJson = JSON.stringify(params);
         formData.append('params', paramsJson);
@@ -384,7 +431,7 @@ export default defineComponent({
                     const dataRows = rows.slice(1, 11); // первые 10 строк
 
                     // Найти индекс и имя колонки с датой (обычно timestamp/date)
-                    const dateHeader = headers.find(h => h.toLowerCase().includes('timestamp') || h.toLowerCase().includes('date'));
+                    const dateHeader = headers.find((h: string) => h.toLowerCase().includes('timestamp') || h.toLowerCase().includes('date'));
                     const dateIdx = dateHeader ? headers.indexOf(dateHeader) : -1;
 
                     const parsedRows = dataRows.map(row => {
@@ -392,8 +439,8 @@ export default defineComponent({
                       headers.forEach((h: string, idx: number) => {
                         let value = row[idx];
                         // Если это колонка даты и значение — число, преобразуем в строку даты
-                        if (idx === dateIdx && typeof value === 'number' && XLSX.SSF) {
-                          const dateObj = XLSX.SSF.parse_date_code(value);
+                        if (idx === dateIdx && typeof value === 'number' && (XLSX as any).SSF) {
+                          const dateObj = (XLSX as any).SSF.parse_date_code(value);
                           if (dateObj) {
                             const pad = (n: number) => n.toString().padStart(2, '0');
                             value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
@@ -490,7 +537,7 @@ export default defineComponent({
       dbError.value = '';
       try {
         const formData = new FormData();
-        formData.append('file', store.selectedFile);
+        formData.append('file', store.selectedFile as Blob, store.selectedFile?.name ?? 'uploaded_file');
         formData.append('table_name', newTableName.value);
         formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value));
         // Специальный режим: только создание таблицы по первой строке
@@ -522,76 +569,78 @@ export default defineComponent({
     const handleSaveToDb = async () => {
       dbLoading.value = true;
       dbError.value = '';
-      try {
-        let tableName = '';
-        if (dbSaveMode.value === 'new') {
-          tableName = newTableName.value.trim();
-          if (!tableName) {
-            dbError.value = 'Введите название новой таблицы.';
-            dbLoading.value = false;
-            return;
-          }
-          // 1. Создать таблицу
-          const formData = new FormData();
-          if (!store.selectedFile) {
-            dbError.value = 'Файл не выбран.';
-            dbLoading.value = false;
-            return;
-          }
-          formData.append('file', store.selectedFile);
-          formData.append('table_name', tableName);
-          formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value));
-          formData.append('create_table_only', 'true');
-          const resp = await fetch('http://localhost:8000/create-table-from-file', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${dbToken.value}`
-            },
-            body: formData
-          });
-          const data = await resp.json();
-          if (!resp.ok || !data.success) {
-            dbError.value = data.detail || 'Ошибка создания таблицы';
-            dbLoading.value = false;
-            return;
-          }
-        } else {
-          tableName = selectedTable.value;
-          if (!tableName || !store.selectedFile) {
-            dbError.value = 'Не выбрана таблица или не загружен файл';
-            dbLoading.value = false;
-            return;
-          }
-          // 2. Проверить структуру
-          const formData = new FormData();
-          formData.append('file', store.selectedFile);
-          formData.append('table_name', tableName);
-          const resp = await fetch('http://localhost:8000/check-df-matches-table-schema', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${dbToken.value}`
-            },
-            body: formData
-          });
-          const data = await resp.json();
-          if (!data.success) {
-            dbError.value = data.detail || 'Структура файла не совпадает с таблицей';
-            dbLoading.value = false;
-            return;
-          }
-        }
-        // Сохраняем название таблицы в store.uploadDbName
-        store.setUploadDbName(tableName);
-        // Скрываем модалку автосохранения
-        closeAutoSaveModal();
-        // Показываем модалку успеха
-        saveSuccessModalVisible.value = true;
-        setTimeout(() => { saveSuccessModalVisible.value = false; }, 1800);
-      } catch (e: any) {
-        dbError.value = (e as any).message || 'Ошибка';
-      } finally {
+      let schema = selectedDbSchema.value;
+      let tableName = '';
+      if (!schema) {
+        dbError.value = 'Выберите схему.';
         dbLoading.value = false;
+        return;
       }
+      if (dbSaveMode.value === 'new') {
+        tableName = newTableName.value.trim();
+        if (!tableName) {
+          dbError.value = 'Введите название новой таблицы.';
+          dbLoading.value = false;
+          return;
+        }
+        // 1. Создать таблицу
+        const formData = new FormData();
+        if (!store.selectedFile) {
+          dbError.value = 'Файл не выбран.';
+          dbLoading.value = false;
+          return;
+        }
+        formData.append('file', store.selectedFile as Blob, store.selectedFile?.name ?? 'uploaded_file');
+        formData.append('table_name', tableName);
+        formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value));
+        formData.append('create_table_only', 'true');
+        formData.append('schema', schema);
+        const resp = await fetch('http://localhost:8000/create-table-from-file', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${dbToken.value}`
+          },
+          body: formData
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+          dbError.value = data.detail || 'Ошибка создания таблицы';
+          dbLoading.value = false;
+          return;
+        }
+      } else {
+        tableName = selectedTable.value;
+        if (!tableName) {
+          dbError.value = 'Не выбрана таблица или не загружен файл';
+          dbLoading.value = false;
+          return;
+        }
+        // 2. Проверить структуру
+        const formData = new FormData();
+        formData.append('file', store.selectedFile as Blob, store.selectedFile?.name ?? 'uploaded_file');
+        formData.append('table_name', tableName);
+        formData.append('schema', schema);
+        const resp = await fetch('http://localhost:8000/check-df-matches-table-schema', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${dbToken.value}`
+          },
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          dbError.value = data.detail || 'Структура файла не совпадает с таблицей';
+          dbLoading.value = false;
+          return;
+        }
+      }
+      // Сохраняем название таблицы в store.uploadDbName
+      store.setUploadDbName(tableName);
+      // Скрываем модалку автосохранения
+      closeAutoSaveModal();
+      // Показываем модалку успеха
+      saveSuccessModalVisible.value = true;
+      setTimeout(() => { saveSuccessModalVisible.value = false; }, 1800);
     }
 
     // Очищать ошибку при смене radio button
@@ -625,7 +674,11 @@ export default defineComponent({
       dbTableCountTotal,
       createTableFromFile,
       saveSuccessModalVisible,
-      handleSaveToDb
+      handleSaveToDb,
+      dbSchemas,
+      selectedDbSchema,
+      dbTablesBySchema,
+      filteredDbTables
     }
   }
 })
@@ -807,6 +860,44 @@ export default defineComponent({
   border: 1px solid #ccc;
   border-radius: 4px;
   box-sizing: border-box;
+}
+
+.connect-btn {
+  margin-bottom: 0px;
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+.connect-btn:hover {
+  background-color: #1976d2;
+}
+
+.table-count-info {
+  font-size: 0.88rem;
+  color: #1976d2;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.db-modal .input-label {
+  margin-top: 0;
+  font-size: 0.97rem;
+  padding: 0;
+}
+
+.db-modal .db-input {
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.primary-keys-label {
+  margin-top: 1.2rem !important;
 }
 
 /* Стили для модального окна успешного сохранения */
