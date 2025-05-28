@@ -42,16 +42,6 @@ class AutoGluonStrategy(AutoMLStrategy):
 
         logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
 
-        # Handle frequency
-        actual_freq = None
-
-        if training_params.frequency and training_params.frequency.lower() != "auto":
-            freq_short = training_params.frequency.split(" ")[0]
-            ts_df = ts_df.convert_frequency(freq_short)
-            actual_freq = freq_short
-            logging.info(f"[train_model] Частота временного ряда установлена: {freq_short}")
-
-
         session_path = get_session_path(session_id)
         
         logging.info(f"[train_model] Создание объекта TimeSeriesPredictor...")
@@ -145,12 +135,6 @@ class AutoGluonStrategy(AutoMLStrategy):
 
         df_ready = convert_to_timeseries(ts_df, id_col, dt_col, tgt_col)
         ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-        if freq and freq.lower() != "auto":
-            freq_short = freq.split(" ")[0]
-            ts_df = ts_df.convert_frequency(freq_short)
-            ts_df = ts_df.fill_missing_values(method="ffill")
-            logging.info(f"Частота временного ряда установлена: {freq_short}")
-
         session_path = get_session_path(session_id)
         model_path = os.path.join(session_path, "autogluon")
         if not os.path.exists(model_path):

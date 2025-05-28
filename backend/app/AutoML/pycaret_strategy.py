@@ -50,10 +50,6 @@ class PyCaretStrategy(AutoMLStrategy):
             id_df = id_df.drop(columns=drop_cols, errors='ignore')
             id_df = id_df.set_index(datetime_col)
             id_df = id_df.sort_index()
-            full_date_range = pd.date_range(start=id_df.index.min(), end=id_df.index.max(), freq='D')
-            id_df = id_df.reindex(full_date_range)
-            id_df[target_col] = id_df[target_col].ffill()
-            id_df.dropna(subset=[target_col], inplace=True)
             min_data_points_for_training = max(fh + 1, 20)
             # if len(id_df) < min_data_points_for_training:
             #     logging.warning(f"Skipping {unique_id} due to insufficient data points ({len(id_df)}) for robust training (requires at least {min_data_points_for_training} points).")

@@ -147,6 +147,102 @@ async def run_training_async(
         training_sessions[session_id] = status
 
 
+def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, session_id: str = None) -> pd.DataFrame:
+    """
+    Универсально дополняет каждый временной ряд до нужной частоты (freq) и заполняет пропуски.
+    Если передан session_id, пишет сообщения о дополнении в metadata.json только для реально дополненных рядов.
+    Также пишет предупреждение, если после дополнения данных недостаточно для полноценного прогноза.
+    Если данных недостаточно, такие ряды сохраняются в отдельный файл с наивным прогнозом и исключаются из датасета для обучения.
+    """
+    freq = training_params.frequency
+    if not freq or freq.lower() == 'auto':
+        return df
+    freq_short = freq.split()[0]
+    id_col = training_params.item_id_column
+    dt_col = training_params.datetime_column
+    tgt_col = training_params.target_column
+    prediction_length = getattr(training_params, 'prediction_length', 1)
+    min_required = max(prediction_length + 1, 5) + prediction_length
+    messages = []
+    method = 'ffill'  # сейчас всегда ffill, но можно расширить
+    naive_forecasts = []
+    # Если нет группировки по id, просто по всему датафрейму
+    if id_col not in df.columns:
+        df = df.copy()
+        df[dt_col] = pd.to_datetime(df[dt_col])
+        full_range = pd.date_range(df[dt_col].min(), df[dt_col].max(), freq=freq_short)
+        if len(full_range) > len(df):
+            df = df.set_index(dt_col).reindex(full_range).rename_axis(dt_col).reset_index()
+            df[tgt_col] = df[tgt_col].ffill()
+            messages.append(f"Ряд дополнен до частоты {freq_short} методом {method}")
+        else:
+            df = df.set_index(dt_col).reindex(full_range).rename_axis(dt_col).reset_index()
+            df[tgt_col] = df[tgt_col].ffill()
+        # Проверка на минимальное количество данных
+        if len(df) < min_required:
+            messages.append("Для ряда невозможно выполнить полноценный прогноз из-за малого количества данных. Выполнен наивный прогноз.")
+            # Формируем наивный прогноз: берём последнее значение и генерируем prediction_length дат вперёд
+            if len(df) > 0:
+                last_date = df[dt_col].max()
+                last_value = df[tgt_col].iloc[-1]
+                future_dates = pd.date_range(last_date, periods=prediction_length+1, freq=freq_short)[1:]
+                naive_df = pd.DataFrame({
+                    dt_col: future_dates,
+                    tgt_col: [last_value]*prediction_length
+                })
+                naive_forecasts.append(naive_df)
+            df = df.iloc[0:0]  # полностью исключаем из обучения
+    else:
+        dfs = []
+        for unique_id, group in df.groupby(id_col):
+            group = group.copy()
+            group[dt_col] = pd.to_datetime(group[dt_col])
+            full_range = pd.date_range(group[dt_col].min(), group[dt_col].max(), freq=freq_short)
+            was_extended = len(full_range) > len(group)
+            group = group.set_index(dt_col).reindex(full_range).rename_axis(dt_col).reset_index()
+            group[id_col] = unique_id
+            group[tgt_col] = group[tgt_col].ffill()
+            # Проверка на минимальное количество данных для каждого ряда
+            if len(group) < min_required:
+                messages.append(f"Для ряда с id {unique_id} невозможно выполнить полноценный прогноз из-за малого количества данных. Выполнен наивный прогноз.")
+                if len(group) > 0:
+                    last_date = group[dt_col].max()
+                    last_value = group[tgt_col].iloc[-1]
+                    future_dates = pd.date_range(last_date, periods=prediction_length+1, freq=freq_short)[1:]
+                    naive_df = pd.DataFrame({
+                        dt_col: future_dates,
+                        tgt_col: [last_value]*prediction_length,
+                        id_col: [unique_id]*prediction_length
+                    })
+                    naive_forecasts.append(naive_df)
+                continue  # не добавляем в dfs, исключаем из обучения
+            dfs.append(group)
+            if was_extended:
+                messages.append(f"Ряд с id {unique_id} дополнен до частоты {freq_short} методом {method}")
+        df = pd.concat(dfs, ignore_index=True) if dfs else df.iloc[0:0]
+    # Сохраняем наивные ряды в отдельный файл, если есть такие
+    naive_forecast_path = None
+    if naive_forecasts and session_id is not None:
+        session_path = get_session_path(session_id)
+        naive_forecast_path = os.path.join(session_path, f"naive_forecast_{session_id}.csv")
+        pd.concat(naive_forecasts, ignore_index=True).to_csv(naive_forecast_path, index=False)
+    # Сохраняем очищенный датасет (без рядов с малым количеством данных) в parquet для обучения и прогноза
+    if session_id is not None:
+        session_path = get_session_path(session_id)
+        parquet_file_path = os.path.join(session_path, "training_data.parquet")
+        df.to_parquet(parquet_file_path, index=False)
+    # Сохраняем messages и путь к наивному прогнозу в metadata.json если есть session_id
+    if session_id is not None and session_id in training_sessions:
+        status = training_sessions[session_id]
+        if messages:
+            if 'messages' not in status:
+                status['messages'] = []
+            status['messages'].extend(messages)
+        if naive_forecast_path:
+            status['naive_forecast_path'] = naive_forecast_path
+        save_session_metadata(session_id, status)
+    return df
+
 def train_model(
     df_train: pd.DataFrame,
     training_params: TrainingParameters,
@@ -175,7 +271,7 @@ def train_model(
         status.update({"progress": text_to_progress['holidays']})
         save_session_metadata(session_id, status)
 
-        # Fill missing values
+        # Fill missing values (custom logic)
         df2 = fill_missing_values(
             df2,
             training_params.fill_missing_method,
@@ -185,10 +281,12 @@ def train_model(
         status.update({"progress": text_to_progress['missings']})
         save_session_metadata(session_id, status)
 
+        # Универсальное дополнение до нужной частоты + запись messages
+        df2 = fill_to_frequency(df2, training_params, session_id=session_id)
+        logging.info(f"[train_model] Данные дополнены до частоты {training_params.frequency}")
 
         for strategy in automl_manager.get_strategies():
             strategy.train(df2, training_params, session_id)
-
 
         session_path = get_session_path(session_id)
         combined_leaderboard = automl_manager.combine_leaderboards(session_id, [strategy.name for strategy in automl_manager.get_strategies()])

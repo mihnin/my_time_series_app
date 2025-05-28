@@ -68,25 +68,18 @@ def predict_timeseries(session_id: str):
     df = fill_missing_values(df, fill_method, fill_group_cols)
     logging.info(f"Пропущенные значения обработаны методом: {fill_method}")
 
-    # static_df = None
-    # if static_feats:
-    #     tmp = df[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
-    #     tmp.rename(columns={id_col: "item_id"}, inplace=True)
-    #     static_df = tmp
-    #     logging.info(f"Добавлены статические признаки: {static_feats}")
-
-    # df_ready = convert_to_timeseries(df, id_col, dt_col, tgt_col)
-    # ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-    # if freq and freq.lower() != "auto":
-    #     freq_short = freq.split(" ")[0]
-    #     ts_df = ts_df.convert_frequency(freq_short)
-    #     ts_df = ts_df.fill_missing_values(method="ffill")
-    #     logging.info(f"Частота временного ряда установлена: {freq_short}")
-
     best_strategy = automl_manager.get_best_strategy(session_id)
     preds = best_strategy.predict(df, session_id, params)
 
-
+    # Добавляем наивный прогноз, если есть соответствующий файл
+    session_path = get_session_path(session_id)
+    naive_path = os.path.join(session_path, f"naive_forecast_{session_id}.csv")
+    if os.path.exists(naive_path):
+        try:
+            df_naive = pd.read_csv(naive_path)
+            preds = pd.concat([preds, df_naive], ignore_index=True)
+        except Exception as e:
+            logging.warning(f"Не удалось добавить наивный прогноз: {e}")
     return preds
 
 def save_prediction(output, session_id):
@@ -185,7 +178,6 @@ def download_prediction_file(session_id: str):
                 weights_dict = None
 
     # Формируем новый Excel-файл с несколькими листами
-    from io import BytesIO
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         # Первый лист — прогноз
@@ -205,6 +197,20 @@ def download_prediction_file(session_id: str):
             pd.DataFrame(list(weights_dict.items()), columns=["Model", "Weight"]).to_excel(writer, sheet_name="WeightedEnsemble", index=False)
         else:
             pd.DataFrame({"info": ["WeightedEnsemble weights not found"]}).to_excel(writer, sheet_name="WeightedEnsemble", index=False)
+        # Пятый лист — messages из metadata.json
+        messages = None
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+                messages = metadata.get("messages", None)
+            except Exception as e:
+                logging.warning(f"Не удалось прочитать messages из metadata.json: {e}")
+                messages = None
+        if messages and isinstance(messages, list) and len(messages) > 0:
+            pd.DataFrame({"messages": messages}).to_excel(writer, sheet_name="Messages", index=False)
+        else:
+            pd.DataFrame({"info": ["Messages not found"]}).to_excel(writer, sheet_name="Messages", index=False)
     output.seek(0)
 
     logging.info(f"[download_prediction_file] Мульти-листовой Excel-файл отправлен: prediction_{session_id}.xlsx")
