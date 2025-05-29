@@ -241,7 +241,6 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
         if naive_forecast_path:
             status['naive_forecast_path'] = naive_forecast_path
         save_session_metadata(session_id, status)
-    print(df[df['Shop'] == 'Shop A'])
     return df
 
 def train_model(
@@ -260,6 +259,20 @@ def train_model(
         df2[training_params.datetime_column] = pd.to_datetime(df2[training_params.datetime_column], errors="coerce")
         status.update({"progress": text_to_progress['preparation']}) 
         save_session_metadata(session_id, status)
+        
+        # --- Сохраняем статические данные в static_data.parquet ---
+        id_col = training_params.item_id_column
+        static_cols = training_params.static_feature_columns
+        if static_cols and id_col in df2.columns:
+            # static_cols: список названий статических признаков
+            static_cols = [col for col in static_cols if col in df2.columns and col != id_col]
+            if static_cols:
+                static_df = df2[[id_col] + static_cols].drop_duplicates(subset=[id_col])
+                session_path = get_session_path(session_id)
+                static_path = os.path.join(session_path, 'static_data.parquet')
+                print(static_df)
+                static_df.to_parquet(static_path, index=False)
+                logging.info(f"[train_model] Статические данные сохранены: {static_path}")
 
         # Add holidays if requested
         if training_params.use_russian_holidays:

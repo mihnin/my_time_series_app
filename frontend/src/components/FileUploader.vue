@@ -47,7 +47,7 @@
         </span>
         <span v-else>📂 Загрузить данные из файла</span>
       </button>
-      <h4 class="subsection-title">Работа с базой данных</h4>
+      <h4 v-if="dbConnected" class="subsection-title">Работа с базой данных</h4>
       <button
         v-if="dbConnected"
         class="db-load-btn"

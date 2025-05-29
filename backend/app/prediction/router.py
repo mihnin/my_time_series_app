@@ -71,6 +71,8 @@ def predict_timeseries(session_id: str):
     best_strategy = automl_manager.get_best_strategy(session_id)
     preds = best_strategy.predict(df, session_id, params)
 
+    
+    
     # Добавляем наивный прогноз, если есть соответствующий файл
     session_path = get_session_path(session_id)
     naive_path = os.path.join(session_path, f"naive_forecast_{session_id}.csv")
@@ -80,6 +82,21 @@ def predict_timeseries(session_id: str):
             preds = pd.concat([preds, df_naive], ignore_index=True)
         except Exception as e:
             logging.warning(f"Не удалось добавить наивный прогноз: {e}")
+
+    # --- Добавляем статические признаки из static_data.parquet, если есть ---
+    static_path = os.path.join(session_path, 'static_data.parquet')
+    
+    if os.path.exists(static_path):
+        try:
+            static_df = pd.read_parquet(static_path)
+            # Оставляем только уникальные id
+            static_df = static_df.drop_duplicates(subset=[id_col])
+            # left join preds + static_df по id_col
+            preds = preds.merge(static_df, on=id_col, how='left')
+            logging.info(f"Статические признаки добавлены к результату прогноза из {static_path}")
+        except Exception as e:
+            logging.warning(f"Не удалось добавить статические признаки: {e}")
+
     return preds
 
 def save_prediction(output, session_id):

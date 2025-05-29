@@ -59,7 +59,7 @@
             <div v-if="predictionRows && predictionRows.length" style="margin-bottom:1rem;">
               <label class="primary-keys-label" style="font-weight:500; color:#333; margin-bottom:0.5rem; display:block; margin-top:1.2rem;">Выберите первичные ключи (опционально):</label>
               <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                <label v-for="col in Object.keys(predictionRows[0])" :key="col" style="display:flex; align-items:center; gap:4px;">
+                <label v-for="col in Object.keys(predictionRows[0]).filter(c => !/^0\.[1-9]$/.test(c))" :key="col" style="display:flex; align-items:center; gap:4px;">
                   <input type="checkbox" :value="col" v-model="selectedPrimaryKeys" />
                   <span>{{ col }}</span>
                 </label>

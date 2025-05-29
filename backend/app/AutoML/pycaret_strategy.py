@@ -8,6 +8,10 @@ from fastapi import HTTPException
 from sessions.utils import get_session_path
 from AutoML.automl import AutoMLStrategy
 import numpy as np # Для np.nanmean
+import threading
+
+# Глобальный lock для PyCaret
+pycaret_lock = threading.Lock()
 
 class PyCaretStrategy(AutoMLStrategy):
     name = 'pycaret'
@@ -40,18 +44,23 @@ class PyCaretStrategy(AutoMLStrategy):
             if col in ts_df.columns:
                 ts_df[col] = ts_df[col].astype('category')
 
+        # Определяем колонки, которые нужно удалить (все, кроме даты, таргета и id)
+        keep_cols = [datetime_col, target_col, item_id_col]
+        drop_cols_all = [col for col in ts_df.columns if col not in keep_cols] + [item_id_col]
+
         unique_ids = ts_df[item_id_col].unique()
         metrics = []
         preds_list = []
 
         for unique_id in unique_ids:
             id_df = ts_df[ts_df[item_id_col] == unique_id].copy()
-            drop_cols = [c for c in ['Country', 'City', item_id_col] if c in id_df.columns]
-            id_df = id_df.drop(columns=drop_cols, errors='ignore')
+            # Удаляем все неключевые колонки
+            id_df = id_df.drop(columns=drop_cols_all, errors='ignore')
             id_df = id_df.set_index(datetime_col)
             id_df = id_df.sort_index()
-            
+            pycaret_lock.acquire()  # просто блокирующий lock, без записи в metadata
             try:
+                # ...весь блок работы с PyCaret теперь под lock...
                 s = setup(
                     data=id_df,
                     target=target_col,
@@ -66,7 +75,6 @@ class PyCaretStrategy(AutoMLStrategy):
                 else:
                     best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids) if budget_time else None, include=pycaret_models)
 
-                #
                 leaderboard_df = pull()
                 # Сохраняем leaderboard для каждого unique_id в отдельную папку
                 id_leaderboards_dir = os.path.join(pycaret_model_path, 'id_leaderboards')
@@ -81,18 +89,19 @@ class PyCaretStrategy(AutoMLStrategy):
                     metrics.append(best_score)
                 finalized_model = finalize_model(best_model)
                 preds = predict_model(finalized_model, fh=3)
+                pycaret_lock.release()
                 preds[item_id_col] = unique_id
-                if unique_id == 'Shop A':
-                    print(preds)
                 preds.reset_index(inplace=True)
                 preds.rename(columns={preds.columns[0]: datetime_col}, inplace=True)
                 preds_list.append(preds)
 
-
                 logging.info(f"[PyCaretStrategy train] Finished {unique_id}, score: {metrics[-1]}")
-                
-
             except Exception as e:
+                if pycaret_lock.locked():
+                    try:
+                        pycaret_lock.release()
+                    except Exception:
+                        pass
                 logging.error(f"[PyCaretStrategy train] Error for {unique_id}: {e}")
                 continue
         # Сохраняем все прогнозы в один файл

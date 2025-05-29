@@ -117,13 +117,20 @@ async def run_training_prediction_async(
 
         preds = await asyncio.to_thread(predict_timeseries, session_id)
 
-        output = BytesIO()
+        # Удаляем столбцы '0.1', ..., '0.9', если они есть
 
+        output = BytesIO()
         
         preds.to_excel(output, index=False)
         output.seek(0)
         save_prediction(output, session_id)
 
+        for col in [str(round(x/10, 1)) for x in range(1, 10)]:
+            if col in preds.columns:
+                preds.drop(columns=[col], inplace=True)
+
+
+        
         # Исправлено: используем upload_table_name и upload_table_schema для сохранения прогноза в БД
         if getattr(training_params, 'upload_table_name', None):
             table_name = getattr(training_params, 'upload_table_name')

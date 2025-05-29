@@ -8,7 +8,7 @@
         <input 
           type="checkbox" 
           v-model="trainPredictSave"
-        > Обучение, Прогноз и Сохранение
+        > Обучить и сделать прогноз
       </label>
     </div>
 
@@ -178,7 +178,7 @@ export default defineComponent({
       return store.trainingStatus && ['initializing', 'running'].includes(store.trainingStatus.status)
     })
     const buttonText = computed(() => {
-      if (!isTraining.value) return '🚀 Обучить модель'
+      if (!isTraining.value) return '🚀 Начать обучение'
       return '⏳ Обучение...'
     })
     const getStatusMessage = computed(() => {
@@ -454,14 +454,14 @@ export default defineComponent({
                       return obj;
                     });
                     store.setPredictionRows(parsedRows);
-                    // Автоматическая загрузка файла
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.setAttribute('download', `prediction_${store.sessionId}.xlsx`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    // --- Автоматическое скачивание убрано ---
+                    // const url = window.URL.createObjectURL(blob);
+                    // const link = document.createElement('a');
+                    // link.href = url;
+                    // link.setAttribute('download', `prediction_${store.sessionId}.xlsx`);
+                    // document.body.appendChild(link);
+                    // link.click();
+                    // document.body.removeChild(link);
                   } catch (e) {
                     alert('Ошибка при обработке прогноза: ' + (e instanceof Error ? e.message : e));
                   }
