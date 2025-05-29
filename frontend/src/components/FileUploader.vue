@@ -20,7 +20,7 @@
     </details> -->
 
     <div class="upload-section">
-      <h4 class="subsection-title">Загрузка данных</h4>
+      <h4 class="subsection-title">Загрузка данных из файла</h4>
       <div class="upload-zone" @dragover.prevent @drop.prevent="handleDrop">
         <input 
           type="file" 
@@ -47,13 +47,14 @@
         </span>
         <span v-else>📂 Загрузить данные из файла</span>
       </button>
+      <h4 class="subsection-title">Работа с базой данных</h4>
       <button
         v-if="dbConnected"
         class="db-load-btn"
         @click="openDbModal"
         style="margin-top: 0.5rem; background: #388e3c;"
       >
-        🗄️ Загрузить из БД
+        🗄️ Загрузить данные из БД
       </button>
       <button
         v-if="dbConnected && fileLoaded"
@@ -62,16 +63,16 @@
         :disabled="isLoading"
         style="margin-top: 0.5rem;"
       >
-        ⬆️ Загрузить файл в БД
+        ⬆️ Загрузить данные в БД
       </button>
       <button
-        v-if="dbConnected && fileLoaded"
+      v-if="dbConnected && fileLoaded"
         class="download-from-app-btn"
         :disabled="!dbConnected"
         @click="downloadFromApp"
         style="width: 100%; margin-top: 0.5rem; margin-bottom: 10px;"
       >
-        ⬇️ Скачать из приложения
+        ⬇️ Скачать данные из приложения
       </button>
     </div>
 

@@ -179,8 +179,6 @@ async def upload_df_to_db(
 
     Если update_on_pk=True, функция попытается автоматически определить
     первичный ключ таблицы и выполнить "upsert" (INSERT ON CONFLICT UPDATE).
-    Если первичный ключ не найден или не все его столбцы есть в DataFrame,
-    будет вызвано исключение.
     """
     async with get_connection(username, password) as conn:
         if not df.empty:
@@ -221,6 +219,64 @@ async def upload_df_to_db(
 
             # Выполняем запрос
             await conn.executemany(insert_query, [list(record.values()) for record in records])
+    return True
+
+def clean_value(val):
+        try:
+            import math
+            if val is None:
+                return None
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return None
+            return val
+        except Exception:
+            return val
+
+@read_only_guard
+async def upload_dicts_to_db(
+    records: list[dict],
+    schema: str,
+    table_name: str,
+    username: str,
+    password: str,
+    update_on_pk: bool = True,
+) -> bool:
+    """
+    Загружает данные из списка словарей в существующую таблицу в базе данных.
+    Если update_on_pk=True, выполняет UPSERT по первичному ключу (INSERT ON CONFLICT UPDATE).
+    Требует, чтобы все словари имели одинаковые ключи, соответствующие столбцам таблицы.
+    Таблица должна быть создана заранее.
+    Не использует pandas.
+    """
+    if not records:
+        return True
+    columns = list(records[0].keys())
+    # Преобразуем NaN/None/inf в None вручную
+    
+    records_clean = [
+        {k: clean_value(v) for k, v in rec.items()} for rec in records
+    ]
+    async with get_connection(username, password) as conn:
+        pk_columns = []
+        if update_on_pk:
+            pk_columns = await _get_pk_columns(conn, schema, table_name)
+            if pk_columns and not all(col in columns for col in pk_columns):
+                missing_cols = [col for col in pk_columns if col not in columns]
+                raise ValueError(
+                    f"Словари не содержат столбцы первичного ключа {missing_cols}, необходимые для update_on_pk."
+                )
+        columns_str = ', '.join([f'"{col}"' for col in columns])
+        values_template = ', '.join([f'${i+1}' for i in range(len(columns))])
+        insert_query = f'INSERT INTO "{schema}"."{table_name}" ({columns_str}) VALUES ({values_template})'
+        if update_on_pk and pk_columns:
+            pk_columns_str = ', '.join([f'"{col}"' for col in pk_columns])
+            update_cols = [col for col in columns if col not in pk_columns]
+            if update_cols:
+                update_set_str = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in update_cols])
+                insert_query += f' ON CONFLICT ({pk_columns_str}) DO UPDATE SET {update_set_str}'
+            else:
+                insert_query += f' ON CONFLICT ({pk_columns_str}) DO NOTHING'
+        await conn.executemany(insert_query, [list(rec.values()) for rec in records_clean])
     return True
 
 # --- Предпросмотр таблицы с лимитом строк ---
@@ -344,7 +400,6 @@ async def check_df_matches_table_schema(df: pd.DataFrame, schema: str, table_nam
             
             if not df_columns_lower.issubset(db_columns_lower):
                 return False
-            print(df_columns_lower, db_columns_lower)
             for col in df.columns:
                 df_type = str(df[col].dtype)
                 if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -359,7 +414,8 @@ async def check_df_matches_table_schema(df: pd.DataFrame, schema: str, table_nam
                 if df_type != expected_type and not (
                     (df_type.startswith('int') and expected_type == 'int64') or
                     (df_type.startswith('float') and expected_type == 'float64') or
-                    (df_type in ('object', 'string') and expected_type == 'object')
+                    (df_type in ('object', 'string') and expected_type == 'object') or
+                    (df_type.startswith('int') and expected_type == 'float64')
                 ):
                     print(expected_type, df_type)
                     return False

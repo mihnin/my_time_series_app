@@ -21,7 +21,7 @@
         @click="openAutoSaveModal"
       >
         <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 20 20" width="20" style="vertical-align:middle;"><g><ellipse cx="10" cy="5.5" rx="8" ry="3.5" fill="#fff" stroke="#007bff" stroke-width="1.2"/><ellipse cx="10" cy="5.5" rx="8" ry="3.5" fill="#007bff" fill-opacity=".15"/><rect x="2" y="5.5" width="16" height="7" rx="4" fill="#fff" stroke="#007bff" stroke-width="1.2"/><rect x="2" y="5.5" width="16" height="7" rx="4" fill="#007bff" fill-opacity=".10"/><rect x="2" y="12.5" width="16" height="3" rx="1.5" fill="#fff" stroke="#007bff" stroke-width="1.2"/><rect x="2" y="12.5" width="16" height="3" rx="1.5" fill="#007bff" fill-opacity=".10"/></g></svg>
-        Автоматическое сохранение в БД
+        Автоматическое сохранение прогноза в БД
       </button>
     </div>
 
