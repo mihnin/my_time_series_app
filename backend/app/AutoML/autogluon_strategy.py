@@ -71,9 +71,9 @@ class AutoGluonStrategy(AutoMLStrategy):
                 if model == 'Chronos':
                     print("Chronos is using pre-installed")
                     hyperparams["Chronos"] = [
-                        {"model_path": "autogluon/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
-                        {"model_path": "autogluon/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
-                        {"model_path": "autogluon/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
+                        {"model_path": "autogluon_models/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
+                        {"model_path": "autogluon_models/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
+                        {"model_path": "autogluon_models/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
                     ]
                 else:
                     hyperparams[model] = {}

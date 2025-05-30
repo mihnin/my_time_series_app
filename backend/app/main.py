@@ -5,6 +5,7 @@ from prediction.router import router as prediction_router
 from db.router import router as db_router
 from train_prediciton_save.router import router as train_prediction_save_router
 import logging
+import os
 
 
 app = FastAPI(
@@ -24,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure logs directory exists
+os.makedirs('logs', exist_ok=True)
 
 logging.basicConfig(
     filename='logs/app.log',
