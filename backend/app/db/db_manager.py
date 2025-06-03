@@ -7,6 +7,27 @@ from functools import wraps
 from .settings import settings
 
 
+def auto_convert_dates(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Автоматически приводит все object-столбцы к datetime, если все не-null значения успешно преобразуются.
+    Если после преобразования все значения имеют время 00:00:00, приводит к типу date.
+    Если хотя бы в одном значении есть часы/минуты/секунды отличные от 00:00:00, сохраняет как datetime.
+    Возвращает новый DataFrame (копия).
+    """
+    df = df.copy()
+    for col in df.select_dtypes(include=['object']).columns:
+        orig_notnull = df[col].notnull()
+        converted = pd.to_datetime(df[col], errors='coerce')
+        if (converted.notna() | ~orig_notnull).all():
+            df[col] = converted
+    # Преобразуем datetime64[ns] к date, если все значения без времени (00:00:00)
+    for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns:
+        times = df[col].dt.time
+        # Если все не-null значения имеют время 00:00:00, делаем date, иначе оставляем datetime
+        if times[df[col].notna()].eq(pd.to_datetime('00:00:00').time()).all():
+            df[col] = df[col].dt.date
+    return df
+
 # --- Контекстный менеджер подключения ---
 @asynccontextmanager
 async def get_connection(username: str, password: str):
@@ -436,7 +457,7 @@ async def check_df_matches_table_schema(df: pd.DataFrame, schema: str, table_nam
             exists = await conn.fetchval(check_query, schema, table_name)
             if not exists:
                 return False
-
+            
             # Получаем информацию о столбцах таблицы
             columns_query = """
                 SELECT column_name, data_type

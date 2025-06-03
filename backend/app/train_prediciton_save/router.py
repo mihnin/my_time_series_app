@@ -15,7 +15,7 @@ from io import BytesIO
 import pandas as modin_pd
 from db.db_manager import upload_df_to_db
 from db.jwt_logic import get_current_user_db_creds
-from db.router import auto_convert_dates
+from db.db_manager import auto_convert_dates
 from prediction.router import predict_timeseries, save_prediction
 from training.model import TrainingParameters
 from training.router import train_model, get_training_status, prepare_training_data_and_status, optional_oauth2_scheme
@@ -45,17 +45,18 @@ async def run_training_prediction_async(
     """Асинхронный запуск процесса обучения."""
     try:
         logging.info(f"[run_training_async] Запуск обучения для session_id={session_id}, файл: {original_filename}")
-        # Create session directory and save initial status
         session_path = create_session_directory(session_id)
-        status = {
+        status = training_sessions[session_id]
+        logging.info(f"[run_training_async] Статус сессии до обновления: {status}")
+        status.update({
             "status": "running",
             "start_time": datetime.now().isoformat(),
             "progress": 0,
             "session_path": session_path,
             "original_filename": original_filename,
-            "training_parameters": training_params.model_dump() 
-        }
-        training_sessions[session_id] = status
+            "training_parameters": training_params.model_dump()
+        })
+        logging.info(f"[run_training_async] Статус сессии после обновления: {status}")
         save_session_metadata(session_id, status)
 
         # 1. Initial validation
@@ -73,6 +74,7 @@ async def run_training_prediction_async(
         logging.info(f"[run_training_async] Валидация успешно пройдена.")
 
         status.update({"progress": 10})
+        logging.info(f"[run_training_async] Статус после валидации: {status}")
         save_session_metadata(session_id, status)
         
         # 2. Setup model directory
@@ -167,6 +169,7 @@ async def run_training_prediction_async(
             "error": error_msg,
             "end_time": datetime.now().isoformat()
         })
+        logging.info(f"[run_training_async] Статус после ошибки: {status}")
         save_session_metadata(session_id, status)
         training_sessions[session_id] = status
 

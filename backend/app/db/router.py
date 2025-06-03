@@ -20,32 +20,13 @@ from .db_manager import (
     upload_df_to_db,
     check_db_connection,
     check_df_matches_table_schema,
-    get_total_table_count_by_schema
+    get_total_table_count_by_schema,
+    auto_convert_dates
 )
 import logging
 
 router = APIRouter()
 
-def auto_convert_dates(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Автоматически приводит все object-столбцы к datetime, если все не-null значения успешно преобразуются.
-    Если после преобразования все значения имеют время 00:00:00, приводит к типу date.
-    Если хотя бы в одном значении есть часы/минуты/секунды отличные от 00:00:00, сохраняет как datetime.
-    Возвращает новый DataFrame (копия).
-    """
-    df = df.copy()
-    for col in df.select_dtypes(include=['object']).columns:
-        orig_notnull = df[col].notnull()
-        converted = pd.to_datetime(df[col], errors='coerce')
-        if (converted.notna() | ~orig_notnull).all():
-            df[col] = converted
-    # Преобразуем datetime64[ns] к date, если все значения без времени (00:00:00)
-    for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns:
-        times = df[col].dt.time
-        # Если все не-null значения имеют время 00:00:00, делаем date, иначе оставляем datetime
-        if times[df[col].notna()].eq(pd.to_datetime('00:00:00').time()).all():
-            df[col] = df[col].dt.date
-    return df
 
 
 @router.post('/validate-secret-key', response_model=EnvVarsResponse)
@@ -359,6 +340,7 @@ async def check_df_matches_table_schema_endpoint(
             raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
         if df.empty:
             raise HTTPException(status_code=400, detail='Файл пустой или не содержит данных')
+        df = auto_convert_dates(df)
         matches = await check_df_matches_table_schema(df, schema, table_name, db_creds['username'], db_creds['password'])
         if matches:
             return {"success": True, "detail": "Структура совпадает"}

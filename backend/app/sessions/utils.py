@@ -4,10 +4,10 @@ import shutil
 from typing import Dict, Any
 from datetime import datetime
 
+import pandas as pd
+
 # Base path for all training sessions - now relative to backend/app directory
 SESSIONS_BASE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "training_sessions")
-training_sessions: Dict[str, Dict] = {}
-
 
 def get_session_path(session_id: str) -> str:
     """Get the full path to a session directory."""
@@ -69,3 +69,6 @@ def save_training_file(session_id: str, file_content: bytes, original_filename: 
 def get_model_path(session_id: str) -> str:
     """Get the path for storing model files in the session directory."""
     return os.path.join(get_session_path(session_id), "model")
+
+# Глобальный словарь для хранения статусов сессий обучения
+training_sessions = {}

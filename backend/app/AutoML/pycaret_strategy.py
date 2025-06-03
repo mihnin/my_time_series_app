@@ -7,6 +7,7 @@ from pycaret.time_series import setup, compare_models, finalize_model, save_mode
 from fastapi import HTTPException
 from sessions.utils import get_session_path, load_session_metadata, save_session_metadata
 from AutoML.automl import AutoMLStrategy
+from AutoML.locks import global_automl_lock
 import numpy as np # Для np.nanmean
 import threading
 
@@ -52,9 +53,18 @@ class PyCaretStrategy(AutoMLStrategy):
         metrics = []
         preds_list = []
 
-        # --- Новый блок: захват лока один раз для всей сессии ---
-        lock_acquired = pycaret_lock.acquire(blocking=False)
         meta = load_session_metadata(session_id)
+        # --- ReadWriteLock: PyCaret захватывает write lock ---
+        lock_acquired = global_automl_lock._read_ready.acquire(blocking=False)
+        if lock_acquired:
+            # Проверяем, что нет других читателей/писателей
+            can_write = not global_automl_lock._writer and global_automl_lock._readers == 0
+            if can_write:
+                global_automl_lock._writer = True
+                global_automl_lock._read_ready.release()
+            else:
+                global_automl_lock._read_ready.release()
+                lock_acquired = False
         if not lock_acquired:
             # Лок занят, пишем pycaret_locked=True в metadata.json
             try:
@@ -62,8 +72,8 @@ class PyCaretStrategy(AutoMLStrategy):
                 save_session_metadata(session_id, meta)
             except Exception as e:
                 logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=True в metadata.json: {e}")
-            # Ждём освобождения лока
-            pycaret_lock.acquire()
+            # Ждём write lock
+            global_automl_lock.acquire_write()
             # После получения лока, снимаем pycaret_locked
             try:
                 meta = load_session_metadata(session_id)
@@ -79,6 +89,7 @@ class PyCaretStrategy(AutoMLStrategy):
             except Exception as e:
                 logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
         try:
+            # ...весь блок работы с PyCaret теперь под write lock...
             for unique_id in unique_ids:
                 id_df = ts_df[ts_df[item_id_col] == unique_id].copy()
                 # Удаляем все неключевые колонки
@@ -93,7 +104,7 @@ class PyCaretStrategy(AutoMLStrategy):
                     session_id=session_seed,
                     numeric_imputation_target='ffill',
                     numeric_imputation_exogenous='ffill',
-                    verbose=False,
+                    verbose=False
                 )
                 if use_all_models:
                     best_model = compare_models(sort=eval_metric, fold=3, budget_time=budget_time / 60 / len(unique_ids) if budget_time else None, exclude="auto_arima")
@@ -124,15 +135,15 @@ class PyCaretStrategy(AutoMLStrategy):
             logging.error(f"[PyCaretStrategy train] Error: {e}")
             raise
         finally:
-            if pycaret_lock.locked():
-                pycaret_lock.release()
-                # После освобождения лока, явно пишем pycaret_locked=False
-                try:
-                    meta = load_session_metadata(session_id)
-                    meta['pycaret_locked'] = False
-                    save_session_metadata(session_id, meta)
-                except Exception as e:
-                    logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False после release в metadata.json: {e}")
+            # Освобождаем write lock
+            global_automl_lock.release_write()
+            # После освобождения лока, явно пишем pycaret_locked=False
+            try:
+                meta = load_session_metadata(session_id)
+                meta['pycaret_locked'] = False
+                save_session_metadata(session_id, meta)
+            except Exception as e:
+                logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False после release в metadata.json: {e}")
         # Сохраняем все прогнозы в один файл
         if preds_list:
             all_preds = pd.concat(preds_list, ignore_index=True)
