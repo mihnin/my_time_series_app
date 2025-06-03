@@ -66,10 +66,14 @@ def predict_timeseries(session_id: str):
         df = add_russian_holiday_feature(df, date_col=dt_col, holiday_col="russian_holiday")
         logging.info("Добавлен признак российских праздников")
     df = fill_missing_values(df, fill_method, fill_group_cols)
+    
     logging.info(f"Пропущенные значения обработаны методом: {fill_method}")
 
-    best_strategy = automl_manager.get_best_strategy(session_id)
-    preds = best_strategy.predict(df, session_id, params)
+    if len(df) != 0:
+        best_strategy = automl_manager.get_best_strategy(session_id)
+        preds = best_strategy.predict(df, session_id, params)
+    else:
+        preds = pd.DataFrame()
 
     
     
@@ -194,6 +198,22 @@ def download_prediction_file(session_id: str):
                 logging.warning(f"Не удалось прочитать веса WeightedEnsemble: {e}")
                 weights_dict = None
 
+    # Читаем leaderboard PyCaret по каждому уникальному id, если есть
+    pycaret_leaderboards = []
+    pycaret_leaderboards_dir = os.path.join(session_path, 'pycaret', 'id_leaderboards')
+    if os.path.exists(pycaret_leaderboards_dir):
+        for idx, fname in enumerate(os.listdir(pycaret_leaderboards_dir)):
+            if fname.startswith('leaderboard_') and fname.endswith('.csv'):
+                unique_id = fname[len('leaderboard_'):-4]
+                try:
+                    df_lb = pd.read_csv(os.path.join(pycaret_leaderboards_dir, fname))
+                    df_lb.insert(0, 'unique_id', unique_id)
+                    # Добавим разделитель перед каждой таблицей, включая первую
+                    pycaret_leaderboards.append(pd.DataFrame({'unique_id': [f'--- {unique_id} ---'], **{col: [''] for col in df_lb.columns if col != 'unique_id'}}))
+                    pycaret_leaderboards.append(df_lb)
+                except Exception as e:
+                    logging.warning(f"Не удалось прочитать leaderboard для PyCaret id={unique_id}: {e}")
+
     # Формируем новый Excel-файл с несколькими листами
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -228,6 +248,12 @@ def download_prediction_file(session_id: str):
             pd.DataFrame({"messages": messages}).to_excel(writer, sheet_name="Messages", index=False)
         else:
             pd.DataFrame({"info": ["Messages not found"]}).to_excel(writer, sheet_name="Messages", index=False)
+        # Лист с объединёнными leaderboard для PyCaret с разделителями
+        if pycaret_leaderboards:
+            df_pycaret_all = pd.concat(pycaret_leaderboards, ignore_index=True)
+            df_pycaret_all.to_excel(writer, sheet_name="PyCaret_Leaderboards", index=False)
+        else:
+            pd.DataFrame({"info": ["PyCaret leaderboards not found"]}).to_excel(writer, sheet_name="PyCaret_Leaderboards", index=False)
     output.seek(0)
 
     logging.info(f"[download_prediction_file] Мульти-листовой Excel-файл отправлен: prediction_{session_id}.xlsx")

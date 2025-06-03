@@ -15,6 +15,7 @@ from io import BytesIO
 import pandas as modin_pd
 from db.db_manager import upload_df_to_db
 from db.jwt_logic import get_current_user_db_creds
+from db.router import auto_convert_dates
 from prediction.router import predict_timeseries, save_prediction
 from training.model import TrainingParameters
 from training.router import train_model, get_training_status, prepare_training_data_and_status, optional_oauth2_scheme
@@ -145,13 +146,17 @@ async def run_training_prediction_async(
 
             logging.info(f"[run_training_async] Начинается загрузка прогноза в таблицу '{table_name}' базы данных (схема: {schema})...")
             if schema:
+                preds = auto_convert_dates(preds)
                 await upload_df_to_db(preds, schema, table_name, username, password)
             else:
+                preds = auto_convert_dates(preds)
                 await upload_df_to_db(preds, table_name, username, password)
             logging.info(f"[run_training_async] Прогноз успешно загружен в таблицу '{table_name}' базы данных (схема: {schema}).")
 
-
+        # Гарантированно обновляем статус после загрузки в БД
         status.update({"progress": 100, 'status': 'completed'})
+        save_session_metadata(session_id, status)
+        training_sessions[session_id] = status
 
     except Exception as e:
         error_msg = str(e)

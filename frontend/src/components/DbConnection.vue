@@ -129,6 +129,17 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: login.value, password: password.value })
         })
+        if (!response.ok) {
+          if (response.status === 401) {
+            error.value = 'Неверный логин или пароль'
+          } else {
+            error.value = `Ошибка сервера: ${response.status}`
+          }
+          store.setDbConnected(false)
+          store.setAuthToken(null)
+          connecting.value = false
+          return
+        }
         let result = null
         try {
           result = await response.json()
@@ -138,15 +149,12 @@ export default defineComponent({
           connecting.value = false
           return
         }
-
         store.setDbCheckResult(result)
         if (result.success && result.access_token) {
-          store.setAuthToken(result.access_token) // Сохраняем токен в Pinia (в памяти)
+          store.setAuthToken(result.access_token)
           store.setDbConnected(true)
-          // Очищаем логин/пароль из локальных состояний компонента
           login.value = ''
           password.value = ''
-          // Показываем success-модалку и скрываем основную
           modalVisible.value = false
           successModalVisible.value = true
           setTimeout(() => { successModalVisible.value = false }, 1800)

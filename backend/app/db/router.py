@@ -26,6 +26,26 @@ import logging
 
 router = APIRouter()
 
+def auto_convert_dates(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Автоматически приводит все object-столбцы к datetime, если все не-null значения успешно преобразуются.
+    Если после преобразования все значения имеют время 00:00:00, приводит к типу date.
+    Если хотя бы в одном значении есть часы/минуты/секунды отличные от 00:00:00, сохраняет как datetime.
+    Возвращает новый DataFrame (копия).
+    """
+    df = df.copy()
+    for col in df.select_dtypes(include=['object']).columns:
+        orig_notnull = df[col].notnull()
+        converted = pd.to_datetime(df[col], errors='coerce')
+        if (converted.notna() | ~orig_notnull).all():
+            df[col] = converted
+    # Преобразуем datetime64[ns] к date, если все значения без времени (00:00:00)
+    for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns:
+        times = df[col].dt.time
+        # Если все не-null значения имеют время 00:00:00, делаем date, иначе оставляем datetime
+        if times[df[col].notna()].eq(pd.to_datetime('00:00:00').time()).all():
+            df[col] = df[col].dt.date
+    return df
 
 
 @router.post('/validate-secret-key', response_model=EnvVarsResponse)
@@ -79,7 +99,7 @@ async def login_for_access_token(data: DBConnectionRequest):
     """
     is_connected = await check_db_connection(data.username, data.password)
     if not is_connected:
-        return DBConnectionResponse(success=False, detail="Authentication failed: Invalid credentials")
+        raise HTTPException(status_code=401, detail="Authentication failed: Invalid credentials")
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -146,9 +166,10 @@ async def upload_excel_to_db_endpoint(
         content = await file.read()
         try:
             df = pd.read_excel(io.BytesIO(content))
+            df = auto_convert_dates(df)
+            print(df.dtypes)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
-
         if df.empty:
             raise HTTPException(status_code=400, detail='Файл пустой или не содержит данных')
 
@@ -241,6 +262,7 @@ async def save_prediction_to_db(
         raise HTTPException(status_code=404, detail=f"Файл прогноза не найден: {pred_path}")
     try:
         df = pd.read_excel(pred_path)
+        df = auto_convert_dates(df)
         drop_cols = [str(round(x/10, 1)) for x in range(1, 10)]
         df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
         if df.empty:
@@ -282,6 +304,7 @@ async def create_table_from_file_endpoint(
         content = await file.read()
         try:
             df = pd.read_excel(io.BytesIO(content))
+            df = auto_convert_dates(df)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
         if df.empty:
@@ -328,6 +351,10 @@ async def check_df_matches_table_schema_endpoint(
         content = await file.read()
         try:
             df = pd.read_excel(io.BytesIO(content))
+            df = auto_convert_dates(df)
+            # Приводим столбец Date к типу datetime
+            if 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'], errors='raise')
         except Exception as e:
             raise HTTPException(status_code=400, detail=f'Ошибка чтения Excel: {str(e)}')
         if df.empty:

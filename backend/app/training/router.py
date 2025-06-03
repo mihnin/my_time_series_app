@@ -17,7 +17,6 @@ from db.jwt_logic import get_current_user_db_creds, oauth2_scheme
 from db.settings import settings as db_settings
 from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
-
 import pandas as modin_pd
 from autogluon.timeseries import TimeSeriesPredictor
 from .model import TrainingParameters
@@ -46,15 +45,13 @@ router = APIRouter()
 
 def get_training_status(session_id: str) -> Optional[Dict]:
     """Get the current status of a training session."""
-    if session_id not in training_sessions:
-        # Try to load from file
-        try:
-            metadata = load_session_metadata(session_id)
-            if metadata:
-                training_sessions[session_id] = metadata
-        except:
-            return None
-    return training_sessions.get(session_id)
+    try:
+        metadata = load_session_metadata(session_id)
+        if metadata:
+            training_sessions[session_id] = metadata  # обновляем кэш, если нужно
+        return metadata
+    except:
+        return None
 
 async def run_training_async(
     session_id: str,
@@ -298,9 +295,11 @@ def train_model(
         # Универсальное дополнение до нужной частоты + запись messages
         df2 = fill_to_frequency(df2, training_params, session_id=session_id)
         logging.info(f"[train_model] Данные дополнены до частоты {training_params.frequency}")
+        
 
-        for strategy in automl_manager.get_strategies():
-            strategy.train(df2, training_params, session_id)
+        if len(df2) != 0:
+            for strategy in automl_manager.get_strategies():
+                strategy.train(df2, training_params, session_id)
 
         session_path = get_session_path(session_id)
         combined_leaderboard = automl_manager.combine_leaderboards(session_id, [strategy.name for strategy in automl_manager.get_strategies()])
@@ -315,21 +314,24 @@ def train_model(
 
 @router.get("/training_status/{session_id}")
 async def get_session_status(session_id: str):
-    """Получить статус сессии обучения. Если завершено — добавить лидерборд."""
+    """Получить статус сессии обучения. Если завершено — добавить лидерборд. Также возвращает статус PyCaret lock."""
     logging.info(f"[get_training_status] Запрос статуса для session_id={session_id}")
     status = get_training_status(session_id)
     if status is None:
         logging.error(f"Сессия не найдена: {session_id}")
         raise HTTPException(status_code=404, detail="Training session not found")
+    # PyCaret lock status (always check, even if not completed)
+    # Read from session metadata.json, not pycaret/model_metadata.json
+    pycaret_locked = bool(status.get('pycaret_locked', False))
+    status['pycaret_locked'] = pycaret_locked
+    session_path = get_session_path(session_id)
     if status.get("status") == "completed":
-        session_path = get_session_path(session_id)
         leaderboard_path = os.path.join(session_path, "leaderboard.csv")
         leaderboard = None
         if os.path.exists(leaderboard_path):
             leaderboard = pd.read_csv(leaderboard_path).to_dict(orient="records")
             logging.info(f"[get_training_status] Лидерборд добавлен к статусу для session_id={session_id}")
         status["leaderboard"] = leaderboard
-
         # Добавляем pycaret/id_leaderboards
         pycaret_leaderboards_dir = os.path.join(session_path, 'pycaret', 'id_leaderboards')
         pycaret_leaderboards = {}
@@ -447,13 +449,6 @@ async def prepare_training_data_and_status(
     Универсальная функция подготовки данных (из файла или БД) и инициализации статуса сессии.
     Возвращает: df_train, original_filename, parquet_file_path, session_path, initial_status
     """
-    import pandas as modin_pd
-    from io import BytesIO
-    import os
-    from db.db_manager import fetch_table_as_dataframe
-    from db.jwt_logic import get_current_user_db_creds
-    from sessions.utils import create_session_directory, save_session_metadata, training_sessions
-    from datetime import datetime
     
     session_path = create_session_directory(session_id)
     parquet_file_path = os.path.join(session_path, parquet_file_name)

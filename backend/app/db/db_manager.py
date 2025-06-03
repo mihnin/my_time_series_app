@@ -126,6 +126,22 @@ async def create_table_from_df(df: pd.DataFrame, schema: str, table_name: str, u
             # Все int и float -> DOUBLE PRECISION
             if pd_type.startswith('int') or pd_type.startswith('float'):
                 sql_type = 'DOUBLE PRECISION'
+            elif pd_type == 'datetime64[ns]':
+                sql_type = 'TIMESTAMP'
+            elif pd_type == 'bool':
+                sql_type = 'BOOLEAN'
+            elif pd_type == 'object':
+                # Проверяем, если все значения - datetime.date (и не datetime.datetime)
+                import datetime
+                non_null = df[col].dropna()
+                if not non_null.empty and all(isinstance(x, datetime.date) and not isinstance(x, datetime.datetime) for x in non_null):
+                    sql_type = 'DATE'
+                else:
+                    sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
+            elif pd_type == 'string':
+                sql_type = 'TEXT'
+            elif pd_type == 'date':
+                sql_type = 'DATE'
             else:
                 sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
             columns.append(f'"{col}" {sql_type}')
@@ -180,6 +196,39 @@ async def upload_df_to_db(
     Если update_on_pk=True, функция попытается автоматически определить
     первичный ключ таблицы и выполнить "upsert" (INSERT ON CONFLICT UPDATE).
     """
+    print(df.dtypes)
+    def convert_dates_for_db(val, dtype=None):
+        import datetime
+        if dtype == 'date':
+            # asyncpg ожидает строку для поля date
+            if isinstance(val, datetime.datetime):
+                return val.date().strftime('%Y-%m-%d')
+            if isinstance(val, datetime.date):
+                return val.strftime('%Y-%m-%d')
+            if isinstance(val, str):
+                # Проверяем, что строка в формате даты
+                try:
+                    return datetime.datetime.strptime(val, '%Y-%m-%d').strftime('%Y-%m-%d')
+                except Exception:
+                    return None
+            return None
+        if dtype == 'datetime64[ns]':
+            # asyncpg ожидает datetime.datetime для TIMESTAMP
+            if isinstance(val, datetime.datetime):
+                return val
+            if isinstance(val, datetime.date):
+                return datetime.datetime(val.year, val.month, val.day)
+            if isinstance(val, str):
+                try:
+                    return datetime.datetime.strptime(val, '%Y-%m-%d')
+                except Exception:
+                    try:
+                        return datetime.datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+                    except Exception:
+                        return None
+            return None
+        return val
+
     async with get_connection(username, password) as conn:
         if not df.empty:
             pk_columns = []
@@ -197,8 +246,13 @@ async def upload_df_to_db(
                         f"{missing_cols}, необходимые для update_on_pk."
                     )
 
-            # Преобразуем NaN в None
+            # Преобразуем NaN в None и корректно обрабатываем даты/строки
             records = df.where(pd.notnull(df), None).to_dict(orient='records')
+            dtypes = {col: str(df[col].dtype) for col in df.columns}
+            records = [
+                {k: convert_dates_for_db(v, dtypes.get(k)) for k, v in rec.items()}
+                for rec in records
+            ]
 
             columns_str = ', '.join([f'"{col}"' for col in df.columns])
             values_template = ', '.join([f'${i+1}' for i in range(len(df.columns))])

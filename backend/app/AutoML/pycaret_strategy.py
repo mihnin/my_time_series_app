@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any, Optional, List, Union
 from pycaret.time_series import setup, compare_models, finalize_model, save_model, load_model, predict_model, pull
 from fastapi import HTTPException
-from sessions.utils import get_session_path
+from sessions.utils import get_session_path, load_session_metadata, save_session_metadata
 from AutoML.automl import AutoMLStrategy
 import numpy as np # Для np.nanmean
 import threading
@@ -52,14 +52,39 @@ class PyCaretStrategy(AutoMLStrategy):
         metrics = []
         preds_list = []
 
-        for unique_id in unique_ids:
-            id_df = ts_df[ts_df[item_id_col] == unique_id].copy()
-            # Удаляем все неключевые колонки
-            id_df = id_df.drop(columns=drop_cols_all, errors='ignore')
-            id_df = id_df.set_index(datetime_col)
-            id_df = id_df.sort_index()
-            pycaret_lock.acquire()  # просто блокирующий lock, без записи в metadata
+        # --- Новый блок: захват лока один раз для всей сессии ---
+        lock_acquired = pycaret_lock.acquire(blocking=False)
+        meta = load_session_metadata(session_id)
+        if not lock_acquired:
+            # Лок занят, пишем pycaret_locked=True в metadata.json
             try:
+                meta['pycaret_locked'] = True
+                save_session_metadata(session_id, meta)
+            except Exception as e:
+                logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=True в metadata.json: {e}")
+            # Ждём освобождения лока
+            pycaret_lock.acquire()
+            # После получения лока, снимаем pycaret_locked
+            try:
+                meta = load_session_metadata(session_id)
+                meta['pycaret_locked'] = False
+                save_session_metadata(session_id, meta)
+            except Exception as e:
+                logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
+        else:
+            # Если лок сразу получен, явно пишем pycaret_locked=False
+            try:
+                meta['pycaret_locked'] = False
+                save_session_metadata(session_id, meta)
+            except Exception as e:
+                logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
+        try:
+            for unique_id in unique_ids:
+                id_df = ts_df[ts_df[item_id_col] == unique_id].copy()
+                # Удаляем все неключевые колонки
+                id_df = id_df.drop(columns=drop_cols_all, errors='ignore')
+                id_df = id_df.set_index(datetime_col)
+                id_df = id_df.sort_index()
                 # ...весь блок работы с PyCaret теперь под lock...
                 s = setup(
                     data=id_df,
@@ -89,21 +114,25 @@ class PyCaretStrategy(AutoMLStrategy):
                     metrics.append(best_score)
                 finalized_model = finalize_model(best_model)
                 preds = predict_model(finalized_model, fh=3)
-                pycaret_lock.release()
                 preds[item_id_col] = unique_id
                 preds.reset_index(inplace=True)
                 preds.rename(columns={preds.columns[0]: datetime_col}, inplace=True)
                 preds_list.append(preds)
 
                 logging.info(f"[PyCaretStrategy train] Finished {unique_id}, score: {metrics[-1]}")
-            except Exception as e:
-                if pycaret_lock.locked():
-                    try:
-                        pycaret_lock.release()
-                    except Exception:
-                        pass
-                logging.error(f"[PyCaretStrategy train] Error for {unique_id}: {e}")
-                continue
+        except Exception as e:
+            logging.error(f"[PyCaretStrategy train] Error: {e}")
+            raise
+        finally:
+            if pycaret_lock.locked():
+                pycaret_lock.release()
+                # После освобождения лока, явно пишем pycaret_locked=False
+                try:
+                    meta = load_session_metadata(session_id)
+                    meta['pycaret_locked'] = False
+                    save_session_metadata(session_id, meta)
+                except Exception as e:
+                    logging.warning(f"[PyCaretStrategy train] Не удалось записать pycaret_locked=False после release в metadata.json: {e}")
         # Сохраняем все прогнозы в один файл
         if preds_list:
             all_preds = pd.concat(preds_list, ignore_index=True)

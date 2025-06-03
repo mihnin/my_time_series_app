@@ -1,0 +1,12 @@
+# Frontend Dockerfile
+FROM node:20
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npm run build-only
+
+CMD ["npm", "run", "preview", "--", "--host", "--port", "4173"]

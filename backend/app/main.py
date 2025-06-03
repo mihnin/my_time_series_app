@@ -19,6 +19,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vue.js dev server
+        "http://localhost:4173",  # Vue.js production preview
         "http://localhost:3000",  # Production frontend
     ],
     allow_credentials=True,

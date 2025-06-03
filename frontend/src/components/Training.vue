@@ -183,6 +183,10 @@ export default defineComponent({
     })
     const getStatusMessage = computed(() => {
       if (!store.trainingStatus) return ''
+      // Show special message if pycaret_locked is True
+      if (store.trainingStatus.pycaret_locked === true) {
+        return 'Повышеная нагрузка на сервер. Обучение и прогноз займет немного больше времени.'
+      }
       const status = store.trainingStatus.status
       if (status === 'initializing') return 'Инициализация обучения...'
       if (status === 'running') return `Обучение в процессе (${store.trainingStatus.progress ?? 0}%)`
