@@ -5,7 +5,7 @@
         v-for="page in pages" 
         :key="page"
         @click="$emit('page-change', page)"
-        :class="{ active: currentPage === page }"
+        :class="{ active: page === currentPage }"
       >
         {{ page }}
       </button>
@@ -14,18 +14,22 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
-
+import { defineComponent, toRefs } from 'vue'
 export default defineComponent({
   name: 'Navigation',
+  props: {
+    currentPage: {
+      type: String,
+      required: true
+    }
+  },
   emits: ['page-change'],
-  setup() {
-    const currentPage = ref('Главная')
-    const pages = ['Главная', 'Анализ данных', 'Help']
-
+  setup(props) {
+    const pages = ['Обучение', 'Инструкция']
+    const { currentPage } = toRefs(props)
     return {
-      currentPage,
-      pages
+      pages,
+      currentPage
     }
   }
 })
@@ -58,7 +62,7 @@ button:hover {
 }
 
 button.active {
-  background-color: #4CAF50;
-  color: white;
+  background-color: #4CAF50 !important;
+  color: white !important;
 }
 </style>

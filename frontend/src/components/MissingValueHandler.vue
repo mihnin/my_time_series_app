@@ -6,6 +6,7 @@
     <div class="fill-method-select">
       <label>Способ заполнения пропусков</label>
       <select v-model="selectedFillMethod">
+        <option disabled value="">Выберите способ заполнения</option>
         <option 
           v-for="option in fillOptions" 
           :key="option" 
@@ -70,7 +71,6 @@ export default defineComponent({
     const selectedGroupingColumn = ref('')
     
     const fillOptions = [
-      "None (оставить как есть)",
       "Constant=0 (заменить на нули)", 
       "Group mean (среднее по группе)", 
       "Forward fill (протянуть значения)", 
@@ -78,6 +78,11 @@ export default defineComponent({
       "KNN imputer (k ближайших соседей)"
     ]
 
+    // Гарантируем, что fillMethod всегда валиден и не пустой
+    if (!store.fillMethod || !fillOptions.includes(store.fillMethod)) {
+      store.setFillMethod('Forward fill (протянуть значения)')
+    }
+    // selectedFillMethod всегда с дефолтом
     const selectedFillMethod = computed({
       get: () => store.fillMethod,
       set: (value: string) => store.setFillMethod(value)

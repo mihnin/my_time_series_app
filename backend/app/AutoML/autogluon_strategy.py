@@ -205,7 +205,10 @@ class AutoGluonStrategy(AutoMLStrategy):
         
         # 6. Прогноз
         try:
+            print('auto', ts_df)
+            print('---')
             preds = predictor.predict(ts_df)
+            print('auto_preds', preds.dtypes)
             logging.info(f"Прогноз успешно выполнен для session_id={session_id}")
             # Переименование колонок или индексов item_id и timestamp
             if hasattr(preds, 'rename'):
@@ -231,7 +234,7 @@ class AutoGluonStrategy(AutoMLStrategy):
             logging.error(f"Ошибка при прогнозировании: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {e}")
         preds = preds.reset_index()
-        preds[dt_col] = preds[dt_col].dt.strftime('%Y-%m-%d')
+        preds[dt_col] = preds[dt_col].dt.strftime('%Y-%m-%d %H:%M:%S')
 
         # Удалить колонку 'index' из preds, если она появилась после reset_index
         if 'index' in preds.columns:

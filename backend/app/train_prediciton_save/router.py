@@ -120,10 +120,8 @@ async def run_training_prediction_async(
 
         preds = await asyncio.to_thread(predict_timeseries, session_id)
 
-        # Удаляем столбцы '0.1', ..., '0.9', если они есть
 
         output = BytesIO()
-        
         preds.to_excel(output, index=False)
         output.seek(0)
         save_prediction(output, session_id)

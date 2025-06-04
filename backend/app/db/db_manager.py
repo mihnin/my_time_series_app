@@ -10,8 +10,7 @@ from .settings import settings
 def auto_convert_dates(df: pd.DataFrame) -> pd.DataFrame:
     """
     Автоматически приводит все object-столбцы к datetime, если все не-null значения успешно преобразуются.
-    Если после преобразования все значения имеют время 00:00:00, приводит к типу date.
-    Если хотя бы в одном значении есть часы/минуты/секунды отличные от 00:00:00, сохраняет как datetime.
+    Всегда сохраняет как datetime (TIMESTAMP), не приводит к типу date.
     Возвращает новый DataFrame (копия).
     """
     df = df.copy()
@@ -20,12 +19,7 @@ def auto_convert_dates(df: pd.DataFrame) -> pd.DataFrame:
         converted = pd.to_datetime(df[col], errors='coerce')
         if (converted.notna() | ~orig_notnull).all():
             df[col] = converted
-    # Преобразуем datetime64[ns] к date, если все значения без времени (00:00:00)
-    for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns:
-        times = df[col].dt.time
-        # Если все не-null значения имеют время 00:00:00, делаем date, иначе оставляем datetime
-        if times[df[col].notna()].eq(pd.to_datetime('00:00:00').time()).all():
-            df[col] = df[col].dt.date
+    # Не преобразуем к date, всегда оставляем datetime64[ns]
     return df
 
 # --- Контекстный менеджер подключения ---
@@ -152,17 +146,18 @@ async def create_table_from_df(df: pd.DataFrame, schema: str, table_name: str, u
             elif pd_type == 'bool':
                 sql_type = 'BOOLEAN'
             elif pd_type == 'object':
-                # Проверяем, если все значения - datetime.date (и не datetime.datetime)
+                # Не определяем DATE, всегда TIMESTAMP для дат
                 import datetime
                 non_null = df[col].dropna()
-                if not non_null.empty and all(isinstance(x, datetime.date) and not isinstance(x, datetime.datetime) for x in non_null):
-                    sql_type = 'DATE'
+                if not non_null.empty and all(isinstance(x, datetime.datetime) for x in non_null):
+                    sql_type = 'TIMESTAMP'
                 else:
                     sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
             elif pd_type == 'string':
                 sql_type = 'TEXT'
             elif pd_type == 'date':
-                sql_type = 'DATE'
+                # Не используем DATE, всегда TIMESTAMP
+                sql_type = 'TIMESTAMP'
             else:
                 sql_type = DTYPE_MAP.get(pd_type, 'TEXT')
             columns.append(f'"{col}" {sql_type}')
@@ -217,22 +212,8 @@ async def upload_df_to_db(
     Если update_on_pk=True, функция попытается автоматически определить
     первичный ключ таблицы и выполнить "upsert" (INSERT ON CONFLICT UPDATE).
     """
-    print(df.dtypes)
     def convert_dates_for_db(val, dtype=None):
         import datetime
-        if dtype == 'date':
-            # asyncpg ожидает строку для поля date
-            if isinstance(val, datetime.datetime):
-                return val.date().strftime('%Y-%m-%d')
-            if isinstance(val, datetime.date):
-                return val.strftime('%Y-%m-%d')
-            if isinstance(val, str):
-                # Проверяем, что строка в формате даты
-                try:
-                    return datetime.datetime.strptime(val, '%Y-%m-%d').strftime('%Y-%m-%d')
-                except Exception:
-                    return None
-            return None
         if dtype == 'datetime64[ns]':
             # asyncpg ожидает datetime.datetime для TIMESTAMP
             if isinstance(val, datetime.datetime):
@@ -492,7 +473,6 @@ async def check_df_matches_table_schema(df: pd.DataFrame, schema: str, table_nam
                     (df_type in ('object', 'string') and expected_type == 'object') or
                     (df_type.startswith('int') and expected_type == 'float64')
                 ):
-                    print(expected_type, df_type)
                     return False
             
             return True

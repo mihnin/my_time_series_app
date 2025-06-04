@@ -168,6 +168,7 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
         df = df.copy()
         df[dt_col] = pd.to_datetime(df[dt_col])
         full_range = pd.date_range(df[dt_col].min(), df[dt_col].max(), freq=freq_short)
+        
         if len(full_range) > len(df):
             df = df.set_index(dt_col).reindex(full_range).rename_axis(dt_col).reset_index()
             df[tgt_col] = df[tgt_col].ffill()
@@ -267,7 +268,6 @@ def train_model(
                 static_df = df2[[id_col] + static_cols].drop_duplicates(subset=[id_col])
                 session_path = get_session_path(session_id)
                 static_path = os.path.join(session_path, 'static_data.parquet')
-                print(static_df)
                 static_df.to_parquet(static_path, index=False)
                 logging.info(f"[train_model] Статические данные сохранены: {static_path}")
 
@@ -373,7 +373,6 @@ async def train_model_endpoint(
     Если в параметрах есть download_table_name, то датасет берется из БД, иначе из файла.
     Аутентификация требуется только для загрузки из БД.
     """
-    print(training_file.filename)
     session_id = str(uuid.uuid4())
     try:
         logging.info(f"[train_model_endpoint] Получен запрос на обучение. Session ID: {session_id}")

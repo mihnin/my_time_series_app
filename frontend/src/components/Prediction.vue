@@ -86,13 +86,16 @@ export default defineComponent({
           const obj: Record<string, any> = {};
           headers.forEach((header, i) => {
             let value = rowArray[i];
-            // Если это колонка даты и значение — число, преобразуем в строку даты
-            if (i === dateIdx && typeof value === 'number' && XLSX.SSF) {
-              const dateObj = XLSX.SSF.parse_date_code(value);
-              if (dateObj) {
-                const pad = (n: number) => n.toString().padStart(2, '0');
-                // Только дата, без времени
-                value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)}`;
+            // Если это колонка даты и значение — число, преобразуем в строку даты и времени
+            if (i === dateIdx && typeof value === 'number' && XLSX && XLSX.utils && XLSX.utils.encode_col) {
+              // Используем XLSX.SSF.parse_date_code, если доступно
+              const parseDateCode = XLSX.SSF?.parse_date_code || (window as any).XLSX?.SSF?.parse_date_code;
+              if (parseDateCode) {
+                const dateObj = parseDateCode(value);
+                if (dateObj) {
+                  const pad = (n: number) => n.toString().padStart(2, '0');
+                  value = `${dateObj.y}-${pad(dateObj.m)}-${pad(dateObj.d)} ${pad(dateObj.H)}:${pad(dateObj.M)}:${pad(dateObj.S)}`;
+                }
               }
             }
             obj[header] = value;

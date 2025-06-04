@@ -4,6 +4,7 @@ from training.router import router as training_router
 from prediction.router import router as prediction_router
 from db.router import router as db_router
 from train_prediciton_save.router import router as train_prediction_save_router
+from logs.router import router as logs_router
 import logging
 import os
 
@@ -37,6 +38,14 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+def ensure_env_file():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(env_path):
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.write('SECRET_KEY=KIgSBcy5vZ\n')
+
+ensure_env_file()
+
 @app.get("/")
 async def root():
     return {
@@ -48,3 +57,4 @@ app.include_router(training_router)
 app.include_router(train_prediction_save_router)
 app.include_router(prediction_router)
 app.include_router(db_router)
+app.include_router(logs_router)

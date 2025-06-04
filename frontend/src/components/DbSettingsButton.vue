@@ -6,6 +6,14 @@
         <span class="gear-icon">⚙️</span>
         <span class="btn-text">Настройки БД</span>
       </button>
+      <button type="button" class="log-button" @click="downloadLogs">
+        <span class="gear-icon">📥</span>
+        <span class="btn-text">Скачать логи</span>
+      </button>
+      <button type="button" class="log-button clear-button" @click="clearLogs">
+        <span class="gear-icon">🗑️</span>
+        <span class="btn-text">Очистить логи</span>
+      </button>
     </details>
 
     <!-- Модальное окно для ввода секретного ключа -->
@@ -96,7 +104,6 @@ export default defineComponent({
     const isLoading = ref(false)
     const errorMessage = ref('')
     const successModalVisible = ref(false)
-    
     // Параметры окружения по умолчанию
     const envVars = reactive({
       DB_USER: '',
@@ -105,7 +112,8 @@ export default defineComponent({
       DB_PORT: '',
       DB_NAME: '',
       DB_SCHEMA: ''
-    })      // Валидировать секретное слово
+    })
+    // Методы для модалок и настроек
     const validateSecretKey = async () => {
       if (!secretWord.value) {
         errorMessage.value = 'Введите секретное слово'
@@ -190,6 +198,38 @@ export default defineComponent({
       }
     }
     
+    // Скачать логи
+    const downloadLogs = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/logs/download');
+        if (!response.ok) throw new Error('Ошибка при скачивании логов');
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'app.log';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        alert('Не удалось скачать логи.');
+        console.error('Ошибка скачивания логов:', error);
+      }
+    };
+
+    // Очистить логи
+    const clearLogs = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/logs/clear', { method: 'POST' });
+        if (!response.ok) throw new Error('Ошибка при очистке логов');
+        alert('Логи успешно очищены.');
+      } catch (error) {
+        alert('Не удалось очистить логи.');
+        console.error('Ошибка очистки логов:', error);
+      }
+    };
+    
     // Закрыть модальное окно ввода секретного слова
     const closeDbModal = () => {
       showDbModal.value = false
@@ -202,19 +242,21 @@ export default defineComponent({
       showEnvModal.value = false
       errorMessage.value = ''
     }
-      // Функция closeSuccessModal больше не нужна, т.к. окно закрывается автоматически
+    
       return {
       showDbModal,
       showEnvModal,
       secretWord,
-      envVars,
       isLoading,
       errorMessage,
       successModalVisible,
+      envVars,
       validateSecretKey,
-      updateEnvVariables,
       closeDbModal,
-      closeEnvModal
+      closeEnvModal,
+      updateEnvVariables,
+      downloadLogs,
+      clearLogs
     }
   }
 })
@@ -248,6 +290,7 @@ export default defineComponent({
   font-weight: 500;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   transition: background-color 0.2s;
   font-size: 0.95rem;
@@ -255,6 +298,37 @@ export default defineComponent({
 .db-settings-btn:hover {
   background-color: #1976D2;
 }
+
+.log-button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+
+.log-button:hover {
+  background-color: #1565c0;
+}
+
+.clear-button {
+  background-color: #f44336 !important;
+}
+
+.clear-button:hover {
+  background-color: #d32f2f !important;
+}
+
 .gear-icon {
   font-size: 1.2rem;
   line-height: 1;

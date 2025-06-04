@@ -1,13 +1,14 @@
 <template>
   <div class="app">
-    <Sidebar :currentPage="currentPage" :handlePageChange="handlePageChange" />
+    <Sidebar :current-page="currentPage" @page-change="handlePageChange" />
     <DbConnection />
     <div class="main-content">
       <div class="header">
         <h1>Версия 3.0</h1>
         <h2>Бизнес-приложение для прогнозирования временных рядов</h2>
       </div>
-      <MainPage />
+      <Instruction :isVisible="currentPage === 'Инструкция'" @close="handlePageChange('Обучение')" />
+      <MainPage v-if="currentPage !== 'Инструкция'" />
       <!-- <FrequencySettings :isVisible="currentPage === 'train'" /> -->
     </div>
   </div>
@@ -19,17 +20,19 @@ import { useMainStore } from './stores/mainStore'
 import Sidebar from './components/Sidebar.vue'
 import MainPage from './components/MainPage.vue'
 import DbConnection from './components/DbConnection.vue'
+import Instruction from './components/Instruction.vue'
 
 export default defineComponent({
   name: 'App',
   components: {
     Sidebar,
     MainPage,
-    DbConnection
+    DbConnection,
+    Instruction
   },
   setup() {
     const store = useMainStore()
-    const currentPage = ref('Главная')
+    const currentPage = ref('Обучение')
 
     const handlePageChange = (page: string) => {
       currentPage.value = page

@@ -221,8 +221,8 @@ def convert_to_timeseries(df: pd.DataFrame, id_col: str, timestamp_col: str, tar
         if new_col not in df_local.columns:
             raise ValueError(f"Не удалось создать колонку '{new_col}'. Проверьте правильность указанных имен колонок.")
     
-    # Преобразуем item_id в строку и сортируем
-    df_local["item_id"] = df_local["item_id"].astype(str)
+    # УБРАНО: Преобразуем item_id в строку и сортируем
+    # df_local["item_id"] = df_local["item_id"].astype(str)
     df_local = df_local.sort_values(["item_id", "timestamp"])
     df_local = df_local.reset_index(drop=True)
     

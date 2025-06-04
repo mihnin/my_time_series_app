@@ -11,8 +11,6 @@
     <Training :is-visible="hasLoadedFile" />
     <Prediction :is-visible="hasLoadedFile" />
     <SaveResults :is-visible="hasLoadedFile" />
-    <AppLogs :is-visible="hasLoadedFile" />
-    <ModelExport :is-visible="hasLoadedFile" />
   </div>
 </template>
 
@@ -27,8 +25,6 @@ import MetricsAndModels from './MetricsAndModels.vue'
 import Training from './Training.vue'
 import Prediction from './Prediction.vue'
 import SaveResults from './SaveResults.vue'
-import AppLogs from './AppLogs.vue'
-import ModelExport from './ModelExport.vue'
 
 export default defineComponent({
   name: 'TrainingSettings',
@@ -41,9 +37,7 @@ export default defineComponent({
     MetricsAndModels,
     Training,
     Prediction,
-    SaveResults,
-    AppLogs,
-    ModelExport
+    SaveResults
   },
 
   setup() {
@@ -60,7 +54,7 @@ export default defineComponent({
       store.setTargetColumn('<нет>')
       store.setIdColumn('<нет>')
       store.setStaticFeatures([])
-      store.setFillMethod('None (оставить как есть)')
+      store.setFillMethod('Forward fill (протянуть значения)')
       store.setGroupingColumns([])
       store.setHorizonUnit('D (день)') // сбрасываем единицу измерения по умолчанию
       store.setSelectedMetric('MAE (Mean absolute error)')
@@ -69,7 +63,7 @@ export default defineComponent({
       store.setPredictionHorizon(3)
       store.setTimeLimit(null)
       store.setMeanOnly(false)
-      store.setTrainPredictSave(false)
+      store.setTrainPredictSave(true)
     }
 
     return {

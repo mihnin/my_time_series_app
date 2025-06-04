@@ -1,14 +1,14 @@
 <template>
   <div class="sidebar">
-    <Navigation @page-change="handlePageChange" />
+    <Navigation :current-page="currentPage" @page-change="$emit('page-change', $event)" />
     <div class="sidebar-separator"></div>
-    <TrainingSettings v-if="currentPage === 'Главная'" />
+    <TrainingSettings v-if="currentPage === 'Обучение'" />
     <DbSettingsButton />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, toRefs } from 'vue'
 import Navigation from './Navigation.vue'
 import TrainingSettings from './TrainingSettings.vue'
 import DbSettingsButton from './DbSettingsButton.vue'
@@ -25,15 +25,16 @@ export default defineComponent({
     currentPage: {
       type: String,
       required: true
-    },
-    handlePageChange: {
-      type: Function,
-      required: true
     }
   },
-  setup() {
+  emits: ['page-change'],
+  setup(props) {
     const store = useMainStore()
-    return { store }
+    const { currentPage } = toRefs(props)
+    return { 
+      store,
+      currentPage
+    }
   }
 })
 </script>

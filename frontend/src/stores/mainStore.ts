@@ -15,7 +15,7 @@ export const useMainStore = defineStore('main', () => {
   const staticFeatures = ref<string[]>([])
   const selectedColumns = ref<string[]>([])
   const considerRussianHolidays = ref(false)
-  const fillMethod = ref('None (оставить как есть)')
+  const fillMethod = ref('Forward fill (протянуть значения)')
   const groupingColumns = ref<string[]>([])
   const selectedMetric = ref('MAE (Mean absolute error)')
   const selectedModels = ref<string[]>(['*'])
@@ -23,14 +23,14 @@ export const useMainStore = defineStore('main', () => {
   const predictionHorizon = ref(3)
   const timeLimit = ref<number | null>(null)
   const meanOnly = ref(false)
-  const trainPredictSave = ref(false)
+  const trainPredictSave = ref(true)
   const sessionId = ref<string | null>(null)
   const trainingStatus = ref<any>(null)
   const predictionRows = ref<any[]>([])
   const horizonUnit = ref("D (день)")
 
   // PyCaret models selection
-  const selectedPycaretModels = ref<string[]>(['*'])
+  const selectedPycaretModels = ref<string[]>([])
 
   // --- DB connection state (обновлено) ---
   const authToken = ref<string | null>(null) // Теперь храним только токен
