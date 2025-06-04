@@ -379,13 +379,10 @@ export default defineComponent({
           await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-              // Вставляем код воркера как строку
-              const workerCode = `importScripts('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');\nself.onmessage = ${String(function(e) { const { fileData, fileName, maxRows } = e.data; try { const workbook = XLSX.read(fileData, { type: 'binary' }); const firstSheet = workbook.Sheets[workbook.SheetNames[0]]; let jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }); if (maxRows && jsonData.length > maxRows) { jsonData = jsonData.slice(0, maxRows); } const [header, ...rows] = jsonData; const result = rows.map(row => { const obj = {}; header.forEach((key, idx) => { obj[key] = row[idx]; }); return obj; }); self.postMessage({ success: true, data: result }); } catch (error) { self.postMessage({ success: false, error: error.message }); } })}`;
-              const blob = new Blob([workerCode], { type: 'application/javascript' });
-              const worker = new Worker(URL.createObjectURL(blob));
+              // Используем Vite worker с импортом из node_modules
+              const worker = new Worker(new URL('../worker-xlsx.ts', import.meta.url), { type: 'module' });
               worker.onmessage = function(event) {
                 if (event.data.success) {
-                  // Преобразуем даты после получения данных
                   import('xlsx').then(XLSX => {
                     const converted = convertExcelDates(event.data.data, XLSX);
                     store.setTableData(converted)
@@ -400,7 +397,7 @@ export default defineComponent({
               worker.postMessage({
                 fileData: e.target?.result ?? '',
                 fileName: file.name,
-                maxRows: 1000000 // или chunkSize.value, если нужно ограничение
+                maxRows: 1000000
               });
             };
             reader.onerror = (err) => reject(err);

@@ -180,7 +180,7 @@ class AutoGluonStrategy(AutoMLStrategy):
         tgt_col = training_params.get("target_column")
         freq = training_params.get("frequency")
         static_df = None
-
+        
 
         if static_feats:
             tmp = ts_df[[id_col] + static_feats].drop_duplicates(subset=[id_col]).copy()
@@ -190,6 +190,8 @@ class AutoGluonStrategy(AutoMLStrategy):
 
         df_ready = convert_to_timeseries(ts_df, id_col, dt_col, tgt_col)
         ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
+        
+
         session_path = get_session_path(session_id)
         model_path = os.path.join(session_path, "autogluon")
         if not os.path.exists(model_path):
@@ -201,14 +203,9 @@ class AutoGluonStrategy(AutoMLStrategy):
         except Exception as e:
             logging.error(f"Ошибка загрузки модели: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка загрузки модели: {e}")
-
-        
         # 6. Прогноз
         try:
-            print('auto', ts_df)
-            print('---')
             preds = predictor.predict(ts_df)
-            print('auto_preds', preds.dtypes)
             logging.info(f"Прогноз успешно выполнен для session_id={session_id}")
             # Переименование колонок или индексов item_id и timestamp
             if hasattr(preds, 'rename'):
@@ -241,5 +238,5 @@ class AutoGluonStrategy(AutoMLStrategy):
             preds = preds.drop(columns=['index'])
 
         return preds
-# datetime64[ns]
+    
 autogluon_strategy = AutoGluonStrategy()

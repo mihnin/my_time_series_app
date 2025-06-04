@@ -1,5 +1,4 @@
-// worker-xlsx.js
-importScripts('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+import * as XLSX from 'xlsx';
 
 self.onmessage = function(e) {
   const { fileData, fileName, maxRows } = e.data;
@@ -13,14 +12,14 @@ self.onmessage = function(e) {
     // Convert back to objects using first row as header
     const [header, ...rows] = jsonData;
     const result = rows.map(row => {
-      const obj = {};
-      header.forEach((key, idx) => {
+      const obj: Record<string, any> = {};
+      header.forEach((key: string, idx: number) => {
         obj[key] = row[idx];
       });
       return obj;
     });
     self.postMessage({ success: true, data: result });
-  } catch (error) {
+  } catch (error: any) {
     self.postMessage({ success: false, error: error.message });
   }
 };
