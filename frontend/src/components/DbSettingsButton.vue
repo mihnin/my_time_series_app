@@ -538,18 +538,18 @@ export default defineComponent({
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 0.15rem; /* Минимальный отступ между полями */
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.05rem; /* Минимальный отступ под подписью */
   font-weight: 500;
 }
 
 .env-input {
   width: 100%;
-  padding: 0.5rem;
+  padding: 0.25rem; /* Минимальный padding */
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 4px;
