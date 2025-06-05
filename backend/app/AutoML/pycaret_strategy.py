@@ -158,7 +158,7 @@ class PyCaretStrategy(AutoMLStrategy):
             all_preds = all_preds[[datetime_col, target_col, item_id_col]]
             all_preds.to_csv(preds_path, index=False)
             logging.info(f"[PyCaretStrategy train] All predictions saved to: {preds_path}")
-        avg_metric = -float(np.sum(metrics)) if metrics else 0
+        avg_metric = -float(np.mean(metrics)) if metrics else 0
         self.save_pycaret_data(None, pycaret_model_path, training_params, avg_metric, eval_metric)
         logging.info(f"[PyCaretStrategy train] PyCaret training process completed for session {session_id}. Avg metric: {avg_metric}")
 

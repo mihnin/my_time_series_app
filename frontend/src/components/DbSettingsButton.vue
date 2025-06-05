@@ -22,12 +22,15 @@
         <div class="modal-content">
           <button class="modal-close" @click="closeDbModal" aria-label="Закрыть">&times;</button>
           <h4>Подключение к БД</h4>
-          <label for="secret-word">Секретное слово:</label>        <input id="secret-word" v-model="secretWord" type="password" class="secret-input" />        
-          <button @click="validateSecretKey" class="connect-btn full-width" :disabled="isLoading">
-            {{ isLoading ? 'Подождите...' : 'Подключиться' }}
-          </button>
-          <div class="error-container">
-            <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+          <label for="secret-word">Секретное слово:</label>
+          <input id="secret-word" v-model="secretWord" type="password" class="secret-input" />
+          <div class="modal-footer">
+            <button @click="validateSecretKey" class="connect-btn full-width" :disabled="isLoading">
+              {{ isLoading ? 'Подождите...' : 'Подключиться' }}
+            </button>
+            <div class="error-container">
+              <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -69,12 +72,13 @@
             <label for="db-schema">Схема:</label>
             <input id="db-schema" v-model="envVars.DB_SCHEMA" class="env-input" />
           </div>
+          <div class="modal-footer">
             <button @click="updateEnvVariables" class="connect-btn full-width" :disabled="isLoading">
-            {{ isLoading ? 'Сохранение...' : 'Сохранить настройки' }}
-          </button>
-          
-          <div class="error-container">
-            <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+              {{ isLoading ? 'Сохранение...' : 'Сохранить настройки' }}
+            </button>
+            <div class="error-container">
+              <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -88,11 +92,13 @@
           <h4>Скачать логи</h4>
           <label for="download-secret-word">Секретное слово:</label>
           <input id="download-secret-word" v-model="downloadSecretWord" type="password" class="secret-input" />
-          <button @click="downloadLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
-            {{ isLoading ? 'Подождите...' : 'Скачать' }}
-          </button>
-          <div class="error-container">
-            <div v-if="downloadLogsError" class="error-message">{{ downloadLogsError }}</div>
+          <div class="modal-footer">
+            <button @click="downloadLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
+              {{ isLoading ? 'Подождите...' : 'Скачать' }}
+            </button>
+            <div class="error-container">
+              <div v-if="downloadLogsError" class="error-message">{{ downloadLogsError }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -106,11 +112,13 @@
           <h4>Очистить логи</h4>
           <label for="clear-secret-word">Секретное слово:</label>
           <input id="clear-secret-word" v-model="clearSecretWord" type="password" class="secret-input" />
-          <button @click="clearLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
-            {{ isLoading ? 'Подождите...' : 'Очистить' }}
-          </button>
-          <div class="error-container">
-            <div v-if="clearLogsError" class="error-message">{{ clearLogsError }}</div>
+          <div class="modal-footer">
+            <button @click="clearLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
+              {{ isLoading ? 'Подождите...' : 'Очистить' }}
+            </button>
+            <div class="error-container">
+              <div v-if="clearLogsError" class="error-message">{{ clearLogsError }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -487,6 +495,26 @@ export default defineComponent({
   flex-direction: column;
   gap: 1rem;
 }
+
+.modal-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Для корректного позиционирования кнопки в модалках */
+.env-settings-modal .modal-footer,
+.modal-content .modal-footer {
+  width: 100%;
+}
+
+/* Убираем margin-top у .full-width, чтобы не было лишнего отступа */
+.full-width {
+  width: 100%;
+  margin-top: 0;
+}
+
 .modal-close {
   position: absolute;
   top: 0.5rem;
@@ -507,7 +535,7 @@ export default defineComponent({
 }
 .secret-input {
   width: 100%;
-  padding: 0.5rem;
+  padding: 0.75rem; /* Увеличенный padding */
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -523,10 +551,6 @@ export default defineComponent({
 }
 .connect-btn:hover {
   background: #2e7031;
-}
-.full-width {
-  width: 100%;
-  margin-top: 1rem;
 }
 .gear-icon {
   font-size: 1.45rem;
@@ -549,7 +573,7 @@ export default defineComponent({
 
 .env-input {
   width: 100%;
-  padding: 0.25rem; /* Минимальный padding */
+  padding: 0.75rem; /* Увеличенный padding */
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 4px;

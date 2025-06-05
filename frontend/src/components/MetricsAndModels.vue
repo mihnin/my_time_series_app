@@ -64,12 +64,11 @@
         @change="addPycaretModel"
       >
         <option value="">Выберите модель</option>
-        <option value="*" v-if="!selectedPycaretModels.includes('*')">Все модели</option>
         <option 
           v-for="(description, key) in pycaretModels" 
           :key="key" 
           :value="key"
-          :disabled="selectedPycaretModels.includes(key)"
+          :disabled="selectedPycaretModels.includes(key) || (key === '*' && selectedPycaretModels.includes('*'))"
         >
           {{ description }}
         </option>

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 from fastapi import HTTPException
@@ -14,6 +15,9 @@ from training.model import TrainingParameters
 from autogluon.timeseries import TimeSeriesPredictor
 from AutoML.locks import global_automl_lock
 
+# Глобальный семафор для ограничения числа одновременных обучений AutoGluon
+autogluon_train_semaphore = threading.Semaphore(12)
+
 class AutoGluonStrategy(AutoMLStrategy):
     name = 'autogluon'
     def train(self,
@@ -23,127 +27,129 @@ class AutoGluonStrategy(AutoMLStrategy):
         ):
         # --- ReadWriteLock: AutoGluon захватывает read lock ---
         meta = None
-        try:
-            meta = None
+        # Ограничение на 8 параллельных обучений
+        with autogluon_train_semaphore:
             try:
-                from sessions.utils import load_session_metadata, save_session_metadata
-                meta = load_session_metadata(session_id)
-            except Exception:
-                pass
-            lock_acquired = False
-            # Пытаемся получить read lock без блокировки, если не получается — пишем pycaret_locked=True
-            if global_automl_lock._read_ready.acquire(blocking=False):
-                if not global_automl_lock._writer:
-                    global_automl_lock._readers += 1
-                    global_automl_lock._read_ready.release()
-                    lock_acquired = True
+                meta = None
+                try:
+                    from sessions.utils import load_session_metadata, save_session_metadata
+                    meta = load_session_metadata(session_id)
+                except Exception:
+                    pass
+                lock_acquired = False
+                # Пытаемся получить read lock без блокировки, если не получается — пишем pycaret_locked=True
+                if global_automl_lock._read_ready.acquire(blocking=False):
+                    if not global_automl_lock._writer:
+                        global_automl_lock._readers += 1
+                        global_automl_lock._read_ready.release()
+                        lock_acquired = True
+                    else:
+                        global_automl_lock._read_ready.release()
+                if not lock_acquired:
+                    # Лок занят PyCaret'ом, пишем pycaret_locked=True
+                    if meta is not None:
+                        try:
+                            meta['pycaret_locked'] = True
+                            save_session_metadata(session_id, meta)
+                        except Exception as e:
+                            logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=True в metadata.json: {e}")
+                    # Ждём освобождения PyCaret (write lock)
+                    global_automl_lock.acquire_read()
+                    # После получения лока, снимаем pycaret_locked
+                    if meta is not None:
+                        try:
+                            meta = load_session_metadata(session_id)
+                            meta['pycaret_locked'] = False
+                            save_session_metadata(session_id, meta)
+                        except Exception as e:
+                            logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
                 else:
-                    global_automl_lock._read_ready.release()
-            if not lock_acquired:
-                # Лок занят PyCaret'ом, пишем pycaret_locked=True
-                if meta is not None:
-                    try:
-                        meta['pycaret_locked'] = True
-                        save_session_metadata(session_id, meta)
-                    except Exception as e:
-                        logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=True в metadata.json: {e}")
-                # Ждём освобождения PyCaret (write lock)
-                global_automl_lock.acquire_read()
-                # После получения лока, снимаем pycaret_locked
+                    # Если лок сразу получен, явно пишем pycaret_locked=False
+                    if meta is not None:
+                        try:
+                            meta['pycaret_locked'] = False
+                            save_session_metadata(session_id, meta)
+                        except Exception as e:
+                            logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
+                # --- Обучение модели AutoGluon под read lock ---
+                # Handle static features
+                static_df = None
+                if training_params.static_feature_columns:
+                    tmp = ts_df[[training_params.item_id_column] + training_params.static_feature_columns].drop_duplicates(
+                        subset=[training_params.item_id_column]
+                    ).copy()
+                    tmp.rename(columns={training_params.item_id_column: "item_id"}, inplace=True)
+                    static_df = tmp
+                    logging.info(f"[train_model] Добавлены статические признаки: {training_params.static_feature_columns}")
+
+                # Convert to TimeSeriesDataFrame
+                df_ready = safely_prepare_timeseries_data(
+                    ts_df,
+                    training_params.datetime_column,
+                    training_params.item_id_column,
+                    training_params.target_column
+                )
+                ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
+
+                logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
+
+                session_path = get_session_path(session_id)
+                logging.info(f"[train_model] Создание объекта TimeSeriesPredictor...")
+                model_path =  os.path.join(session_path, 'autogluon')
+                actual_freq = training_params.frequency.split(" ")[0]
+
+                predictor = TimeSeriesPredictor(
+                    target="target",
+                    prediction_length=training_params.prediction_length,
+                    eval_metric=training_params.evaluation_metric.split(" ")[0],
+                    freq=actual_freq,
+                    quantile_levels=[0.5] if training_params.predict_mean_only else None,
+                    path=model_path,
+                    verbosity=2
+                )
+
+                # --- Логика выбора моделей ---
+                models_to_train = training_params.models_to_train
+                if not models_to_train or (isinstance(models_to_train, list) and len(models_to_train) == 0):
+                    logging.warning('[AutoGluonStrategy train] Не выбрано ни одной модели для обучения. Пропуск.')
+                    return
+                use_all_models = models_to_train == '*' or (isinstance(models_to_train, str) and models_to_train.strip() == '*')
+
+                hyperparams = {}
+                if not use_all_models:
+                    for model in models_to_train:
+                        if model == 'Chronos':
+                            print("Chronos is using pre-installed")
+                            hyperparams["Chronos"] = [
+                                {"model_path": "autogluon_models/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
+                                {"model_path": "autogluon_models/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
+                                {"model_path": "autogluon_models/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
+                            ]
+                        else:
+                            hyperparams[model] = {}
+                else:
+                    hyperparams = None
+
+                # Train the model
+                logging.info(f"[train_model] Запуск обучения модели...")
+                predictor.fit(
+                    train_data=ts_df,
+                    time_limit=training_params.training_time_limit,
+                    presets=training_params.autogluon_preset,
+                    hyperparameters=hyperparams
+                )
+                self.save_data(predictor, model_path, training_params)
+            finally:
+                # Освобождаем read lock
+                global_automl_lock.release_read()
+                # После освобождения лока, явно пишем pycaret_locked=False
                 if meta is not None:
                     try:
                         meta = load_session_metadata(session_id)
                         meta['pycaret_locked'] = False
                         save_session_metadata(session_id, meta)
                     except Exception as e:
-                        logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
-            else:
-                # Если лок сразу получен, явно пишем pycaret_locked=False
-                if meta is not None:
-                    try:
-                        meta['pycaret_locked'] = False
-                        save_session_metadata(session_id, meta)
-                    except Exception as e:
-                        logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False в metadata.json: {e}")
-            # --- Обучение модели AutoGluon под read lock ---
-            # Handle static features
-            static_df = None
-            if training_params.static_feature_columns:
-                tmp = ts_df[[training_params.item_id_column] + training_params.static_feature_columns].drop_duplicates(
-                    subset=[training_params.item_id_column]
-                ).copy()
-                tmp.rename(columns={training_params.item_id_column: "item_id"}, inplace=True)
-                static_df = tmp
-                logging.info(f"[train_model] Добавлены статические признаки: {training_params.static_feature_columns}")
-
-            # Convert to TimeSeriesDataFrame
-            df_ready = safely_prepare_timeseries_data(
-                ts_df,
-                training_params.datetime_column,
-                training_params.item_id_column,
-                training_params.target_column
-            )
-            ts_df = make_timeseries_dataframe(df_ready, static_df=static_df)
-
-            logging.info(f"[train_model] Данные преобразованы в TimeSeriesDataFrame.")
-
-            session_path = get_session_path(session_id)
-            logging.info(f"[train_model] Создание объекта TimeSeriesPredictor...")
-            model_path =  os.path.join(session_path, 'autogluon')
-            actual_freq = training_params.frequency.split(" ")[0]
-
-            predictor = TimeSeriesPredictor(
-                target="target",
-                prediction_length=training_params.prediction_length,
-                eval_metric=training_params.evaluation_metric.split(" ")[0],
-                freq=actual_freq,
-                quantile_levels=[0.5] if training_params.predict_mean_only else None,
-                path=model_path,
-                verbosity=2
-            )
-
-            # --- Логика выбора моделей ---
-            models_to_train = training_params.models_to_train
-            if not models_to_train or (isinstance(models_to_train, list) and len(models_to_train) == 0):
-                logging.warning('[AutoGluonStrategy train] Не выбрано ни одной модели для обучения. Пропуск.')
-                return
-            use_all_models = models_to_train == '*' or (isinstance(models_to_train, str) and models_to_train.strip() == '*')
-
-            hyperparams = {}
-            if not use_all_models:
-                for model in models_to_train:
-                    if model == 'Chronos':
-                        print("Chronos is using pre-installed")
-                        hyperparams["Chronos"] = [
-                            {"model_path": "autogluon_models/chronos-bolt-base", "ag_args": {"name_suffix": "ZeroShot"}},
-                            {"model_path": "autogluon_models/chronos-bolt-small", "ag_args": {"name_suffix": "ZeroShot"}},
-                            {"model_path": "autogluon_models/chronos-bolt-small", "fine_tune": True, "ag_args": {"name_suffix": "FineTuned"}}
-                        ]
-                    else:
-                        hyperparams[model] = {}
-            else:
-                hyperparams = None
-
-            # Train the model
-            logging.info(f"[train_model] Запуск обучения модели...")
-            predictor.fit(
-                train_data=ts_df,
-                time_limit=training_params.training_time_limit,
-                presets=training_params.autogluon_preset,
-                hyperparameters=hyperparams
-            )
-            self.save_data(predictor, model_path, training_params)
-        finally:
-            # Освобождаем read lock
-            global_automl_lock.release_read()
-            # После освобождения лока, явно пишем pycaret_locked=False
-            if meta is not None:
-                try:
-                    meta = load_session_metadata(session_id)
-                    meta['pycaret_locked'] = False
-                    save_session_metadata(session_id, meta)
-                except Exception as e:
-                    logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False после release в metadata.json: {e}")
+                        logging.warning(f"[AutoGluonStrategy train] Не удалось записать pycaret_locked=False после release в metadata.json: {e}")
 
     def save_data(self, predictor, model_path, training_params):
 
