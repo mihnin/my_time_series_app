@@ -6,13 +6,19 @@ from .settings import settings, reload_env_vars
 def validate_secret_key(key: str) -> bool:
     """
     Проверяет, совпадает ли переданный ключ с SECRET_KEY из настроек.
-    
-    Args:
-        key: Ключ для проверки
-        
-    Returns:
-        bool: True, если ключ совпадает, иначе False
+    Если файла .env нет или в нем нет ключа, создаёт файл с этим ключом.
     """
+    env_path = Path(__file__).parent.parent / '.env'
+    # Проверяем, что файл существует и содержит SECRET_KEY
+    env_vars = dotenv_values(str(env_path)) if env_path.exists() else {}
+    if not env_path.exists() or 'SECRET_KEY' not in env_vars:
+        # Создаём .env с переданным ключом
+        with open(env_path, 'a', encoding='utf-8') as f:
+            f.write(f'SECRET_KEY={key}\n')
+        # Перезагружаем переменные окружения
+        reload_env_vars()
+        settings.refresh()
+        return True
     return key == settings.SECRET_KEY
 
 

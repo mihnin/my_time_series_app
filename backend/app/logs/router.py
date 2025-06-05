@@ -1,22 +1,28 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
 import os
 import logging
 from datetime import datetime
 import tempfile
 import shutil
+from db.env_utils import validate_secret_key
+from db.model import SecretKeyRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Путь к файлу логов
-LOG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.log")
+LOG_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "app.log")
 
-@router.get("/logs/download")
-async def download_logs():
+@router.post("/logs/download")
+async def download_logs(request: Request):
     """
-    Скачать файл логов
+    Скачать файл логов (требуется секретный ключ в теле запроса)
     """
+    data = await request.json()
+    secret_key = data.get("secret_key")
+    if not secret_key or not validate_secret_key(secret_key):
+        raise HTTPException(status_code=403, detail="Неверный секретный ключ")
     try:
         if not os.path.exists(LOG_FILE_PATH):
             logger.warning(f"Log file not found: {LOG_FILE_PATH}")
@@ -46,10 +52,14 @@ async def download_logs():
         raise HTTPException(status_code=500, detail=f"Ошибка при скачивании логов: {str(e)}")
 
 @router.post("/logs/clear")
-async def clear_logs():
+async def clear_logs(request: Request):
     """
-    Очистить файл логов (сделать его пустым)
+    Очистить файл логов (сделать его пустым, требуется секретный ключ в теле запроса)
     """
+    data = await request.json()
+    secret_key = data.get("secret_key")
+    if not secret_key or not validate_secret_key(secret_key):
+        raise HTTPException(status_code=403, detail="Неверный секретный ключ")
     try:
         # Создаем директорию если её нет
         os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)

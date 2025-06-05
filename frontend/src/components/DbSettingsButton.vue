@@ -6,11 +6,11 @@
         <span class="gear-icon">⚙️</span>
         <span class="btn-text">Настройки БД</span>
       </button>
-      <button type="button" class="log-button" @click="downloadLogs">
+      <button type="button" class="log-button" @click="openDownloadLogsModal">
         <span class="gear-icon">📥</span>
         <span class="btn-text">Скачать логи</span>
       </button>
-      <button type="button" class="log-button clear-button" @click="clearLogs">
+      <button type="button" class="log-button clear-button" @click="openClearLogsModal">
         <span class="gear-icon">🗑️</span>
         <span class="btn-text">Очистить логи</span>
       </button>
@@ -79,6 +79,43 @@
         </div>
       </div>
     </Teleport>
+    
+    <!-- Модальное окно для скачивания логов -->
+    <Teleport to="body">
+      <div v-if="showDownloadLogsModal" class="modal-overlay">
+        <div class="modal-content">
+          <button class="modal-close" @click="closeDownloadLogsModal" aria-label="Закрыть">&times;</button>
+          <h4>Скачать логи</h4>
+          <label for="download-secret-word">Секретное слово:</label>
+          <input id="download-secret-word" v-model="downloadSecretWord" type="password" class="secret-input" />
+          <button @click="downloadLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
+            {{ isLoading ? 'Подождите...' : 'Скачать' }}
+          </button>
+          <div class="error-container">
+            <div v-if="downloadLogsError" class="error-message">{{ downloadLogsError }}</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    
+    <!-- Модальное окно для очистки логов -->
+    <Teleport to="body">
+      <div v-if="showClearLogsModal" class="modal-overlay">
+        <div class="modal-content">
+          <button class="modal-close" @click="closeClearLogsModal" aria-label="Закрыть">&times;</button>
+          <h4>Очистить логи</h4>
+          <label for="clear-secret-word">Секретное слово:</label>
+          <input id="clear-secret-word" v-model="clearSecretWord" type="password" class="secret-input" />
+          <button @click="clearLogsWithKey" class="connect-btn full-width" :disabled="isLoading">
+            {{ isLoading ? 'Подождите...' : 'Очистить' }}
+          </button>
+          <div class="error-container">
+            <div v-if="clearLogsError" class="error-message">{{ clearLogsError }}</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    
       <!-- Модальное окно успешного обновления -->
     <Teleport to="body">
       <div v-if="successModalVisible" class="success-modal-overlay">
@@ -100,9 +137,15 @@ export default defineComponent({
   setup() {
     const showDbModal = ref(false)
     const showEnvModal = ref(false)
+    const showDownloadLogsModal = ref(false)
+    const showClearLogsModal = ref(false)
     const secretWord = ref('')
+    const downloadSecretWord = ref('')
+    const clearSecretWord = ref('')
     const isLoading = ref(false)
     const errorMessage = ref('')
+    const downloadLogsError = ref('')
+    const clearLogsError = ref('')
     const successModalVisible = ref(false)
     // Параметры окружения по умолчанию
     const envVars = reactive({
@@ -230,33 +273,122 @@ export default defineComponent({
       }
     };
     
-    // Закрыть модальное окно ввода секретного слова
+    // Скачать логи с секретным словом
+    const downloadLogsWithKey = async () => {
+      if (!downloadSecretWord.value) {
+        downloadLogsError.value = 'Введите секретное слово'
+        return
+      }
+      isLoading.value = true
+      downloadLogsError.value = ''
+      try {
+        const response = await fetch('http://localhost:8000/logs/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret_key: downloadSecretWord.value })
+        })
+        if (!response.ok) throw new Error('Ошибка при скачивании логов')
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'app.log'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        window.URL.revokeObjectURL(url)
+        showDownloadLogsModal.value = false
+        downloadSecretWord.value = ''
+      } catch (error) {
+        downloadLogsError.value = 'Не удалось скачать логи.'
+        console.error('Ошибка скачивания логов:', error)
+      } finally {
+        isLoading.value = false
+      }
+    }
+    // Очистить логи с секретным словом
+    const clearLogsWithKey = async () => {
+      if (!clearSecretWord.value) {
+        clearLogsError.value = 'Введите секретное слово'
+        return
+      }
+      isLoading.value = true
+      clearLogsError.value = ''
+      try {
+        const response = await fetch('http://localhost:8000/logs/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret_key: clearSecretWord.value })
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) throw new Error('Ошибка при очистке логов')
+        showClearLogsModal.value = false
+        clearSecretWord.value = ''
+        alert('Логи успешно очищены.')
+      } catch (error) {
+        clearLogsError.value = 'Не удалось очистить логи.'
+        console.error('Ошибка очистки логов:', error)
+      } finally {
+        isLoading.value = false
+      }
+    }
+    // Открытие/закрытие модалок
+    const openDownloadLogsModal = () => {
+      showDownloadLogsModal.value = true
+      downloadSecretWord.value = ''
+      downloadLogsError.value = ''
+    }
+    const closeDownloadLogsModal = () => {
+      showDownloadLogsModal.value = false
+      downloadSecretWord.value = ''
+      downloadLogsError.value = ''
+    }
+    const openClearLogsModal = () => {
+      showClearLogsModal.value = true
+      clearSecretWord.value = ''
+      clearLogsError.value = ''
+    }
+    const closeClearLogsModal = () => {
+      showClearLogsModal.value = false
+      clearSecretWord.value = ''
+      clearLogsError.value = ''
+    }
     const closeDbModal = () => {
       showDbModal.value = false
       secretWord.value = ''
       errorMessage.value = ''
     }
-    
-    // Закрыть модальное окно настроек окружения
     const closeEnvModal = () => {
       showEnvModal.value = false
       errorMessage.value = ''
     }
     
-      return {
+    return {
       showDbModal,
       showEnvModal,
+      showDownloadLogsModal,
+      showClearLogsModal,
       secretWord,
+      downloadSecretWord,
+      clearSecretWord,
       isLoading,
       errorMessage,
+      downloadLogsError,
+      clearLogsError,
       successModalVisible,
       envVars,
       validateSecretKey,
       closeDbModal,
       closeEnvModal,
+      closeDownloadLogsModal,
+      closeClearLogsModal,
       updateEnvVariables,
       downloadLogs,
-      clearLogs
+      clearLogs,
+      downloadLogsWithKey,
+      clearLogsWithKey,
+      openDownloadLogsModal,
+      openClearLogsModal
     }
   }
 })
