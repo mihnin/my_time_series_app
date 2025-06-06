@@ -135,7 +135,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+my_env
+catboost_info
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -173,3 +174,13 @@ cython_debug/
 AutogluonModels/
 /results.xlsx
 results.xlsx
+
+backend/app/training_sessions
+.vscode
+backend/app/catboost_info/
+
+# Если эти файлы не должны быть в репозитории (например, большие файлы данных)
+data_validation.py
+environment.yml
+generate_900k.ipynb
+train_data_900k.xlsx
