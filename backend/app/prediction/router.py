@@ -222,6 +222,13 @@ def download_prediction_file(session_id: str):
         # Второй лист — leaderboard
         if df_leaderboard is not None:
             df_leaderboard.to_excel(writer, sheet_name="Leaderboard", index=False)
+            # Подсветка первой строки (лучшей модели) зелёным
+            workbook  = writer.book
+            worksheet = writer.sheets["Leaderboard"]
+            green_format = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
+            # Если есть хотя бы одна строка и один столбец
+            if not df_leaderboard.empty:
+                worksheet.set_row(1, None, green_format)  # row=1, потому что row=0 — это заголовки
         else:
             pd.DataFrame({"info": ["Leaderboard not found"]}).to_excel(writer, sheet_name="Leaderboard", index=False)
         # Третий лист — параметры обучения
