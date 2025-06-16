@@ -1,12 +1,36 @@
-# Frontend Dockerfile
-FROM node:20
+# --- СТАДИЯ 1: BUILDER (Сборка фронтенд-приложения) ---
+# Используем конкретную slim-версию Node.js для сборки
+# 18-alpine - это компактный вариант, но если есть проблемы с glibc, можно взять 18-slim-buster
+FROM node:18.19.1-alpine as builder 
 
+# Устанавливаем рабочую директорию внутри контейнера для сборки
 WORKDIR /app
 
+# Копируем файлы package.json и package-lock.json (или yarn.lock)
+# Это позволяет кешировать установку зависимостей: если эти файлы не меняются,
+# npm install не будет запускаться заново при изменении кода.
 COPY package*.json ./
-RUN npm install
 
+# Устанавливаем зависимости (включая dev-зависимости для сборки) с повторными попытками
+RUN npm install --production=false
+
+# Копируем весь остальной код фронтенда
 COPY . .
+
+# Выполняем сборку вашего фронтенд-приложения
 RUN npm run build-only
 
-CMD ["npm", "run", "preview", "--", "--host", "--port", "4173"]
+# --- СТАДИЯ 2: NGINX (Финальный образ для обслуживания статики) ---
+# Используем официальный легковесный образ Nginx
+FROM nginx:alpine
+
+# Копируем собранные статические файлы из стадии 'builder'
+# Vue.js (Vite) собирает в папку 'dist'
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Открываем порт, на котором будет слушать Nginx
+EXPOSE 80
+
+# Команда для запуска Nginx
+# Nginx в alpine уже настроен на запуск по умолчанию
+CMD ["nginx", "-g", "daemon off;"]

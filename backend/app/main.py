@@ -67,7 +67,6 @@ async def root():
         "status": "ok",
         "message": "Time Series Analysis API is running"
     }
-
 app.include_router(training_router)
 app.include_router(train_prediction_save_router)
 app.include_router(prediction_router)

@@ -1,21 +1,29 @@
+version: '3.8'
+
 services:
-
-  backend:
+  my_time_series_backend:
     build:
-      context: ./backend
-      dockerfile: app/Dockerfile
-    container_name: my_time_series_backend
+      context: ./backend/app # Контекст сборки указывает на директорию 'app'
+      dockerfile: Dockerfile # Имя Dockerfile
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/app:/app
-    command: ["/bin/sh", "-c", "pip uninstall -y dask && uvicorn main:app --host 0.0.0.0 --port 8000"]
-
-  frontend:
+      - "8000:8000" # Проксирование порта 8000 из контейнера на порт 8000 хоста
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped # Автоматический перезапуск контейнера, если он упал
+  my_time_series_frontend:
     build:
-      context: ./frontend
+      context: ./frontend # Предполагаем, что Dockerfile фронтенда находится в ./frontend
       dockerfile: Dockerfile
-    container_name: my_time_series_frontend
     ports:
-      - "4173:4173"
-    command: ["/bin/sh", "-c", "npm run build-only && npm run preview -- --host --port 4173"]
+      - "3000:80" # Nginx слушает на порту 80 внутри контейнера
+    # ВНИМАНИЕ: Для продакшна ЗАКОММЕНТИРУЙТЕ или УДАЛИТЕ volumes для кода фронтенда!
+    # volumes:
+    #   - ./frontend:/app
+    # Зависимость от бэкенда: фронтенд не запустится, пока бэкенд не будет здоров
+    depends_on:
+      my_time_series_backend:
+        condition: service_started # Изменено с service_healthy на service_started
+
+networks:
+  default: # Определяем сеть по умолчанию для всех сервисов
+    driver: bridge
