@@ -184,3 +184,6 @@ data_validation.py
 environment.yml
 generate_900k.ipynb
 train_data_900k.xlsx
+.pytest_cache
+frontend/.vite
+backend/app/logs/app*
