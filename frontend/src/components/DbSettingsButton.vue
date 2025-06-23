@@ -139,6 +139,7 @@
 
 <script lang="ts">
 import { defineComponent, ref, reactive } from 'vue'
+import { API_BASE_URL } from '../apiConfig'
 
 export default defineComponent({
   name: 'DbSettingsButton',
@@ -175,7 +176,7 @@ export default defineComponent({
       errorMessage.value = ''
       
       try {
-        const response = await fetch('http://localhost:8000/validate-secret-key', {
+        const response = await fetch(`${API_BASE_URL}/validate-secret-key`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -217,7 +218,7 @@ export default defineComponent({
       errorMessage.value = ''
       
       try {
-        const response = await fetch('http://localhost:8000/update-env-variables', {
+        const response = await fetch(`${API_BASE_URL}/update-env-variables`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -252,7 +253,7 @@ export default defineComponent({
     // Скачать логи
     const downloadLogs = async () => {
       try {
-        const response = await fetch('http://localhost:8000/logs/download');
+        const response = await fetch(`${API_BASE_URL}/logs/download`);
         if (!response.ok) throw new Error('Ошибка при скачивании логов');
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -272,7 +273,7 @@ export default defineComponent({
     // Очистить логи
     const clearLogs = async () => {
       try {
-        const response = await fetch('http://localhost:8000/logs/clear', { method: 'POST' });
+        const response = await fetch(`${API_BASE_URL}/logs/clear`, { method: 'POST' });
         if (!response.ok) throw new Error('Ошибка при очистке логов');
         alert('Логи успешно очищены.');
       } catch (error) {
@@ -290,7 +291,7 @@ export default defineComponent({
       isLoading.value = true
       downloadLogsError.value = ''
       try {
-        const response = await fetch('http://localhost:8000/logs/download', {
+        const response = await fetch(`${API_BASE_URL}/logs/download`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ secret_key: downloadSecretWord.value })
@@ -323,7 +324,7 @@ export default defineComponent({
       isLoading.value = true
       clearLogsError.value = ''
       try {
-        const response = await fetch('http://localhost:8000/logs/clear', {
+        const response = await fetch(`${API_BASE_URL}/logs/clear`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ secret_key: clearSecretWord.value })

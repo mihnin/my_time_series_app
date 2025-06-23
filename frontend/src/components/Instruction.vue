@@ -95,6 +95,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
+import { API_BASE_URL } from '../apiConfig'
 export default defineComponent({
   name: 'Instruction',
   props: {
@@ -107,7 +108,7 @@ export default defineComponent({
   methods: {
     downloadExample(type: string) {
       // Всегда скачиваем train_data.xlsx с backend
-      const url = 'http://localhost:8000/instruction/example_train.xlsx';
+      const url = `${API_BASE_URL}/instruction/example_train.xlsx`;
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'example_train.xlsx');
