@@ -142,6 +142,7 @@
 </template>
 
 <script lang="ts">
+import { API_BASE_URL } from '@/apiConfig'
 import { defineComponent, computed, ref, watch } from 'vue'
 import { useMainStore } from '../stores/mainStore'
 
@@ -235,7 +236,7 @@ export default defineComponent({
       dbTableCountAvailable.value = null
       dbTableCountTotal.value = null
       try {
-        const resp = await fetch('http://localhost:8000/get-tables', {
+        const resp = await fetch(`${API_BASE_URL}/get-tables`, {
           headers: {
             'Authorization': `Bearer ${dbToken.value}`
           }
@@ -266,7 +267,7 @@ export default defineComponent({
     const checkTrainingStatus = async () => {
       if (!store.sessionId) return
       try {
-        const response = await fetch(`http://localhost:8000/training_status/${store.sessionId}`)
+        const response = await fetch(`${API_BASE_URL}/training_status/${store.sessionId}`)
         if (!response.ok) {
           throw new Error('Failed to fetch training status')
         }
@@ -387,7 +388,7 @@ export default defineComponent({
               ...(store.authToken ? { 'Authorization': `Bearer ${store.authToken}` } : {})
             }
           };
-          const response = await fetch('http://localhost:8000/train_prediction_save/', fetchOptions);
+          const response = await fetch(`${API_BASE_URL}/train_prediction_save/`, fetchOptions);
           if (!response.ok) {
             const errorText = await response.text();
             let errorData;
@@ -410,7 +411,7 @@ export default defineComponent({
           const pollStatus = async () => {
             if (!store.sessionId) return;
             try {
-              const statusResp = await fetch(`http://localhost:8000/training_status/${store.sessionId}`);
+              const statusResp = await fetch(`${API_BASE_URL}/training_status/${store.sessionId}`);
               if (!statusResp.ok) throw new Error('Failed to fetch training status');
               const status = await statusResp.json();
               store.setTrainingStatus(status);
@@ -422,7 +423,7 @@ export default defineComponent({
                 if (["completed", "complete"].includes(status.status)) {
                   // Получаем прогноз
                   try {
-                    const fileResp = await fetch(`http://localhost:8000/download_prediction/${store.sessionId}`);
+                    const fileResp = await fetch(`${API_BASE_URL}/download_prediction/${store.sessionId}`);
                     if (!fileResp.ok) throw new Error('Ошибка скачивания прогноза');
                     const blob = await fileResp.blob();
                     // Парсим первые 10 строк xlsx
@@ -491,7 +492,7 @@ export default defineComponent({
             ...(store.authToken ? { 'Authorization': `Bearer ${store.authToken}` } : {})
           }
         };
-        const response = await fetch('http://localhost:8000/train_timeseries_model/', fetchOptions);
+        const response = await fetch(`${API_BASE_URL}/train_timeseries_model/`, fetchOptions);
         if (!response.ok) {
           const errorText = await response.text();
           let errorData;
@@ -546,7 +547,7 @@ export default defineComponent({
         formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value));
         // Специальный режим: только создание таблицы по первой строке
         formData.append('create_table_only', 'true');
-        const resp = await fetch('http://localhost:8000/create-table-from-file', {
+        const resp = await fetch(`${API_BASE_URL}/create-table-from-file`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${dbToken.value}`
@@ -599,7 +600,7 @@ export default defineComponent({
         formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value));
         formData.append('create_table_only', 'true');
         formData.append('schema', schema);
-        const resp = await fetch('http://localhost:8000/create-table-from-file', {
+        const resp = await fetch(`${API_BASE_URL}/create-table-from-file`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${dbToken.value}`
@@ -624,7 +625,7 @@ export default defineComponent({
         formData.append('file', store.selectedFile as Blob, store.selectedFile?.name ?? 'uploaded_file');
         formData.append('table_name', tableName);
         formData.append('schema', schema);
-        const resp = await fetch('http://localhost:8000/check-df-matches-table-schema', {
+        const resp = await fetch(`${API_BASE_URL}/check-df-matches-table-schema`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${dbToken.value}`

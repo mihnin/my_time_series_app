@@ -233,6 +233,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, watch } from 'vue'
 import { useMainStore } from '../stores/mainStore'
+import { API_BASE_URL } from '../apiConfig'
 import * as XLSX from 'xlsx'
 
 export default defineComponent({
@@ -288,7 +289,7 @@ export default defineComponent({
     async function fetchDbTables() {
       dbTablesLoading.value = true
       try {
-        const response = await fetch('http://localhost:8000/get-tables', {
+        const response = await fetch(`${API_BASE_URL}/get-tables`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -476,7 +477,7 @@ export default defineComponent({
       if (store.dbConnected && store.authToken) {
         dbTablesLoading.value = true
         try {
-          const response = await fetch('http://localhost:8000/get-tables', {
+          const response = await fetch(`${API_BASE_URL}/get-tables`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -526,7 +527,7 @@ export default defineComponent({
       dbError.value = ''
       isLoadingFromDb.value = true
       try {
-        const response = await fetch('http://localhost:8000/download-table-from-db', {
+        const response = await fetch(`${API_BASE_URL}/download-table-from-db`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -565,7 +566,7 @@ export default defineComponent({
       tablePreviewLoading.value = true
       tablePreviewError.value = ''
       try {
-        const response = await fetch('http://localhost:8000/get-table-preview', {
+        const response = await fetch(`${API_BASE_URL}/get-table-preview`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -606,7 +607,7 @@ export default defineComponent({
         formData.append('table_name', uploadTableName.value)
         formData.append('primary_keys', JSON.stringify(selectedPrimaryKeys.value))
         formData.append('dbSaveMode', dbSaveMode.value)
-        const response = await fetch('http://localhost:8000/upload-excel-to-db', {
+        const response = await fetch(`${API_BASE_URL}/upload-excel-to-db`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${store.authToken}`
@@ -637,7 +638,7 @@ export default defineComponent({
       selectedUploadDbSchema.value = ''
       if (store.dbConnected && store.authToken) {
         uploadDbTablesLoading.value = true
-        fetch('http://localhost:8000/get-tables', {
+        fetch(`${API_BASE_URL}/get-tables`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

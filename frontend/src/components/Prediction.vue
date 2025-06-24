@@ -16,6 +16,7 @@
 <script lang="ts">
 import { defineComponent, computed, ref } from 'vue'
 import { useMainStore } from '../stores/mainStore'
+import { API_BASE_URL } from '../apiConfig'
 
 export default defineComponent({
   name: 'Prediction',
@@ -51,7 +52,7 @@ export default defineComponent({
 
       try {
         console.log('Fetching prediction for session:', sessionId);
-        const response = await fetch(`http://localhost:8000/predict/${sessionId}`);
+        const response = await fetch(`${API_BASE_URL}/predict/${sessionId}`);
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Error response from server:', errorText);

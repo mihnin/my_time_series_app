@@ -114,6 +114,7 @@
 <script lang="ts">
 import { defineComponent, computed, ref, onMounted } from 'vue'
 import { useMainStore } from '../stores/mainStore'
+import { API_BASE_URL } from '@/apiConfig'
 
 export default defineComponent({
   name: 'SaveResults',
@@ -163,7 +164,7 @@ export default defineComponent({
     const fetchDbTables = async () => {
       if (!store.dbConnected || !store.authToken) return
       try {
-        const response = await fetch('http://localhost:8000/get-tables', {
+        const response = await fetch(`${API_BASE_URL}/get-tables`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -244,7 +245,7 @@ export default defineComponent({
         }
       }
       try {
-        const response = await fetch('http://localhost:8000/save-prediction-to-db', {
+        const response = await fetch(`${API_BASE_URL}/save-prediction-to-db`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -274,7 +275,7 @@ export default defineComponent({
 
     const saveToCsv = async () => {
       if (!store.sessionId) return
-      const url = `http://localhost:8000/download_prediction_csv/${store.sessionId}`
+      const url = `${API_BASE_URL}/download_prediction_csv/${store.sessionId}`
       try {
         const response = await fetch(url)
         if (!response.ok) throw new Error('Ошибка скачивания CSV')
@@ -292,7 +293,7 @@ export default defineComponent({
 
     const saveToExcel = async () => {
       if (!store.sessionId) return
-      const url = `http://localhost:8000/download_prediction/${store.sessionId}`
+      const url = `${API_BASE_URL}/download_prediction/${store.sessionId}`
       try {
         const response = await fetch(url)
         if (!response.ok) throw new Error('Ошибка скачивания Excel')
