@@ -14,6 +14,7 @@ import {
   FileText
 } from 'lucide-react'
 import './App.css'
+import { DataProvider } from './contexts/DataContext'
 
 // Import page components (to be created)
 import Dashboard from './components/Dashboard'
@@ -90,9 +91,11 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <DataProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </DataProvider>
   )
 }
 

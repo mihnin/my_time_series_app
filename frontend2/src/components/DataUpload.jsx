@@ -1,4 +1,7 @@
-import React, { useState, useLayoutEffect } from 'react'
+import React, { useState, useLayoutEffect, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useData } from '../contexts/DataContext'
+import { parseFile, validateFileSize, validateFileType, formatFileSize } from '../utils/fileParser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx'
 import { Button } from '@/components/ui/button.jsx'
 import { Input } from '@/components/ui/input.jsx'
@@ -18,9 +21,14 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export default function DataUpload() {
-  // --- File upload state (unchanged) ---
-  const [uploadedFile, setUploadedFile] = useState(null)
+  const navigate = useNavigate()
+  const { updateData, uploadedFile, setUploadedFile } = useData()
+  
+  // --- File upload state ---
   const [previewData, setPreviewData] = useState(null)
+  const [fileLoading, setFileLoading] = useState(false)
+  const [fileError, setFileError] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
 
   // --- DB connection/auth state ---
   const [dbUsername, setDbUsername] = useState('')
@@ -41,25 +49,116 @@ export default function DataUpload() {
   const [tablePreviewError, setTablePreviewError] = useState('')
   const [previewVisible, setPreviewVisible] = useState(false)
   const firstRenderRef = React.useRef(true)
+  
+  // Ref для автоматического скролла к предпросмотру
+  const previewRef = useRef(null)
 
-  // --- File upload logic (unchanged) ---
-  const handleFileUpload = (event) => {
+  // --- File upload logic ---
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0]
-    if (file) {
+    if (!file) return
+
+    // Сброс предыдущих состояний
+    setFileError('')
+    setPreviewData(null)
+    setUploadedFile(null)
+
+    try {
+      // Валидация размера файла
+      if (!validateFileSize(file, 100)) {
+        setFileError('Размер файла превышает 100 МБ')
+        return
+      }
+
+      // Валидация типа файла
+      if (!validateFileType(file)) {
+        setFileError('Поддерживаются только файлы форматов CSV, XLSX, XLS')
+        return
+      }
+
+      setFileLoading(true)
       setUploadedFile(file)
-      // Simulate file processing
+
+      // Парсинг файла
+      const parsedData = await parseFile(file)
+      
+      // Ограничиваем предпросмотр первыми 10 строками для производительности
+      const previewRows = parsedData.rows.slice(0, 10)
+      
+      setPreviewData({
+        columns: parsedData.columns,
+        rows: previewRows,
+        totalRows: parsedData.rows.length
+      })
+
+    } catch (error) {
+      console.error('Ошибка при обработке файла:', error)
+      setFileError(error.message || 'Произошла ошибка при обработке файла')
+      setUploadedFile(null)
+      setPreviewData(null)
+    } finally {
+      setFileLoading(false)
+    }
+  }
+
+  const handleClearFile = () => {
+    setUploadedFile(null)
+    setPreviewData(null)
+    setFileError('')
+    setFileLoading(false)
+    // Очищаем input
+    const fileInput = document.querySelector('input[type="file"]')
+    if (fileInput) {
+      fileInput.value = ''
+    }
+  }
+
+  // Автоматический скролл к предпросмотру после загрузки файла
+  useEffect(() => {
+    if (previewData && previewRef.current) {
+      // Небольшая задержка для завершения рендеринга
       setTimeout(() => {
-        setPreviewData({
-          columns: ['date', 'value', 'category', 'id'],
-          rows: [
-            ['2023-01-01', '100.5', 'A', '1'],
-            ['2023-01-02', '102.3', 'A', '1'],
-            ['2023-01-03', '98.7', 'B', '2'],
-            ['2023-01-04', '105.1', 'A', '1'],
-            ['2023-01-05', '99.8', 'B', '2']
-          ]
+        previewRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
         })
-      }, 1000)
+      }, 100)
+    }
+  }, [previewData])
+
+  // --- Drag & Drop handlers ---
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      const file = files[0]
+      // Создаем событие как для input
+      const fakeEvent = {
+        target: {
+          files: [file]
+        }
+      }
+      handleFileUpload(fakeEvent)
     }
   }
 
@@ -243,6 +342,28 @@ export default function DataUpload() {
     setDbError('')
   }
 
+  const handleContinueToConfig = async () => {
+    // Сохраняем данные в контекст перед навигацией
+    if (previewData && uploadedFile) {
+      try {
+        setFileLoading(true)
+        // Загружаем полные данные для передачи в конфигурацию
+        const fullData = await parseFile(uploadedFile)
+        updateData(fullData, 'file', null)
+      } catch (error) {
+        console.error('Ошибка при загрузке полных данных:', error)
+        setFileError('Ошибка при подготовке данных для конфигурации')
+        setFileLoading(false)
+        return
+      } finally {
+        setFileLoading(false)
+      }
+    } else if (tablePreview && selectedDbTable) {
+      updateData(tablePreview, 'database', selectedDbTable)
+    }
+    navigate('/config')
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
@@ -276,10 +397,22 @@ export default function DataUpload() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                <Upload className="mx-auto mb-4 text-muted-foreground" size={48} />
+              <div 
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  isDragOver 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border'
+                }`}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                <Upload className={`mx-auto mb-4 ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} size={48} />
                 <div className="space-y-2">
-                  <p className="text-lg font-medium">Перетащите файл сюда или выберите файл</p>
+                  <p className="text-lg font-medium">
+                    {isDragOver ? 'Отпустите файл для загрузки' : 'Перетащите файл сюда или выберите файл'}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Максимальный размер файла: 100 МБ
                   </p>
@@ -288,18 +421,49 @@ export default function DataUpload() {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={handleFileUpload}
+                  disabled={fileLoading}
                   className="mt-4 max-w-xs mx-auto"
                 />
+                {fileLoading && (
+                  <div className="mt-4 flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    <span className="text-sm text-muted-foreground">Обработка файла...</span>
+                  </div>
+                )}
               </div>
 
-              {uploadedFile && (
+              {uploadedFile && !fileError && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="text-green-600" size={20} />
+                      <div>
+                        <p className="font-medium text-green-800">Файл успешно загружен</p>
+                        <p className="text-sm text-green-600">
+                          {uploadedFile.name} ({formatFileSize(uploadedFile.size)})
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearFile}
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      Очистить
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {fileError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="text-green-600" size={20} />
+                    <AlertCircle className="text-red-600" size={20} />
                     <div>
-                      <p className="font-medium text-green-800">Файл успешно загружен</p>
-                      <p className="text-sm text-green-600">
-                        {uploadedFile.name} ({(uploadedFile.size / 1024 / 1024).toFixed(2)} МБ)
+                      <p className="font-medium text-red-800">Ошибка загрузки файла</p>
+                      <p className="text-sm text-red-600">
+                        {fileError}
                       </p>
                     </div>
                   </div>
@@ -311,7 +475,7 @@ export default function DataUpload() {
           {/* Data Preview and Next Steps only for file tab */}
           {previewData && (
             <>
-              <Card>
+              <Card ref={previewRef}>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Eye className="text-primary" size={20} />
@@ -348,7 +512,7 @@ export default function DataUpload() {
                   </div>
                   <div className="mt-4 flex justify-between items-center">
                     <p className="text-sm text-muted-foreground">
-                      Показано 5 из {previewData.rows.length + 1000} строк
+                      Показано {previewData.rows.length} из {previewData.totalRows || previewData.rows.length} строк
                     </p>
                     <Button variant="outline" className="flex items-center space-x-2">
                       <Download size={16} />
@@ -361,8 +525,12 @@ export default function DataUpload() {
                 <Button variant="outline">
                   Назад
                 </Button>
-                <Button className="bg-primary hover:bg-primary/90">
-                  Продолжить к настройке модели
+                <Button 
+                  className="bg-primary hover:bg-primary/90"
+                  onClick={handleContinueToConfig}
+                  disabled={fileLoading || !previewData}
+                >
+                  {fileLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
                 </Button>
               </div>
             </>
@@ -545,7 +713,10 @@ export default function DataUpload() {
                           <Button variant="outline">
                             Назад
                           </Button>
-                          <Button className="bg-primary hover:bg-primary/90">
+                          <Button 
+                            className="bg-primary hover:bg-primary/90"
+                            onClick={handleContinueToConfig}
+                          >
                             Продолжить к настройке модели
                           </Button>
                         </div>

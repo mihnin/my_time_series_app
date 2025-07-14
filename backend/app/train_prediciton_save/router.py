@@ -12,7 +12,6 @@ from typing import Dict, Optional
 from datetime import datetime
 from io import BytesIO
 
-import pandas as modin_pd
 from db.db_manager import upload_df_to_db
 from db.jwt_logic import get_current_user_db_creds
 from db.db_manager import auto_convert_dates
