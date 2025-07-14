@@ -232,7 +232,6 @@ export default defineComponent({
 
     const selectedMetric = computed({
       get: () => {
-        console.log('Current selectedMetric from store:', store.selectedMetric); // Add this line
         return store.selectedMetric || 'MAE (Mean absolute error)';
       },
       set: (value: string) => store.setSelectedMetric(value)

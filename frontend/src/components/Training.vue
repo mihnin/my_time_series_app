@@ -272,7 +272,6 @@ export default defineComponent({
           throw new Error('Failed to fetch training status')
         }
         const status = await response.json()
-        console.log(status)
         store.setTrainingStatus(status)
         if (["completed", "failed", "complete"].includes(status.status)) {
           if (statusCheckInterval) {
@@ -513,7 +512,6 @@ export default defineComponent({
           throw new Error(errorMessage);
         }
         const result = await response.json();
-        console.log('Training started successfully:', result);
         store.setSessionId(result.session_id)
         // Обновляем статус на running после успешного старта
         store.setTrainingStatus({ status: 'running', progress: 0 })

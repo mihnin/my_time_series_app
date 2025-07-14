@@ -38,7 +38,7 @@ export default defineComponent({
     })
 
     const downloadModelsAndLogs = () => {
-      console.log('Downloading models and logs...')
+      // Download models and logs functionality
     }
 
     return {

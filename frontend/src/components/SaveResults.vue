@@ -173,10 +173,7 @@ export default defineComponent({
         })
         const result = await response.json()
         // --- DEBUG LOG ---
-        console.log('result.tables', result.tables)
-        console.log('dbSchemas', Object.keys(result.tables))
-        console.log('count_available', result.count_available)
-        console.log('count_total', result.count_total)
+        // Debug logs removed
         // --- END DEBUG LOG ---
         if (result.success) {
           dbSchemas.value = Object.keys(result.tables)

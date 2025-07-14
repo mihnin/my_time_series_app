@@ -51,7 +51,6 @@ export default defineComponent({
       // store.setPredictionRows([]); // Optional: clear immediately if you want UI to reflect loading new set
 
       try {
-        console.log('Fetching prediction for session:', sessionId);
         const response = await fetch(`${API_BASE_URL}/predict/${sessionId}`);
         if (!response.ok) {
           const errorText = await response.text();
@@ -59,18 +58,13 @@ export default defineComponent({
           throw new Error('Ошибка при получении прогноза: ' + errorText); // Throw to be caught by catch block
         }
 
-        console.log('Response received, getting blob...');
         const blob = await response.blob();
-        console.log('Converting blob to array buffer...');
         const arrayBuffer = await blob.arrayBuffer();
-        console.log('Loading XLSX library...');
         const XLSX = await import('xlsx');
-        console.log('Parsing Excel file...');
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        console.log('Excel parsed successfully');
 
         if (!json || json.length < 2) { // Expects headers + at least one data row
           throw new Error('Получены некорректные данные прогноза (น้อยกว่า 2 rows in Excel)');
@@ -104,12 +98,8 @@ export default defineComponent({
           return obj;
         });
         
-        console.log('Prediction raw json (array of arrays):', json);
-        console.log('Prediction parsed rows (array of objects):', processedRows);
-
         // Directly set the new prediction rows
         store.setPredictionRows(processedRows);
-        console.log('Prediction rows set in store:', store.predictionRows);
 
       } catch (error) {
         console.error('Error in prediction process:', error);
@@ -120,7 +110,6 @@ export default defineComponent({
         // This delay is for the button's loading spinner.
         setTimeout(() => {
           isLoading.value = false;
-          console.log('FINALLY: local isLoading set to false. Current predictionRows in store:', store.predictionRows);
         }, 300);
       }
     };

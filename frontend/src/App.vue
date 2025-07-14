@@ -45,7 +45,7 @@ export default defineComponent({
     watch(
       () => store.predictionRows,
       (val) => {
-        console.log('App.vue predictionRows watch triggered:', val);
+        // Prediction rows updated
       },
       { deep: true }
     )
