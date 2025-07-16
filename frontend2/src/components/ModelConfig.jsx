@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../contexts/DataContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx'
@@ -21,7 +21,7 @@ import {
 
 export default function ModelConfig() {
   const navigate = useNavigate()
-  const { uploadedData, dataSource, selectedTable, updateTrainingConfig } = useData()
+  const { uploadedData, dataSource, selectedTable, updateTrainingConfig, trainingConfig } = useData()
   
   const [config, setConfig] = useState({
     dateColumn: '',
@@ -35,13 +35,30 @@ export default function ModelConfig() {
     forecastHorizon: 30,
     staticFeatures: [],
     considerHolidays: false,
-    groupingColumns: []
+    groupingColumns: [],
+    autogluonPreset: 'medium_quality', // Пресет AutoGluon
+    trainingTimeLimit: 60 // Максимальное время обучения в секундах
   })
 
   const [selectedFeatureToAdd, setSelectedFeatureToAdd] = useState('none')
   const [selectedGroupingColumn, setSelectedGroupingColumn] = useState('none')
   const [selectedAutogluonModelToAdd, setSelectedAutogluonModelToAdd] = useState('none')
   const [selectedPycaretModelToAdd, setSelectedPycaretModelToAdd] = useState('none')
+
+  // Инициализация конфигурации из сохраненного состояния
+  useEffect(() => {
+    if (trainingConfig) {
+      setConfig(trainingConfig)
+    }
+  }, []) // Загружаем только при монтировании компонента
+
+  // Автосохранение конфигурации при каждом изменении
+  useEffect(() => {
+    // Избегаем сохранения при первой загрузке
+    if (config.dateColumn || config.targetColumn) {
+      updateTrainingConfig(config)
+    }
+  }, [config, updateTrainingConfig])
 
   // Получаем доступные колонки из загруженных данных
   const availableColumns = uploadedData && uploadedData.columns ? uploadedData.columns : [
@@ -128,6 +145,13 @@ export default function ModelConfig() {
     { id: 'rmse', label: 'RMSE', description: 'Root Mean Squared Error' },
     { id: 'rmsse', label: 'RMSSE', description: 'Root Mean Squared Scaled Error' },
     { id: 'smape', label: 'SMAPE', description: 'Symmetric Mean Absolute Percentage Error' }
+  ]
+
+  const presetsList = [
+    { id: 'fast_training', label: 'Быстрое обучение', description: 'Быстрая тренировка, базовые модели' },
+    { id: 'medium_quality', label: 'Среднее качество', description: 'Баланс скорости и качества' },
+    { id: 'high_quality', label: 'Высокое качество', description: 'Более точные модели, больше времени' },
+    { id: 'best_quality', label: 'Лучшее качество', description: 'Максимальное качество, долгое обучение' }
   ]
 
   const handleConfigChange = (field, value) => {
@@ -240,7 +264,7 @@ export default function ModelConfig() {
   const availableStaticFeatures = availableColumns.filter(column => 
     column !== config.dateColumn &&
     column !== config.targetColumn &&
-    (config.idColumn !== '' && column !== config.idColumn) &&
+    (config.idColumn ? column !== config.idColumn : true) &&
     !config.staticFeatures.includes(column)
   )
 
@@ -555,25 +579,54 @@ export default function ModelConfig() {
                 </div>
               )}
 
-              {/* Селектор для добавления AutoGluon моделей */}
-              <Select 
-                value={selectedAutogluonModelToAdd}
-                onValueChange={(value) => {
-                  setSelectedAutogluonModelToAdd(value)
-                  handleModelAdd(value, 'autogluon')
-                }}
-                disabled={availableAutogluonModels.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите модель для добавления" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Выберите модель</SelectItem>
-                  {availableAutogluonModels.map(model => (
-                    <SelectItem key={model.id} value={model.id}>{model.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Селекторы для добавления AutoGluon моделей и пресета */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Добавить модель</Label>
+                  <Select 
+                    value={selectedAutogluonModelToAdd}
+                    onValueChange={(value) => {
+                      setSelectedAutogluonModelToAdd(value)
+                      handleModelAdd(value, 'autogluon')
+                    }}
+                    disabled={availableAutogluonModels.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите модель для добавления" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Выберите модель</SelectItem>
+                      {availableAutogluonModels.map(model => (
+                        <SelectItem key={model.id} value={model.id}>{model.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Пресет AutoGluon</Label>
+                  <Select 
+                    value={config.autogluonPreset} 
+                    onValueChange={(value) => handleConfigChange('autogluonPreset', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите пресет">
+                        {config.autogluonPreset ? presetsList.find(p => p.id === config.autogluonPreset)?.label : "Выберите пресет"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presetsList.map(preset => (
+                        <SelectItem key={preset.id} value={preset.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{preset.label}</span>
+                            <span className="text-xs text-muted-foreground">{preset.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
             {/* PyCaret Models */}
@@ -629,40 +682,57 @@ export default function ModelConfig() {
           </CardContent>
         </Card>
 
-        {/* Metrics Selection */}
+        {/* Additional Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <CheckCircle className="text-primary" size={20} />
-              <span>Метрика качества</span>
+              <Settings className="text-primary" size={20} />
+              <span>Дополнительные настройки</span>
             </CardTitle>
             <CardDescription>
-              Выберите метрику для оценки качества моделей
+              Настройки метрики качества и ограничения времени обучения
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Метрика оценки качества</Label>
-              <Select 
-                value={config.selectedMetric} 
-                onValueChange={(value) => handleConfigChange('selectedMetric', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите метрику">
-                    {config.selectedMetric ? metricOptions.find(m => m.id === config.selectedMetric)?.label : "Выберите метрику"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {metricOptions.map(metric => (
-                    <SelectItem key={metric.id} value={metric.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{metric.label}</span>
-                        <span className="text-xs text-muted-foreground">{metric.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Метрика оценки качества</Label>
+                <Select 
+                  value={config.selectedMetric} 
+                  onValueChange={(value) => handleConfigChange('selectedMetric', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите метрику">
+                      {config.selectedMetric ? metricOptions.find(m => m.id === config.selectedMetric)?.label : "Выберите метрику"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {metricOptions.map(metric => (
+                      <SelectItem key={metric.id} value={metric.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{metric.label}</span>
+                          <span className="text-xs text-muted-foreground">{metric.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Максимальное время обучения (секунды)</Label>
+                <Input
+                  type="number"
+                  min="30"
+                  max="3600"
+                  value={config.trainingTimeLimit}
+                  onChange={(e) => handleConfigChange('trainingTimeLimit', parseInt(e.target.value) || 60)}
+                  placeholder="60"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ограничение времени на обучение всех моделей (от 30 до 3600 секунд)
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -698,8 +768,10 @@ export default function ModelConfig() {
                   )}
                   <p><strong>Горизонт прогноза:</strong> {config.forecastHorizon} периодов</p>
                   <p><strong>Выбрано AutoGluon моделей:</strong> {config.selectedAutogluonModels.length}</p>
+                  <p><strong>Пресет AutoGluon:</strong> {presetsList.find(p => p.id === config.autogluonPreset)?.label}</p>
                   <p><strong>Выбрано PyCaret моделей:</strong> {config.selectedPycaretModels.length}</p>
                   <p><strong>Метрика качества:</strong> {metricOptions.find(m => m.id === config.selectedMetric)?.label}</p>
+                  <p><strong>Время обучения:</strong> {config.trainingTimeLimit} секунд</p>
                   {uploadedData && uploadedData.rows && (
                     <p><strong>Строк данных:</strong> {uploadedData.rows.length}</p>
                   )}

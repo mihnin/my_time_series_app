@@ -279,7 +279,6 @@ async def create_table_from_file_endpoint(
     Используется только первая строка данных (после заголовков).
     """
     try:
-        print(file.filename)
         if not (file.filename and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls'))):
             raise HTTPException(status_code=400, detail='Файл должен быть Excel (.xlsx или .xls)')
         content = await file.read()

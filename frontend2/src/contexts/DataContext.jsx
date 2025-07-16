@@ -16,7 +16,18 @@ export function DataProvider({ children }) {
   const [trainPredictSave, setTrainPredictSave] = useState(false)
   const [predictionRows, setPredictionRows] = useState([])
   const [dbConnected, setDbConnected] = useState(false)
+  const [dbUsername, setDbUsername] = useState("")
+  const [dbPassword, setDbPassword] = useState("")
   const [uploadDbName, setUploadDbName] = useState('')
+  const [totalTrainingTime, setTotalTrainingTime] = useState('')
+  const [predictionProcessed, setPredictionProcessed] = useState(false);
+  const [previewData, setPreviewData] = useState(null)
+  const [tablePreview, setTablePreview] = useState(null)
+  const [activeTab, setActiveTab] = useState('file')
+  const [dbTables, setDbTables] = useState([])
+  const [dbTablesLoading, setDbTablesLoading] = useState(false)
+  const [dbError, setDbError] = useState('')
+  const [trainingStartTime, setTrainingStartTime] = useState(null);
 
   const updateData = (data, source, table = null) => {
     setUploadedData(data)
@@ -38,6 +49,14 @@ export function DataProvider({ children }) {
     setTrainingStatus(status)
   }
 
+  const resetTrainingState = () => {
+    setTrainingStatus(null)
+    setSessionId(null)
+    setTotalTrainingTime('')
+    setPredictionRows([])
+    setPredictionProcessed(false)
+  }
+
   return (
     <DataContext.Provider value={{
       // Data state
@@ -54,6 +73,7 @@ export function DataProvider({ children }) {
       updateTrainingConfig,
       trainingStatus,
       updateTrainingStatus,
+      resetTrainingState,
       sessionId,
       setSessionId,
       authToken,
@@ -64,8 +84,30 @@ export function DataProvider({ children }) {
       setPredictionRows,
       dbConnected,
       setDbConnected,
+      dbUsername,
+      setDbUsername,
+      dbPassword,
+      setDbPassword,
       uploadDbName,
-      setUploadDbName
+      setUploadDbName,
+      totalTrainingTime,
+      setTotalTrainingTime,
+      predictionProcessed,
+      setPredictionProcessed,
+      previewData,
+      setPreviewData,
+      tablePreview,
+      setTablePreview,
+      activeTab,
+      setActiveTab,
+      dbTables,
+      setDbTables,
+      dbTablesLoading,
+      setDbTablesLoading,
+      dbError,
+      setDbError,
+      trainingStartTime,
+      setTrainingStartTime
     }}>
       {children}
     </DataContext.Provider>

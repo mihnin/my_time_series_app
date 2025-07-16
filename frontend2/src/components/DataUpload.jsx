@@ -16,38 +16,42 @@ import {
   Eye,
   Download
 } from 'lucide-react'
-
-// Read API base URL from environment
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+import { API_BASE_URL } from '../apiConfig.js'
 
 export default function DataUpload() {
   const navigate = useNavigate()
-  const { updateData, uploadedFile, setUploadedFile } = useData()
+  const { updateData, uploadedFile, setUploadedFile, authToken, setAuthToken, previewData, setPreviewData, activeTab, setActiveTab, tablePreview, setTablePreview, dbConnected, setDbConnected, dbTables, setDbTables, dbTablesLoading, setDbTablesLoading, dbError, setDbError } = useData()
+  const [localUsername, setLocalUsername] = useState('');
+  const [localPassword, setLocalPassword] = useState('');
   
   // --- File upload state ---
-  const [previewData, setPreviewData] = useState(null)
   const [fileLoading, setFileLoading] = useState(false)
   const [fileError, setFileError] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
+  const [configLoading, setConfigLoading] = useState(false)
+  // Синхронизируем ref и state
+  const previewDataRef = useRef(null)
+  const activeTabRef = useRef('file')
+  const setPreviewDataState = (data) => {
+    previewDataRef.current = data
+    setPreviewData(data)
+  }
+  const setActiveTabState = (tab) => {
+    activeTabRef.current = tab
+    setActiveTab(tab)
+  }
 
   // --- DB connection/auth state ---
-  const [dbUsername, setDbUsername] = useState('')
-  const [dbPassword, setDbPassword] = useState('')
   const [dbConnecting, setDbConnecting] = useState(false)
-  const [dbConnected, setDbConnected] = useState(false)
-  const [dbError, setDbError] = useState('')
   const [dbSuccess, setDbSuccess] = useState(false)
-  const [authToken, setAuthToken] = useState(null)
 
   // --- DB tables state ---
-  const [dbTables, setDbTables] = useState([])
-  const [dbTablesLoading, setDbTablesLoading] = useState(false)
   const [selectedDbTable, setSelectedDbTable] = useState('')
   const [selectedSchema, setSelectedSchema] = useState('')
-  const [tablePreview, setTablePreview] = useState(null)
   const [tablePreviewLoading, setTablePreviewLoading] = useState(false)
   const [tablePreviewError, setTablePreviewError] = useState('')
   const [previewVisible, setPreviewVisible] = useState(false)
+  const [tableLoadingFromDb, setTableLoadingFromDb] = useState(false)
   const firstRenderRef = React.useRef(true)
   
   // Ref для автоматического скролла к предпросмотру
@@ -62,6 +66,10 @@ export default function DataUpload() {
     setFileError('')
     setPreviewData(null)
     setUploadedFile(null)
+    // Очищаем состояния БД при загрузке файла
+    setTablePreview(null)
+    setTablePreviewError('')
+    setSelectedDbTable('')
 
     try {
       // Валидация размера файла
@@ -81,16 +89,16 @@ export default function DataUpload() {
 
       // Парсинг файла
       const parsedData = await parseFile(file)
-      
-      // Ограничиваем предпросмотр первыми 10 строками для производительности
-      const previewRows = parsedData.rows.slice(0, 10)
-      
+      // Ограничиваем предпросмотр первыми 5 строками для производительности
+      const previewRows = parsedData.rows.slice(0, 5)
       setPreviewData({
         columns: parsedData.columns,
         rows: previewRows,
-        totalRows: parsedData.rows.length
+        totalRows: parsedData.rows.length,
+        fullData: parsedData // Сохраняем полные данные в previewData
       })
-
+      // Сохраняем данные сразу после загрузки
+      updateData(parsedData, 'file', null)
     } catch (error) {
       console.error('Ошибка при обработке файла:', error)
       setFileError(error.message || 'Произошла ошибка при обработке файла')
@@ -106,6 +114,10 @@ export default function DataUpload() {
     setPreviewData(null)
     setFileError('')
     setFileLoading(false)
+    // Очищаем состояния БД
+    setTablePreview(null)
+    setTablePreviewError('')
+    setSelectedDbTable('')
     // Очищаем input
     const fileInput = document.querySelector('input[type="file"]')
     if (fileInput) {
@@ -171,7 +183,7 @@ export default function DataUpload() {
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: dbUsername, password: dbPassword })
+        body: JSON.stringify({ username: localUsername, password: localPassword })
       })
       if (!response.ok) {
         if (response.status === 401) {
@@ -198,8 +210,8 @@ export default function DataUpload() {
         setDbConnected(true)
         setDbSuccess(true)
         setDbError('')
-        setDbUsername('')
-        setDbPassword('')
+        setLocalUsername('')
+        setLocalPassword('')
         // Optionally: setTimeout to hide success after a while
         setTimeout(() => setDbSuccess(false), 1800)
       } else {
@@ -222,9 +234,16 @@ export default function DataUpload() {
     setDbConnected(false)
     setDbSuccess(false)
     setDbError('')
-    setDbUsername('')
-    setDbPassword('')
-    // Optionally: clear any DB-related preview data
+    setLocalUsername('')
+    setLocalPassword('')
+    setDbTables([])
+    setSelectedDbTable('')
+    setSelectedSchema('')
+    setTablePreview(null)
+    setTablePreviewError('')
+    setTableLoadingFromDb(false)
+    setPreviewData(null)
+    setUploadedFile(null)
   }
 
   // --- Fetch tables after successful connection ---
@@ -244,7 +263,6 @@ export default function DataUpload() {
         }
       })
       const result = await response.json()
-      console.log('Ответ /get-tables:', result)
       if (result.success && result.tables && typeof result.tables === 'object') {
         const schemas = Object.keys(result.tables)
         const tablesBySchema = schemas.map(schema => ({
@@ -291,7 +309,6 @@ export default function DataUpload() {
         body: JSON.stringify({ schema, table })
       })
       const result = await response.json()
-      console.log('Ответ /get-table-preview:', result)
       if (result.success && Array.isArray(result.data) && result.data.length > 0) {
         const columns = Object.keys(result.data[0])
         const rows = result.data.map(rowObj => columns.map(col => rowObj[col]))
@@ -311,10 +328,13 @@ export default function DataUpload() {
 
   // --- Effect: fetch tables after connect ---
   React.useEffect(() => {
-    if (dbConnected && authToken) {
+    if (authToken) {
+      setDbConnected(true)
       fetchDbTables(authToken)
+    } else {
+      setDbConnected(false)
     }
-  }, [dbConnected, authToken])
+  }, [authToken])
 
   // --- Effect: fetch preview when table selected ---
   React.useEffect(() => {
@@ -345,23 +365,95 @@ export default function DataUpload() {
   const handleContinueToConfig = async () => {
     // Сохраняем данные в контекст перед навигацией
     if (previewData && uploadedFile) {
-      try {
-        setFileLoading(true)
-        // Загружаем полные данные для передачи в конфигурацию
-        const fullData = await parseFile(uploadedFile)
-        updateData(fullData, 'file', null)
-      } catch (error) {
-        console.error('Ошибка при загрузке полных данных:', error)
-        setFileError('Ошибка при подготовке данных для конфигурации')
-        setFileLoading(false)
-        return
-      } finally {
-        setFileLoading(false)
+      setConfigLoading(true)
+      // Используем полные данные из previewData, если они есть
+      if (previewData.fullData) {
+        updateData(previewData.fullData, 'file', null)
+      } else {
+        // Fallback: используем preview данные как есть
+        updateData({
+          columns: previewData.columns,
+          rows: previewData.rows
+        }, 'file', null)
       }
+      setConfigLoading(false)
+    } else if (tablePreview && selectedDbTable && previewData?.fullData) {
+      // Для данных из БД также используем сохраненные полные данные
+      setConfigLoading(true)
+      updateData(previewData.fullData, 'database', selectedDbTable)
+      setConfigLoading(false)
     } else if (tablePreview && selectedDbTable) {
+      // Fallback для случая когда fullData не установлен
       updateData(tablePreview, 'database', selectedDbTable)
     }
     navigate('/config')
+  }
+
+  // --- Load table from DB ---
+  const loadTableFromDb = async () => {
+    if (!selectedDbTable || !authToken) return
+    
+    setTablePreviewError('')
+    setTableLoadingFromDb(true)
+    
+    try {
+      // Парсим schema.table из selectedDbTable
+      const [schema, ...tableParts] = selectedDbTable.split('.')
+      const table = tableParts.join('.')
+      
+      if (!schema || !table) {
+        setTablePreviewError('Некорректное имя таблицы')
+        return
+      }
+
+      const response = await fetch(`${API_BASE_URL}/download-table-from-db`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ schema: schema, table: table })
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        setTablePreviewError(err.detail || 'Ошибка загрузки таблицы из БД')
+        return
+      }
+
+      // Получаем blob Excel-файла
+      const blob = await response.blob()
+      // Создаем файл с правильным расширением
+      const file = new File([blob], `${table}.xlsx`, { type: blob.type })
+      
+      // Устанавливаем файл как загруженный
+      setUploadedFile(file)
+      
+      // Парсим файл как обычную загрузку Excel
+      const parsedData = await parseFile(file)
+      
+      // Ограничиваем предпросмотр первыми 10 строками
+      const previewRows = parsedData.rows.slice(0, 10)
+      
+      setPreviewData({
+        columns: parsedData.columns,
+        rows: previewRows,
+        totalRows: parsedData.rows.length,
+        fullData: parsedData // Сохраняем полные данные и для БД
+      })
+
+      // Обновляем контекст с полными данными
+      updateData(parsedData, 'database', selectedDbTable)
+      
+    } catch (error) {
+      console.error('Ошибка при загрузке данных из БД:', error)
+      setTablePreviewError('Ошибка загрузки данных из БД: ' + (error?.message || error))
+      // Очищаем состояния при ошибке
+      setUploadedFile(null)
+      setPreviewData(null)
+    } finally {
+      setTableLoadingFromDb(false)
+    }
   }
 
   return (
@@ -373,7 +465,7 @@ export default function DataUpload() {
         </p>
       </div>
 
-      <Tabs defaultValue="file" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="file" className="flex items-center space-x-2">
             <FileText size={16} />
@@ -473,7 +565,7 @@ export default function DataUpload() {
           </Card>
 
           {/* Data Preview and Next Steps only for file tab */}
-          {previewData && (
+          {activeTab === 'file' && previewData && (
             <>
               <Card ref={previewRef}>
                 <CardHeader>
@@ -514,10 +606,6 @@ export default function DataUpload() {
                     <p className="text-sm text-muted-foreground">
                       Показано {previewData.rows.length} из {previewData.totalRows || previewData.rows.length} строк
                     </p>
-                    <Button variant="outline" className="flex items-center space-x-2">
-                      <Download size={16} />
-                      <span>Скачать образец</span>
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -528,9 +616,9 @@ export default function DataUpload() {
                 <Button 
                   className="bg-primary hover:bg-primary/90"
                   onClick={handleContinueToConfig}
-                  disabled={fileLoading || !previewData}
+                  disabled={configLoading || !previewData}
                 >
-                  {fileLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
+                  {configLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
                 </Button>
               </div>
             </>
@@ -555,8 +643,8 @@ export default function DataUpload() {
                   <Input
                     id="username"
                     placeholder="postgres"
-                    value={dbUsername}
-                    onChange={handleDbInputChange(setDbUsername)}
+                    value={localUsername}
+                    onChange={e => setLocalUsername(e.target.value)}
                     disabled={dbConnected || dbConnecting}
                   />
                 </div>
@@ -566,8 +654,8 @@ export default function DataUpload() {
                     id="password"
                     type="password"
                     placeholder="••••••••"
-                    value={dbPassword}
-                    onChange={handleDbInputChange(setDbPassword)}
+                    value={localPassword}
+                    onChange={e => setLocalPassword(e.target.value)}
                     disabled={dbConnected || dbConnecting}
                   />
                 </div>
@@ -575,7 +663,7 @@ export default function DataUpload() {
               {!dbConnected ? (
                 <Button
                   onClick={handleDbConnect}
-                  disabled={dbConnecting || dbConnected || !dbUsername || !dbPassword}
+                  disabled={dbConnecting || dbConnected || !localUsername || !localPassword}
                   className="w-full"
                 >
                   {dbConnecting ? 'Подключение...' : 'Подключиться'}
@@ -583,7 +671,7 @@ export default function DataUpload() {
               ) : (
                 <Button
                   onClick={handleDbDisconnect}
-                  className="w-full bg-red-600 hover:bg-red-700"
+                  className="w-full"
                 >
                   Отключиться
                 </Button>
@@ -618,7 +706,7 @@ export default function DataUpload() {
           </Card>
 
           {/* --- DB Table Selection and Preview --- */}
-          {dbConnected && (
+          {activeTab === 'database' && dbConnected && (
             <Card className="bg-white border border-border rounded-lg">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -715,9 +803,17 @@ export default function DataUpload() {
                           </Button>
                           <Button 
                             className="bg-primary hover:bg-primary/90"
-                            onClick={handleContinueToConfig}
+                            onClick={loadTableFromDb}
+                            disabled={tableLoadingFromDb}
                           >
-                            Продолжить к настройке модели
+                            {tableLoadingFromDb ? 'Загрузка...' : 'Загрузить таблицу'}
+                          </Button>
+                          <Button 
+                            className="bg-primary hover:bg-primary/90"
+                            onClick={handleContinueToConfig}
+                            disabled={configLoading || !previewData}
+                          >
+                            {configLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
                           </Button>
                         </div>
                       </div>
