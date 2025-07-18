@@ -20,7 +20,7 @@ import { API_BASE_URL } from '../apiConfig.js'
 
 export default function DataUpload() {
   const navigate = useNavigate()
-  const { updateData, uploadedFile, setUploadedFile, authToken, setAuthToken, previewData, setPreviewData, activeTab, setActiveTab, tablePreview, setTablePreview, dbConnected, setDbConnected, dbTables, setDbTables, dbTablesLoading, setDbTablesLoading, dbError, setDbError } = useData()
+  const { updateData, uploadedFile, setUploadedFile, authToken, setAuthToken, previewData, setPreviewData, activeTab, setActiveTab, tablePreview, setTablePreview, dbConnected, setDbConnected, dbTables, setDbTables, dbTablesLoading, setDbTablesLoading, dbError, setDbError, ensureTablesLoaded } = useData()
   const [localUsername, setLocalUsername] = useState('');
   const [localPassword, setLocalPassword] = useState('');
   
@@ -247,43 +247,11 @@ export default function DataUpload() {
   }
 
   // --- Fetch tables after successful connection ---
-  const fetchDbTables = async (token) => {
-    setDbTablesLoading(true)
-    setDbTables([])
-    setSelectedDbTable('')
-    setSelectedSchema('')
-    setTablePreview(null)
-    setTablePreviewError('')
-    try {
-      const response = await fetch(`${API_BASE_URL}/get-tables`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      const result = await response.json()
-      if (result.success && result.tables && typeof result.tables === 'object') {
-        const schemas = Object.keys(result.tables)
-        const tablesBySchema = schemas.map(schema => ({
-          schema,
-          tables: Array.isArray(result.tables[schema]) ? result.tables[schema] : []
-        })).filter(s => s.tables.length > 0)
-        setDbTables(tablesBySchema)
-        // Не выбирать схему и таблицу по умолчанию
-        setSelectedSchema('')
-        setSelectedDbTable('')
-      } else {
-        setDbTables([])
-        setTablePreviewError('Не удалось получить список таблиц')
-      }
-    } catch (e) {
-      setDbTables([])
-      setTablePreviewError('Ошибка при получении списка таблиц')
-    } finally {
-      setDbTablesLoading(false)
+  useEffect(() => {
+    if (authToken && dbConnected && dbTables.length === 0) {
+      ensureTablesLoaded();
     }
-  }
+  }, [authToken, dbConnected, dbTables.length, ensureTablesLoaded]);
 
   // --- Fetch table preview ---
   const fetchTablePreview = async (tableName) => {
@@ -330,11 +298,11 @@ export default function DataUpload() {
   React.useEffect(() => {
     if (authToken) {
       setDbConnected(true)
-      fetchDbTables(authToken)
+      ensureTablesLoaded();
     } else {
       setDbConnected(false)
     }
-  }, [authToken])
+  }, [authToken, ensureTablesLoaded])
 
   // --- Effect: fetch preview when table selected ---
   React.useEffect(() => {
@@ -390,11 +358,14 @@ export default function DataUpload() {
   }
 
   // --- Load table from DB ---
+  const [dbTableUploadSuccess, setDbTableUploadSuccess] = useState(false)
+
   const loadTableFromDb = async () => {
     if (!selectedDbTable || !authToken) return
     
     setTablePreviewError('')
     setTableLoadingFromDb(true)
+    setDbTableUploadSuccess(false)
     
     try {
       // Парсим schema.table из selectedDbTable
@@ -444,6 +415,8 @@ export default function DataUpload() {
 
       // Обновляем контекст с полными данными
       updateData(parsedData, 'database', selectedDbTable)
+      setDbTableUploadSuccess(true)
+      setTimeout(() => setDbTableUploadSuccess(false), 2000)
       
     } catch (error) {
       console.error('Ошибка при загрузке данных из БД:', error)
@@ -451,6 +424,7 @@ export default function DataUpload() {
       // Очищаем состояния при ошибке
       setUploadedFile(null)
       setPreviewData(null)
+      setDbTableUploadSuccess(false)
     } finally {
       setTableLoadingFromDb(false)
     }
@@ -797,29 +771,41 @@ export default function DataUpload() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="flex justify-end space-x-4 mt-4">
-                          <Button variant="outline">
-                            Назад
-                          </Button>
-                          <Button 
-                            className="bg-primary hover:bg-primary/90"
-                            onClick={loadTableFromDb}
-                            disabled={tableLoadingFromDb}
-                          >
-                            {tableLoadingFromDb ? 'Загрузка...' : 'Загрузить таблицу'}
-                          </Button>
-                          <Button 
-                            className="bg-primary hover:bg-primary/90"
-                            onClick={handleContinueToConfig}
-                            disabled={configLoading || !previewData}
-                          >
-                            {configLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
-                          </Button>
-                        </div>
                       </div>
                     ) : null}
                   </div>
                 )}
+                {dbTableUploadSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="text-green-600" size={20} />
+                      <div>
+                        <p className="font-medium text-green-800">Таблица успешно загружена</p>
+                        <p className="text-sm text-green-600">Данные из выбранной таблицы загружены для анализа</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Always show action buttons, but control enabled state */}
+                <div className="flex justify-end space-x-4 mt-4">
+                  <Button variant="outline">
+                    Назад
+                  </Button>
+                  <Button 
+                    className="bg-primary hover:bg-primary/90"
+                    onClick={loadTableFromDb}
+                    disabled={!selectedDbTable || tableLoadingFromDb}
+                  >
+                    {tableLoadingFromDb ? 'Загрузка...' : 'Загрузить таблицу'}
+                  </Button>
+                  <Button 
+                    className="bg-primary hover:bg-primary/90"
+                    onClick={handleContinueToConfig}
+                    disabled={configLoading || !previewData}
+                  >
+                    {configLoading ? 'Подготовка данных...' : 'Продолжить к настройке модели'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

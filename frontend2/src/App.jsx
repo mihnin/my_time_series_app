@@ -24,6 +24,7 @@ import Training from './components/Training'
 import Analysis from './components/Analysis'
 import Export from './components/Export'
 import DbSettingsButton from './components/DbSettingsButton';
+import DbWork from './components/dbWork.jsx';
 
 // Protected Route wrapper component
 function ProtectedRoute({ children, requiresTraining = false }) {
@@ -84,7 +85,8 @@ function Navigation() {
     { path: '/config', icon: Settings, label: 'Конфигурация', description: 'Настройка модели', requiresFile: true, requiresTraining: false },
     { path: '/training', icon: Play, label: 'Обучение', description: 'Запуск и мониторинг', requiresFile: true, requiresTraining: false },
     { path: '/analysis', icon: BarChart3, label: 'Анализ данных', description: 'Статистика и визуализация', requiresFile: true, requiresTraining: false },
-    { path: '/export', icon: Download, label: 'Экспорт', description: 'Сохранение результатов', requiresFile: false, requiresTraining: true }
+    { path: '/export', icon: Download, label: 'Экспорт', description: 'Сохранение результатов', requiresFile: false, requiresTraining: true },
+    { path: '/dbwork', icon: Database, label: 'Работа с БД', description: 'Загрузка и выгрузка таблиц', requiresFile: false, requiresTraining: false }
   ]
 
   return (
@@ -174,6 +176,7 @@ function AppContent() {
               <Export />
             </ProtectedRoute>
           } />
+          <Route path="/dbwork" element={<DbWork />} />
         </Routes>
       </main>
     </div>

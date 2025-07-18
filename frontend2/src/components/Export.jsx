@@ -10,7 +10,7 @@ import { API_BASE_URL } from '../apiConfig.js'
 import * as XLSX from 'xlsx';
 
 export default function Export() {
-  const { sessionId, authToken, predictionRows, setPredictionRows, trainingStatus, setAuthToken, dbConnected, setDbConnected, dbTables, setDbTables, dbTablesLoading, setDbTablesLoading, dbError, setDbError } = useData();
+  const { sessionId, authToken, predictionRows, setPredictionRows, trainingStatus, setAuthToken, dbConnected, setDbConnected, dbTables, setDbTables, dbTablesLoading, setDbTablesLoading, dbError, setDbError, ensureTablesLoaded, refreshTables } = useData();
   const [localUsername, setLocalUsername] = useState('');
   const [localPassword, setLocalPassword] = useState('');
   
@@ -156,37 +156,12 @@ export default function Export() {
     setDbError('');
   };
 
-  // Fetch schemas/tables when panel opens
+  // --- Fetch tables after successful connection ---
   useEffect(() => {
-    if (!authToken) return;
-    setDbTablesLoading(true);
-    const fetchDbTables = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/get-tables`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
-          },
-        });
-        const result = await response.json();
-        if (result.success) {
-          setDbSchemas(Object.keys(result.tables));
-          setDbTablesBySchema(result.tables);
-          setSelectedDbSchema(Object.keys(result.tables)[0] || '');
-        } else {
-          setDbSchemas([]);
-          setDbTablesBySchema({});
-        }
-      } catch {
-        setDbSchemas([]);
-        setDbTablesBySchema({});
-      } finally {
-        setDbTablesLoading(false);
-      }
-    };
-    fetchDbTables();
-  }, [authToken]);
+    if (authToken && dbConnected && dbTables.length === 0) {
+      ensureTablesLoaded();
+    }
+  }, [authToken, dbConnected, dbTables.length, ensureTablesLoaded]);
 
   const filteredDbTables = selectedDbSchema ? (dbTablesBySchema[selectedDbSchema] || []) : [];
 
@@ -246,6 +221,7 @@ export default function Export() {
           setDbSaveSuccess(true);
           setTimeout(() => setDbSaveSuccess(false), 2000);
           setDbPanelOpen(false);
+          refreshTables(); // обновить глобальный список таблиц
         } else {
           setDbSaveError(result.detail || 'Ошибка при сохранении в БД.');
         }

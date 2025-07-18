@@ -346,7 +346,7 @@ export default function ModelConfig() {
               <div className="space-y-2">
                 <Label className="flex items-center space-x-2">
                   <Hash size={16} className="text-primary" />
-                  <span>ID колонка</span>
+                  <span>ID колонка *</span>
                 </Label>
                 <Select value={config.idColumn || 'none'} onValueChange={(value) => handleConfigChange('idColumn', value)}>
                   <SelectTrigger>

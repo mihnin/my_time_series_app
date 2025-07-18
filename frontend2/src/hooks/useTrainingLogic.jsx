@@ -82,7 +82,6 @@ export function useTrainingLogic({
         setDbError('');
         setDbUsername('');
         setDbPassword('');
-        fetchDbTables(result.access_token);
       } else {
         setDbError('Не удалось подключиться к базе данных');
         setDbConnected(false);
@@ -92,41 +91,6 @@ export function useTrainingLogic({
       setDbConnected(false);
     } finally {
       setDbConnecting(false);
-    }
-  };
-
-  const fetchDbTables = async (token) => {
-    setDbTablesLoading(true);
-    setDbTables([]);
-    setSelectedSchema('');
-    setSelectedTable('');
-    try {
-      const response = await fetch(`${API_BASE_URL}/get-tables`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const result = await response.json();
-      if (result.success && result.tables && typeof result.tables === 'object') {
-        const schemas = Object.keys(result.tables);
-        const tablesBySchema = schemas.map(schema => ({
-          schema,
-          tables: Array.isArray(result.tables[schema]) ? result.tables[schema] : []
-        })).filter(s => s.tables.length > 0);
-        setDbTables(tablesBySchema);
-        setSelectedSchema('');
-        setSelectedTable('');
-      } else {
-        setDbTables([]);
-        setDbError('Не удалось получить список таблиц');
-      }
-    } catch (error) {
-      setDbTables([]);
-      setDbError('Ошибка при получении списка таблиц');
-    } finally {
-      setDbTablesLoading(false);
     }
   };
 
@@ -213,20 +177,6 @@ export function useTrainingLogic({
       return false;
     }
   };
-
-  // Подключение к БД при наличии токена
-  useEffect(() => {
-    if (authToken) {
-      setDbConnected(true);
-      fetchDbTables(authToken);
-    } else {
-      setDbConnected(false);
-      setDbTables([]);
-      setSelectedSchema('');
-      setSelectedTable('');
-    }
-    // eslint-disable-next-line
-  }, [authToken]);
 
   // --- Training logic ---
   const resetTrainingState = () => {
@@ -640,4 +590,4 @@ export function useTrainingLogic({
     getBestModel, getBestModelMetric, getAverageMetric, getTotalTrainingTime,
     resetTrainingState
   };
-} 
+}

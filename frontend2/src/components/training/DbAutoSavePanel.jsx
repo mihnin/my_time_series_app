@@ -10,7 +10,7 @@ import { CheckCircle, Database, Settings, ChevronDown, ChevronUp } from 'lucide-
 import { API_BASE_URL } from '../../apiConfig.js';
 
 export default function DbAutoSavePanel(props) {
-  const { dbConnected, setDbConnected, setAuthToken, dbTables, setDbTables, dbTablesLoading, dbError, setDbError, authToken } = useData();
+  const { dbConnected, setDbConnected, setAuthToken, dbTables, setDbTables, dbTablesLoading, dbError, setDbError, authToken, ensureTablesLoaded, refreshTables } = useData();
   const [localUsername, setLocalUsername] = useState('');
   const [localPassword, setLocalPassword] = useState('');
   const [autoSaveMenuOpen, setAutoSaveMenuOpen] = useState(false); // по умолчанию скрыто
@@ -38,41 +38,10 @@ export default function DbAutoSavePanel(props) {
 
   // Автоматическая загрузка таблиц после подключения к БД
   useEffect(() => {
-    async function fetchDbTables(token) {
-      if (!token) return;
-      setDbTables([]);
-      if (typeof setDbTablesLoading === 'function') setDbTablesLoading(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/get-tables`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        const result = await response.json();
-        if (result.success && result.tables && typeof result.tables === 'object') {
-          const schemas = Object.keys(result.tables);
-          const tablesBySchema = schemas.map(schema => ({
-            schema,
-            tables: Array.isArray(result.tables[schema]) ? result.tables[schema] : []
-          })).filter(s => s.tables.length > 0);
-          setDbTables(tablesBySchema);
-        } else {
-          setDbTables([]);
-          setDbError('Не удалось получить список таблиц');
-        }
-      } catch (error) {
-        setDbTables([]);
-        setDbError('Ошибка при получении списка таблиц');
-      } finally {
-        if (typeof setDbTablesLoading === 'function') setDbTablesLoading(false);
-      }
-    }
     if (authToken && dbConnected && dbTables.length === 0) {
-      fetchDbTables(authToken);
+      ensureTablesLoaded();
     }
-  }, [authToken, dbConnected]);
+  }, [authToken, dbConnected, dbTables.length, ensureTablesLoaded]);
 
   useEffect(() => {
     if (autoSaveMenuOpen && contentRef.current) {
@@ -158,9 +127,6 @@ export default function DbAutoSavePanel(props) {
             )}
             {autoSaveMenuOpen && (
               <div className="space-y-3 border-t pt-3">
-                <div className="text-sm text-muted-foreground mb-2">
-                  {dbConnected && 'Настройте параметры сохранения в базу данных'}
-                </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="db-username">Имя пользователя</Label>
@@ -396,37 +362,31 @@ export default function DbAutoSavePanel(props) {
                           </div>
                         )}
 
-                        {((saveMode === 'existing' && selectedTable) || (saveMode === 'create' && selectedSchema && newTableName)) && (
-                          <>
-                            <div className="space-y-2">
-                              <p className="text-sm text-muted-foreground">
-                                {saveMode === 'existing' 
-                                  ? `Результаты будут сохранены в таблицу: ${selectedTable}`
-                                  : `Будет создана новая таблица: ${selectedSchema}.${newTableName}`
-                                }
-                              </p>
-                              <Button
-                                onClick={async () => {
-                                  const saveSettings = saveMode === 'existing' 
-                                    ? { mode: 'existing', selectedSchema, selectedTable }
-                                    : { mode: 'create', selectedSchema, newTableName };
-                                  const success = await handleAutoSaveSetup(saveSettings);
-                                  if (success) {
-                                    props.setAutoSaveEnabled(true);
-                                    setAutoSaveMenuOpen(false); // Скрыть панель после успешной настройки
-                                  }
-                                }}
-                                disabled={
-                                  (saveMode === 'existing' && !selectedTable) || 
-                                  (saveMode === 'create' && (!selectedSchema || !newTableName))
-                                }
-                                className="w-full"
-                              >
-                                Сохранить изменения
-                              </Button>
-                            </div>
-                          </>
-                        )}
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            {saveMode === 'existing' 
+                              ? (selectedTable ? `Результаты будут сохранены в таблицу: ${selectedTable}` : 'Выберите схему и таблицу для сохранения')
+                              : (selectedSchema && newTableName ? `Будет создана новая таблица: ${selectedSchema}.${newTableName}` : 'Выберите схему и имя новой таблицы')
+                            }
+                          </p>
+                          <Button
+                            onClick={async () => {
+                              const saveSettings = saveMode === 'existing' 
+                                ? { mode: 'existing', selectedSchema, selectedTable }
+                                : { mode: 'create', selectedSchema, newTableName };
+                              const success = await handleAutoSaveSetup(saveSettings);
+                              if (success) {
+                                props.setAutoSaveEnabled(true);
+                                setAutoSaveMenuOpen(false);
+                                refreshTables(); // обновить глобальный список таблиц
+                              }
+                            }}
+                            disabled={saveMode === 'existing' ? !selectedTable : (!selectedSchema || !newTableName)}
+                            className="w-full"
+                          >
+                            Сохранить изменения
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-3 text-muted-foreground">
@@ -443,4 +403,4 @@ export default function DbAutoSavePanel(props) {
       ) : null}
     </Card>
   );
-} 
+}
