@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../contexts/DataContext'
-import { parseFile } from '../utils/fileParser'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { BarChart3, AlertTriangle, PieChart } from 'lucide-react'
 import { Button } from '@/components/ui/button.jsx'
+import { API_BASE_URL } from '../apiConfig.js'
 
 export default function Analysis() {
   const navigate = useNavigate();
-  const { uploadedFile, uploadedData, predictionProcessed } = useData()
+  const { uploadedFile, predictionProcessed, sessionId, analysisCache, setAnalysisCache } = useData()
   const [columns, setColumns] = useState([])
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -18,63 +18,78 @@ export default function Analysis() {
   const [missingBins, setMissingBins] = useState([])
   const [dateColIdx, setDateColIdx] = useState(-1)
 
+  // Ключ для кэша: либо sessionId, либо имя файла
+  const cacheKey = sessionId ? `session_${sessionId}` : (uploadedFile ? `file_${uploadedFile.name}_${uploadedFile.size}` : null)
+
   useEffect(() => {
+    if (!cacheKey) return;
+    // Если есть кэш — подгружаем
+    if (analysisCache[cacheKey]) {
+      const cached = analysisCache[cacheKey]
+      setColumns(cached.columns)
+      setRows(cached.rows)
+      setDateColIdx(cached.dateColIdx)
+      setMissingStats(cached.missingStats)
+      setMissingBins(cached.missingBins)
+      setError('')
+      setLoading(false)
+      return
+    }
     async function loadData() {
       setLoading(true)
       setError('')
       try {
-        let data = uploadedData
-        if (!data && uploadedFile) {
-          data = await parseFile(uploadedFile)
-        }
-        if (!data || !data.rows || !data.columns) {
+        let result
+        // Логируем параметры перед запросом
+        console.log('Analysis request params:', { sessionId, uploadedFile, cacheKey })
+        if (sessionId) {
+          // Анализ по parquet — НЕ отправляем файл!
+          const formData = new FormData()
+          formData.append('session_id', sessionId)
+          // Для совместимости с pydantic схемой: session_id всегда строка
+          const res = await fetch(`${API_BASE_URL}/analyze-data`, {
+            method: 'POST',
+            body: formData
+          })
+          if (!res.ok) throw new Error((await res.json()).detail || 'Ошибка анализа')
+          result = await res.json()
+        } else if (uploadedFile) {
+          // Анализ по файлу (если sessionId нет)
+          const formData = new FormData()
+          formData.append('file', uploadedFile)
+          const res = await fetch(`${API_BASE_URL}/analyze-data`, {
+            method: 'POST',
+            body: formData
+          })
+          if (!res.ok) throw new Error((await res.json()).detail || 'Ошибка анализа')
+          result = await res.json()
+        } else {
           setError('Нет данных для анализа')
           setLoading(false)
           return
         }
-        setColumns(data.columns)
-        setRows(data.rows)
-        // Поиск колонки с датой/временем
-        let dateIdx = data.columns.findIndex(col => /date|время|time/i.test(col))
+        setColumns(result.columns)
+        setRows(result.rows)
+        const dateIdx = result.columns.findIndex(col => /date|время|time/i.test(col))
         setDateColIdx(dateIdx)
-        // Подсчёт пропусков
-        let totalCells = data.rows.length * data.columns.length
-        let missingCells = 0
-        for (let row of data.rows) {
-          for (let cell of row) {
-            if (cell === '' || cell === null || cell === undefined) missingCells++
-          }
+        const stats = {
+          total: result.total,
+          missing: result.missing,
+          percent: result.percent
         }
-        setMissingStats({
-          total: data.rows.length,
-          missing: missingCells,
-          percent: totalCells ? (missingCells / totalCells) * 100 : 0
-        })
-        // Бины для диаграммы
-        const binCount = 12
-        const binSize = Math.ceil(data.rows.length / binCount)
-        let bins = Array.from({ length: binCount }, (_, i) => ({
-          name: `${i + 1}`,
-          missing: 0,
-          total: 0
+        setMissingStats(stats)
+        setMissingBins(result.bins)
+        // Сохраняем в кэш
+        setAnalysisCache(prev => ({
+          ...prev,
+          [cacheKey]: {
+            columns: result.columns,
+            rows: result.rows,
+            dateColIdx: dateIdx,
+            missingStats: stats,
+            missingBins: result.bins
+          }
         }))
-        for (let i = 0; i < data.rows.length; i++) {
-          const binIdx = Math.floor(i / binSize)
-          let row = data.rows[i]
-          let rowMissing = row.filter(cell => cell === '' || cell === null || cell === undefined).length
-          bins[binIdx].missing += rowMissing
-          bins[binIdx].total++
-        }
-        // Если есть дата — подписываем бины по времени
-        if (dateIdx !== -1) {
-          const getLabel = (row) => row[dateIdx]?.slice(0, 10) || ''
-          const first = getLabel(data.rows[0])
-          const last = getLabel(data.rows[data.rows.length - 1])
-          for (let i = 0; i < bins.length; i++) {
-            bins[i].name = `${first} - ${last}`
-          }
-        }
-        setMissingBins(bins)
       } catch (e) {
         setError(e.message || 'Ошибка анализа файла')
       } finally {
@@ -82,11 +97,17 @@ export default function Analysis() {
       }
     }
     loadData()
-  }, [uploadedFile, uploadedData])
+  }, [uploadedFile, sessionId])
+
+  // Сброс кэша при загрузке нового файла
+  useEffect(() => {
+    if (!uploadedFile && !sessionId) {
+      setAnalysisCache({})
+    }
+  }, [uploadedFile, sessionId])
 
   // вынесем функцию для обновления анализа
   const handleRefresh = () => {
-    // просто повторно вызовет loadData через смену loading
     setLoading(true)
     setTimeout(() => setLoading(false), 10)
   }
@@ -97,7 +118,12 @@ export default function Analysis() {
         <h1 className="text-2xl font-bold text-foreground mb-2">Анализ данных</h1>
         <p className="text-muted-foreground">Обзор пропусков в исходных данных</p>
       </div>
-      {loading ? <div>Загрузка...</div> : error ? <div className="text-red-500">{error}</div> : (
+      {loading ? (
+        <div className="flex items-center justify-center h-40">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+          <span className="ml-2 text-lg text-muted-foreground">Анализ данных...</span>
+        </div>
+      ) : error ? <div className="text-red-500">{error}</div> : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>

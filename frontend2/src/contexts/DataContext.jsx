@@ -29,6 +29,13 @@ export function DataProvider({ children }) {
   const [dbTablesLoading, setDbTablesLoading] = useState(false);
   const [dbError, setDbError] = useState('');
   const [trainingStartTime, setTrainingStartTime] = useState(null);
+  const [analysisCache, setAnalysisCache] = useState({});
+
+  // Fact rows state
+  const [factRows, setFactRows] = useState([]);
+  const [factRowsKey, setFactRowsKey] = useState({ sessionId: null, idCol: null, firstId: null });
+  const [factLoading, setFactLoading] = useState(false);
+  const [factError, setFactError] = useState('');
 
   const tablesLoadedRef = useRef(false);
 
@@ -58,6 +65,11 @@ export function DataProvider({ children }) {
     setTotalTrainingTime('')
     setPredictionRows([])
     setPredictionProcessed(false)
+    setFactRows([])
+    setFactRowsKey({ sessionId: null, idCol: null, firstId: null })
+    setFactLoading(false)
+    setFactError('')
+    // Optionally reset best metric if you store it in context
   }
 
   const ensureTablesLoaded = useCallback(async () => {
@@ -112,6 +124,42 @@ export function DataProvider({ children }) {
     }
   }, [authToken, dbConnected]);
 
+  const getFactRows = async ({ sessionId, idCol, firstId }) => {
+    if (
+      factRowsKey.sessionId === sessionId &&
+      factRowsKey.idCol === idCol &&
+      factRowsKey.firstId === firstId &&
+      factRows.length > 0
+    ) {
+      return factRows;
+    }
+    setFactLoading(true);
+    setFactError('');
+    try {
+      const payload = { session_id: sessionId, id_column: idCol, ts_id: firstId };
+      const response = await fetch(`${API_BASE_URL}/get-timeseries-by-id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Ошибка запроса');
+      }
+      const data = await response.json();
+      setFactRows(data.rows || []);
+      setFactRowsKey({ sessionId, idCol, firstId });
+      return data.rows || [];
+    } catch (e) {
+      setFactError(e.message || 'Ошибка получения факта');
+      setFactRows([]);
+      setFactRowsKey({ sessionId, idCol, firstId });
+      return [];
+    } finally {
+      setFactLoading(false);
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       // Data state
@@ -165,6 +213,14 @@ export function DataProvider({ children }) {
       setTrainingStartTime,
       ensureTablesLoaded,
       refreshTables,
+      analysisCache,
+      setAnalysisCache,
+      // Fact rows state
+      factRows,
+      factRowsKey,
+      factLoading,
+      factError,
+      getFactRows,
     }}>
       {children}
     </DataContext.Provider>

@@ -1,31 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import { BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useData } from '../../contexts/DataContext';
+import { API_BASE_URL } from '../../apiConfig';
 
-export default function ForecastChart({ uploadedData, predictionRows }) {
-  const { trainingConfig } = useData();
-  if (!uploadedData || !predictionRows || predictionRows.length === 0) return null;
-  const dateCol = trainingConfig?.dateColumn || uploadedData.columns.find(col => /date|время|time/i.test(col)) || uploadedData.columns[0];
-  const valueCol = trainingConfig?.targetColumn || uploadedData.columns.find(col => /target|value|y/i.test(col)) || uploadedData.columns[uploadedData.columns.length-1];
-  const idCol = trainingConfig?.idColumn || uploadedData.columns.find(col => /shop|id|city|country/i.test(col) && !/date|target|value|y/i.test(col));
+export default function ForecastChart({ uploadedData, predictionRows, predictionProcessed }) {
+  const { trainingConfig, sessionId, factRows, factLoading, factError, getFactRows } = useData();
+  const dateCol = uploadedData && (trainingConfig?.dateColumn || uploadedData.columns.find(col => /date|время|time/i.test(col)) || uploadedData.columns[0]);
+  const valueCol = uploadedData && (trainingConfig?.targetColumn || uploadedData.columns.find(col => /target|value|y/i.test(col)) || uploadedData.columns[uploadedData.columns.length-1]);
+  const idCol = uploadedData && (trainingConfig?.idColumn || uploadedData.columns.find(col => /shop|id|city|country/i.test(col) && !/date|target|value|y/i.test(col)));
   let firstId = null;
-  if (idCol) {
+  if (uploadedData && idCol) {
     firstId = uploadedData.rows[0][uploadedData.columns.indexOf(idCol)];
   }
-  // Исходные значения только для одного id
-  const train = idCol
-    ? uploadedData.rows.filter(row => row[uploadedData.columns.indexOf(idCol)] === firstId)
-        .map(row => ({
-          date: String(row[uploadedData.columns.indexOf(dateCol)]),
-          actual: Number(row[uploadedData.columns.indexOf(valueCol)])
-        })).filter(row => row.date && !isNaN(row.actual))
-    : uploadedData.rows.map(row => ({
-          date: String(row[uploadedData.columns.indexOf(dateCol)]),
-          actual: Number(row[uploadedData.columns.indexOf(valueCol)])
-        })).filter(row => row.date && !isNaN(row.actual));
-  // Прогнозные значения только для одного id
+
+  useEffect(() => {
+    if (!predictionProcessed) return;
+    if (!sessionId || !idCol || !firstId) return;
+    getFactRows({ sessionId, idCol, firstId });
+  }, [predictionProcessed, sessionId, idCol, firstId]);
+
+  if (!uploadedData || !predictionRows || predictionRows.length === 0) return null;
+
+  // Формируем данные для графика
+  const train = factRows.map(row => ({
+    date: String(row[dateCol]),
+    actual: Number(row[valueCol])
+  })).filter(row => row.date && !isNaN(row.actual));
+
   const pred = idCol
     ? predictionRows.filter(row => row[idCol] === firstId)
         .map(row => ({
@@ -36,6 +39,7 @@ export default function ForecastChart({ uploadedData, predictionRows }) {
           date: String(row[dateCol]),
           forecast: Number(row[valueCol])
         })).filter(row => row.date && !isNaN(row.forecast));
+
   return (
     <Card>
       <CardHeader>
@@ -50,6 +54,8 @@ export default function ForecastChart({ uploadedData, predictionRows }) {
             Прогноз и факт для <span className="font-semibold">{idCol}</span> = <span className="font-semibold">{String(firstId)}</span>
           </div>
         )}
+        {factLoading && <div className="text-sm text-muted-foreground">Загрузка факта...</div>}
+        {factError && <div className="text-sm text-red-600">{factError}</div>}
         <div className="h-96">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart>
@@ -66,4 +72,4 @@ export default function ForecastChart({ uploadedData, predictionRows }) {
       </CardContent>
     </Card>
   );
-} 
+}

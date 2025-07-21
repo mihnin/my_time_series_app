@@ -144,7 +144,11 @@ export default function Training() {
           openPycaretModal={openPycaretModal}
           formatCellValue={formatCellValue}
         />
-        <ForecastChart uploadedData={uploadedData} predictionRows={predictionRows} />
+        <ForecastChart
+            uploadedData={uploadedData}
+            predictionRows={predictionRows}
+            predictionProcessed={predictionProcessed}
+        />
         <ModelMetricsCards
           bestModel={getBestModel()}
           bestModelMetric={getBestModelMetric()}

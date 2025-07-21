@@ -37,7 +37,7 @@ export function useTrainingLogic({
   const [progress, setProgress] = useState(0);
   const [currentModel, setCurrentModel] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
-  const { setPredictionRows, predictionProcessed, setPredictionProcessed, trainingStartTime, setTrainingStartTime, setSessionId } = useData();
+  const { setPredictionRows, predictionProcessed, setPredictionProcessed, trainingStartTime, setTrainingStartTime, setSessionId, resetTrainingState } = useData();
   const [pycaretModalVisible, setPycaretModalVisible] = useState(false);
   const [pycaretLeaderboards, setPycaretLeaderboards] = useState(null);
 
@@ -179,13 +179,6 @@ export function useTrainingLogic({
   };
 
   // --- Training logic ---
-  const resetTrainingState = () => {
-    setTrainingStatus(null);
-    setSessionId(null);
-    setTotalTrainingTime('');
-    setTrainingStartTime(null);
-  };
-
   const getTrainingStatus = () => {
     if (globalTrainingStatus) {
       if (['completed', 'complete'].includes(globalTrainingStatus.status)) {
@@ -333,6 +326,7 @@ export function useTrainingLogic({
   };
 
   const handleStartTraining = async () => {
+    resetTrainingState();
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -532,44 +526,16 @@ export function useTrainingLogic({
     return null;
   };
 
-  // Парсим заголовки файла при загрузке uploadedFile
+  // Устанавливаем fileColumns только из previewData.columns
+  const { previewData } = useData();
   useEffect(() => {
     if (!uploadedFile) {
       setFileColumns([]);
       return;
     }
-    const parseHeaders = async () => {
-      if (uploadedFile.name.endsWith('.csv')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target.result;
-          const lines = text.split(/\r?\n/);
-          if (lines.length > 0) {
-            const headers = lines[0].split(',').map(h => h.trim());
-            setFileColumns(headers);
-          }
-        };
-        reader.readAsText(uploadedFile);
-      } else if (uploadedFile.name.endsWith('.xlsx') || uploadedFile.name.endsWith('.xls')) {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const XLSX = await import('xlsx');
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-          if (rows.length > 0) {
-            setFileColumns(rows[0].map(h => h?.toString().trim()));
-          }
-        };
-        reader.readAsArrayBuffer(uploadedFile);
-      } else {
-        setFileColumns([]);
-      }
-    };
-    parseHeaders();
-    // eslint-disable-next-line
-  }, [uploadedFile]);
+    const columns = previewData?.columns || [];
+    setFileColumns(columns);
+  }, [uploadedFile, previewData]);
 
   return {
     autoSaveEnabled, setAutoSaveEnabled,

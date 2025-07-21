@@ -7,6 +7,7 @@ from train_prediciton_save.router import router as train_prediction_save_router
 from logs.router import router as logs_router
 from instruction.router import router as instruction_router
 from base64_training.router import router as base64_training_router
+from excel_parsing.router import router as excel_parsing_router
 from contextlib import asynccontextmanager
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -74,3 +75,4 @@ app.include_router(db_router)
 app.include_router(logs_router)
 app.include_router(instruction_router)
 app.include_router(base64_training_router)
+app.include_router(excel_parsing_router)

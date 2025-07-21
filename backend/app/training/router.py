@@ -543,6 +543,9 @@ async def prepare_training_data_and_status(
                 return modin_pd.read_excel(stream)
         df_train = await asyncio.to_thread(read_data_from_stream, file_like_object, training_file.filename)
         file_like_object.close()
+        # Сохраняем оригинальный датасет в parquet с фиксированным именем original_file.parquet
+        original_parquet_path = os.path.join(session_path, "original_file.parquet")
+        await asyncio.to_thread(df_train.to_parquet, original_parquet_path)
         await asyncio.to_thread(df_train.to_parquet, parquet_file_path)
         original_filename = training_file.filename
     initial_status = {

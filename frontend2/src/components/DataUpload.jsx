@@ -94,7 +94,7 @@ export default function DataUpload() {
       setPreviewData({
         columns: parsedData.columns,
         rows: previewRows,
-        totalRows: parsedData.rows.length,
+        totalRows: parsedData.totalRows, // <-- теперь всегда корректно
         fullData: parsedData // Сохраняем полные данные в previewData
       })
       // Сохраняем данные сразу после загрузки
@@ -409,7 +409,7 @@ export default function DataUpload() {
       setPreviewData({
         columns: parsedData.columns,
         rows: previewRows,
-        totalRows: parsedData.rows.length,
+        totalRows: parsedData.totalRows, // <-- теперь всегда корректно
         fullData: parsedData // Сохраняем полные данные и для БД
       })
 
