@@ -7,6 +7,9 @@ import { BarChart3, AlertTriangle, PieChart } from 'lucide-react'
 import { Button } from '@/components/ui/button.jsx'
 import { API_BASE_URL } from '../apiConfig.js'
 
+// --- PROMISE CACHE НА УРОВНЕ МОДУЛЯ ---
+const globalAnalysisPromiseCache = {};
+
 export default function Analysis() {
   const navigate = useNavigate();
   const { uploadedFile, predictionProcessed, sessionId, analysisCache, setAnalysisCache } = useData()
@@ -34,6 +37,23 @@ export default function Analysis() {
       setError('')
       setLoading(false)
       return
+    }
+    // Если уже идет запрос для этого cacheKey — ждем его
+    if (globalAnalysisPromiseCache[cacheKey]) {
+      setLoading(true)
+      globalAnalysisPromiseCache[cacheKey].then((result) => {
+        setColumns(result.columns)
+        setRows(result.rows)
+        setDateColIdx(result.dateColIdx)
+        setMissingStats(result.missingStats)
+        setMissingBins(result.missingBins)
+        setError('')
+        setLoading(false)
+      }).catch(e => {
+        setError(e.message || 'Ошибка анализа файла')
+        setLoading(false)
+      });
+      return;
     }
     async function loadData() {
       setLoading(true)
@@ -68,36 +88,40 @@ export default function Analysis() {
           setLoading(false)
           return
         }
-        setColumns(result.columns)
-        setRows(result.rows)
         const dateIdx = result.columns.findIndex(col => /date|время|time/i.test(col))
-        setDateColIdx(dateIdx)
         const stats = {
           total: result.total,
           missing: result.missing,
           percent: result.percent
         }
+        const cacheObj = {
+          columns: result.columns,
+          rows: result.rows,
+          dateColIdx: dateIdx,
+          missingStats: stats,
+          missingBins: result.bins
+        }
+        setColumns(result.columns)
+        setRows(result.rows)
+        setDateColIdx(dateIdx)
         setMissingStats(stats)
         setMissingBins(result.bins)
-        // Сохраняем в кэш
-        setAnalysisCache(prev => ({
-          ...prev,
-          [cacheKey]: {
-            columns: result.columns,
-            rows: result.rows,
-            dateColIdx: dateIdx,
-            missingStats: stats,
-            missingBins: result.bins
-          }
-        }))
+        setAnalysisCache(prev => ({ ...prev, [cacheKey]: cacheObj }))
+        return cacheObj;
       } catch (e) {
         setError(e.message || 'Ошибка анализа файла')
+        throw e;
       } finally {
         setLoading(false)
       }
     }
-    loadData()
-  }, [uploadedFile, sessionId])
+    // Сохраняем промис в глобальный кэш, чтобы не делать повторных запросов
+    const promise = loadData();
+    globalAnalysisPromiseCache[cacheKey] = promise;
+    promise.finally(() => {
+      delete globalAnalysisPromiseCache[cacheKey];
+    });
+  }, [cacheKey])
 
   // Сброс кэша при загрузке нового файла
   useEffect(() => {
