@@ -168,7 +168,35 @@ export default function DbSettingsButton() {
               </div>
             </div>
             {errorMessage && <div className="text-red-600 text-sm mt-2">{errorMessage}</div>}
-            <Button className="w-full mt-4" onClick={updateEnvVariables} disabled={isLoading}>
+            {/* Кнопка скачать логи */}
+            <Button className="w-full mt-4 mb-2" variant="outline" onClick={async () => {
+              try {
+                const res = await fetch(`${API_BASE_URL}/logs/download`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ secret_key: secretKey })
+                });
+                if (!res.ok) throw new Error('Ошибка скачивания логов');
+                const blob = await res.blob();
+                const contentDisposition = res.headers.get('content-disposition');
+                let filename = 'app_logs.log';
+                if (contentDisposition) {
+                  const match = contentDisposition.match(/filename="?([^";]+)"?/);
+                  if (match) filename = match[1];
+                }
+                const link = document.createElement('a');
+                link.href = window.URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              } catch (e) {
+                setErrorMessage('Ошибка скачивания логов');
+              }
+            }}>
+              Скачать логи
+            </Button>
+            <Button className="w-full mt-2" onClick={updateEnvVariables} disabled={isLoading}>
               {isLoading ? 'Сохранение...' : 'Сохранить настройки'}
             </Button>
           </div>
@@ -187,4 +215,4 @@ export default function DbSettingsButton() {
       )}
     </>
   );
-} 
+}
