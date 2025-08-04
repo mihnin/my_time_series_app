@@ -8,6 +8,10 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 from fastapi import Request
+from io import BytesIO
+from openpyxl import load_workbook
+
+
 
 router = APIRouter()
 
@@ -22,10 +26,12 @@ async def preview_excel(file: UploadFile = File(...)):
             # Для csv считаем строки вручную
             total_rows = sum(1 for _ in file.file) - 1  # минус строка заголовков
         else:
-            df = pd.read_excel(file.file, nrows=10)
-            file.file.seek(0)
-            from openpyxl import load_workbook
-            wb = load_workbook(file.file, read_only=True)
+            # Читаем файл в память
+            file_bytes = await file.read()
+            excel_io = BytesIO(file_bytes)
+            df = pd.read_excel(excel_io, nrows=10)
+            excel_io.seek(0)
+            wb = load_workbook(excel_io, read_only=True)
             ws = wb.active
             total_rows = ws.max_row - 1  # минус строка заголовков
             wb.close()
