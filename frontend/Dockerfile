@@ -18,7 +18,7 @@ RUN npm install --production=false
 COPY . .
 
 # Выполняем сборку вашего фронтенд-приложения
-RUN npm run build-only
+RUN npm run build
 
 # --- СТАДИЯ 2: NGINX (Финальный образ для обслуживания статики) ---
 # Используем официальный легковесный образ Nginx

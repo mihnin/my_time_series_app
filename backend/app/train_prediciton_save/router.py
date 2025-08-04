@@ -12,7 +12,6 @@ from typing import Dict, Optional
 from datetime import datetime
 from io import BytesIO
 
-import pandas as modin_pd
 from db.db_manager import upload_df_to_db
 from db.jwt_logic import get_current_user_db_creds
 from db.db_manager import auto_convert_dates
@@ -23,6 +22,7 @@ from src.validation.data_validation import validate_dataset
 from sessions.utils import (
     create_session_directory,
     save_session_metadata,
+    load_session_metadata,
     cleanup_old_sessions,
     get_model_path,
     training_sessions
@@ -46,7 +46,12 @@ async def run_training_prediction_async(
     try:
         logging.info(f"[run_training_async] Запуск обучения для session_id={session_id}, файл: {original_filename}")
         session_path = create_session_directory(session_id)
-        status = training_sessions[session_id]
+        
+        # ВАЖНО: Загружаем актуальный статус из metadata.json на случай, если там уже есть данные
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions.get(session_id, {})
+        
         logging.info(f"[run_training_async] Статус сессии до обновления: {status}")
         status.update({
             "status": "running",
@@ -73,15 +78,13 @@ async def run_training_prediction_async(
             raise ValueError(error_message)
         logging.info(f"[run_training_async] Валидация успешно пройдена.")
 
-        status.update({"progress": 10})
-        logging.info(f"[run_training_async] Статус после валидации: {status}")
-        save_session_metadata(session_id, status)
-        
         # 2. Setup model directory
         model_path = get_model_path(session_id)
         os.makedirs(model_path, exist_ok=True)
         logging.info(f"[run_training_async] Каталог модели создан: {model_path}")
 
+        # Обновляем прогресс только до начала основного обучения
+        # Дальнейшие обновления прогресса будут происходить внутри train_model
         text_to_progress = {
             'preparation': 10,
             'holidays': 20,
@@ -103,7 +106,12 @@ async def run_training_prediction_async(
         logging.info(f"[run_training_async] Передача задачи обучения в пул потоков...")
         await asyncio.to_thread(train_func)
 
-        # Update final status
+        # Update final status after training is complete
+        # ВАЖНО: Загружаем актуальный статус из metadata.json, чтобы не потерять messages и другие данные
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         status.update({
             "status": "Начинаем прогноз",
             "end_time": datetime.now().isoformat(),
@@ -111,6 +119,7 @@ async def run_training_prediction_async(
             "model_path": model_path,
             "training_parameters": training_params.model_dump()  # сохраняем параметры обучения в финальном статусе
         })
+        logging.info(f"[run_training_async] Progress updated to 70 (prediction start)")
 
         save_session_metadata(session_id, status)
         training_sessions[session_id] = status
@@ -154,6 +163,11 @@ async def run_training_prediction_async(
             logging.info(f"[run_training_async] Прогноз успешно загружен в таблицу '{table_name}' базы данных (схема: {schema}).")
 
         # Гарантированно обновляем статус после загрузки в БД
+        # ВАЖНО: Снова загружаем актуальный статус из metadata.json перед финальным обновлением
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         status.update({"progress": 100, 'status': 'completed'})
         save_session_metadata(session_id, status)
         training_sessions[session_id] = status
@@ -161,7 +175,12 @@ async def run_training_prediction_async(
     except Exception as e:
         error_msg = str(e)
         logging.error(f"[run_training_async] Ошибка обучения в сессии {session_id}: {error_msg}", exc_info=True)
-        status = training_sessions[session_id]
+        
+        # ВАЖНО: Загружаем актуальный статус перед обновлением ошибки
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         status.update({
             "status": "failed",
             "error": error_msg,

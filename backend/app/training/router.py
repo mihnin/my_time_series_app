@@ -120,6 +120,11 @@ async def run_training_async(
         await asyncio.to_thread(train_func)
 
         # Update final status
+        # ВАЖНО: Загружаем актуальный статус после обучения, чтобы не потерять messages
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         status.update({
             "status": "completed",
             "end_time": datetime.now().isoformat(),
@@ -134,7 +139,12 @@ async def run_training_async(
     except Exception as e:
         error_msg = str(e)
         logging.error(f"[run_training_async] Ошибка обучения в сессии {session_id}: {error_msg}", exc_info=True)
-        status = training_sessions[session_id]
+        
+        # ВАЖНО: Загружаем актуальный статус перед записью ошибки
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         status.update({
             "status": "failed",
             "error": error_msg,
@@ -231,7 +241,11 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
         df.to_parquet(parquet_file_path, index=False)
     # Сохраняем messages и путь к наивному прогнозу в metadata.json если есть session_id
     if session_id is not None and session_id in training_sessions:
-        status = training_sessions[session_id]
+        # ВАЖНО: Загружаем актуальный статус из metadata.json перед добавлением messages
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         if messages:
             if 'messages' not in status:
                 status['messages'] = []
@@ -239,6 +253,8 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
         if naive_forecast_path:
             status['naive_forecast_path'] = naive_forecast_path
         save_session_metadata(session_id, status)
+        # Обновляем кэш
+        training_sessions[session_id] = status
     return df
 
 def train_model(
@@ -250,13 +266,28 @@ def train_model(
 ) -> None:
     """Основная функция обучения (запускается в отдельном потоке)."""
     try:
-        status = training_sessions[session_id]
+        if text_to_progress is None:
+            text_to_progress = {
+                'preparation': 10,
+                'holidays': 20,
+                'missings': 30,
+                'dataframe': 40,
+                'training': 50,
+                'metadata': 60
+            }
+        
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
         logging.info(f"[train_model] Начало подготовки данных для session_id={session_id}")
         # 3. Data Preparation
         df2 = df_train.copy()
         df2[training_params.datetime_column] = pd.to_datetime(df2[training_params.datetime_column], errors="coerce")
         status.update({"progress": text_to_progress['preparation']}) 
+        logging.info(f"[train_model] Progress updated to {text_to_progress['preparation']} (preparation)")
         save_session_metadata(session_id, status)
+        training_sessions[session_id] = status  # обновляем кэш
         
         # --- Сохраняем статические данные в static_data.parquet ---
         id_col = training_params.item_id_column
@@ -280,7 +311,9 @@ def train_model(
             )
             logging.info(f"[train_model] Добавлен признак российских праздников.")
         status.update({"progress": text_to_progress['holidays']})
+        logging.info(f"[train_model] Progress updated to {text_to_progress['holidays']} (holidays)")
         save_session_metadata(session_id, status)
+        training_sessions[session_id] = status  # обновляем кэш
 
         # Fill missing values (custom logic)
         df2 = fill_missing_values(
@@ -290,17 +323,36 @@ def train_model(
         )
         logging.info(f"[train_model] Пропущенные значения обработаны методом: {training_params.fill_missing_method}")
         status.update({"progress": text_to_progress['missings']})
+        logging.info(f"[train_model] Progress updated to {text_to_progress['missings']} (missings)")
         save_session_metadata(session_id, status)
+        training_sessions[session_id] = status  # обновляем кэш
 
         # Универсальное дополнение до нужной частоты + запись messages
         df2 = fill_to_frequency(df2, training_params, session_id=session_id)
         logging.info(f"[train_model] Данные дополнены до частоты {training_params.frequency}")
         
+        # ВАЖНО: После fill_to_frequency нужно перезагрузить статус, так как там могли сохраниться messages
+        status = load_session_metadata(session_id)
+        if status is None:
+            status = training_sessions[session_id]
+        
+        status.update({"progress": text_to_progress['dataframe']})
+        logging.info(f"[train_model] Progress updated to {text_to_progress['dataframe']} (dataframe)")
+        save_session_metadata(session_id, status)
+        training_sessions[session_id] = status  # обновляем кэш
 
         if len(df2) != 0:
+            status.update({"progress": text_to_progress['training']})
+            logging.info(f"[train_model] Progress updated to {text_to_progress['training']} (training)")
+            save_session_metadata(session_id, status)
+            training_sessions[session_id] = status  # обновляем кэш
             for strategy in automl_manager.get_strategies():
                 strategy.train(df2, training_params, session_id)
 
+        status.update({"progress": text_to_progress['metadata']})
+        logging.info(f"[train_model] Progress updated to {text_to_progress['metadata']} (metadata)")
+        save_session_metadata(session_id, status)
+        training_sessions[session_id] = status  # обновляем кэш
         session_path = get_session_path(session_id)
         combined_leaderboard = automl_manager.combine_leaderboards(session_id, [strategy.name for strategy in automl_manager.get_strategies()])
         combined_leaderboard.to_csv(os.path.join(session_path, 'leaderboard.csv'), index=False)
@@ -491,6 +543,9 @@ async def prepare_training_data_and_status(
                 return modin_pd.read_excel(stream)
         df_train = await asyncio.to_thread(read_data_from_stream, file_like_object, training_file.filename)
         file_like_object.close()
+        # Сохраняем оригинальный датасет в parquet с фиксированным именем original_file.parquet
+        original_parquet_path = os.path.join(session_path, "original_file.parquet")
+        await asyncio.to_thread(df_train.to_parquet, original_parquet_path)
         await asyncio.to_thread(df_train.to_parquet, parquet_file_path)
         original_filename = training_file.filename
     initial_status = {

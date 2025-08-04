@@ -6,6 +6,8 @@ from db.router import router as db_router
 from train_prediciton_save.router import router as train_prediction_save_router
 from logs.router import router as logs_router
 from instruction.router import router as instruction_router
+from base64_training.router import router as base64_training_router
+from excel_parsing.router import router as excel_parsing_router
 from contextlib import asynccontextmanager
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -35,14 +37,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Load frontend URL from environment
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
 # Настройка CORS для работы с Vue.js фронтендом
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vue.js dev server
-        "http://localhost:4173",  # Vue.js production preview
-        "http://localhost:3000",  # Production frontend
-    ],
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,3 +74,5 @@ app.include_router(prediction_router)
 app.include_router(db_router)
 app.include_router(logs_router)
 app.include_router(instruction_router)
+app.include_router(base64_training_router)
+app.include_router(excel_parsing_router)
