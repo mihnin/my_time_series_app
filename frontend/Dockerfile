@@ -28,6 +28,9 @@ FROM nginx:alpine
 # Vue.js (Vite) собирает в папку 'dist'
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Копируем кастомный конфиг nginx для SPA (history mode)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Открываем порт, на котором будет слушать Nginx
 EXPOSE 80
 

@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "autogluon_models/chronos-bolt-small",
+  "_name_or_path": "autogluon/chronos-bolt-small",
   "architectures": [
     "ChronosBoltModelForForecasting"
   ],
