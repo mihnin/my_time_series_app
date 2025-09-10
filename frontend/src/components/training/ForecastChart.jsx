@@ -6,6 +6,7 @@ import { useData } from '../../contexts/DataContext';
 import { API_BASE_URL } from '../../apiConfig';
 
 export default function ForecastChart({ uploadedData, predictionRows, predictionProcessed }) {
+  // Все DEBUG LOGS и вычисления — только после объявления переменных ниже
   const { trainingConfig, sessionId, factRows, factLoading, factError, getFactRows } = useData();
   const dateCol = uploadedData && (trainingConfig?.dateColumn || uploadedData.columns.find(col => /date|время|time/i.test(col)) || uploadedData.columns[0]);
   const valueCol = uploadedData && (trainingConfig?.targetColumn || uploadedData.columns.find(col => /target|value|y/i.test(col)) || uploadedData.columns[uploadedData.columns.length-1]);
@@ -14,6 +15,7 @@ export default function ForecastChart({ uploadedData, predictionRows, prediction
   if (uploadedData && idCol) {
     firstId = uploadedData.rows[0][uploadedData.columns.indexOf(idCol)];
   }
+
 
   useEffect(() => {
     if (!predictionProcessed) return;
@@ -24,13 +26,19 @@ export default function ForecastChart({ uploadedData, predictionRows, prediction
   if (!uploadedData || !predictionRows || predictionRows.length === 0) return null;
 
   // Формируем данные для графика
-  const train = factRows.map(row => ({
-    date: String(row[dateCol]),
-    actual: Number(row[valueCol])
-  })).filter(row => row.date && !isNaN(row.actual));
+  const train = idCol && firstId !== null
+    ? factRows.filter(row => String(row[idCol]) === String(firstId))
+        .map(row => ({
+          date: String(row[dateCol]),
+          actual: Number(row[valueCol])
+        })).filter(row => row.date && !isNaN(row.actual))
+    : factRows.map(row => ({
+          date: String(row[dateCol]),
+          actual: Number(row[valueCol])
+        })).filter(row => row.date && !isNaN(row.actual));
 
   const pred = idCol
-    ? predictionRows.filter(row => row[idCol] === firstId)
+    ? predictionRows.filter(row => String(row[idCol]) === String(firstId))
         .map(row => ({
           date: String(row[dateCol]),
           forecast: Number(row[valueCol])

@@ -1,4 +1,3 @@
-import base64
 import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -10,7 +9,8 @@ import uuid
 import logging
 import asyncio
 from typing import Optional, List, Union
-
+from minio import Minio
+from minio.error import S3Error
 from training.model import TrainingParameters
 from train_prediciton_save.router import run_training_prediction_async
 from sessions.utils import (
@@ -25,7 +25,7 @@ from AutoML.manager import automl_manager
 router = APIRouter()
 
 class TrainPredictRequest(BaseModel):
-    train_file_base64: str
+    minio_file_id: str
     datetime_column: str = 'Date'
     target_column: str = 'Target'
     item_id_column: str = 'Shop'
@@ -41,10 +41,41 @@ class TrainPredictRequest(BaseModel):
     training_time_limit: Optional[int] = 60
     static_feature_columns: Optional[Union[List[str], str]] = []
     pycaret_models: Optional[str] = None
+    
+def get_minio_client():
+    # TODO: заменить на реальные значения или вынести в конфиг
+    minio_endpoint = os.getenv('MINIO_ENDPOINT', 'localhost:9000')
+    minio_access_key = os.getenv('MINIO_ACCESS_KEY', 'minioadmin')
+    minio_secret_key = os.getenv('MINIO_SECRET_KEY', 'minioadmin')
+    minio_secure = os.getenv('MINIO_SECURE', '0') == '1'
+    return Minio(
+        minio_endpoint,
+        access_key=minio_access_key,
+        secret_key=minio_secret_key,
+        secure=minio_secure
+    )
+
+def get_file_from_minio(file_id: str) -> bytes:
+    # file_id формат: <bucket>/<object>
+    if '/' not in file_id:
+        raise HTTPException(status_code=400, detail='minio_file_id должен быть в формате <bucket>/<object>')
+    bucket, object_name = file_id.split('/', 1)
+    client = get_minio_client()
+    try:
+        response = client.get_object(bucket, object_name)
+        data = response.read()
+        response.close()
+        response.release_conn()
+        return data
+    except S3Error as e:
+        raise HTTPException(status_code=404, detail=f'Ошибка получения файла из MinIO: {str(e)}')
+
 
 class FileResponse(BaseModel):
-    name: str
-    content: str
+    fileId: str
+    fileName: str
+    mimeType: str
+
 
 class TrainPredictResponse(BaseModel):
     files: List[FileResponse]
@@ -215,29 +246,33 @@ def create_enhanced_prediction_file(session_id: str) -> bytes:
     output.seek(0)
     return output.getvalue()
 
+def upload_file_to_minio(file_bytes: bytes, bucket: str, object_name: str, content_type: str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
+    client = get_minio_client()
+    found = client.bucket_exists(bucket)
+    if not found:
+        client.make_bucket(bucket)
+    client.put_object(
+        bucket,
+        object_name,
+        io.BytesIO(file_bytes),
+        length=len(file_bytes),
+        content_type=content_type
+    )
+
 @router.post("/train_predict_base64/", response_model=TrainPredictResponse)
 async def train_predict_base64(request: TrainPredictRequest):
     """
-    Эндпоинт для обучения модели и прогноза по Excel файлам в формате base64.
-    
-    1. Получает файлы в base64
-    2. Запускает обучение
-    3. Делает прогноз
-    4. Возвращает файл с прогнозом и метаинформацией в base64
-    
-    Возвращаемый файл содержит несколько листов:
-    - Prediction: основной прогноз
-    - Leaderboard: результаты сравнения моделей
-    - TrainingParams: параметры обучения
-    - WeightedEnsemble: веса ансамбля моделей
-    - Messages: сообщения процесса обучения
-    - PyCaret_Leaderboards: детальные результаты PyCaret (если используется)
+    Эндпоинт для обучения модели и прогноза по Excel файлам, получаемым из MinIO.
+    1. Получает id файла в MinIO (minio_file_id: <bucket>/<object>)
+    2. Скачивает файл из MinIO
+    3. Запускает обучение
+    4. Делает прогноз
+    5. Загружает прогноз в MinIO в ту же папку
+    6. Возвращает fileId, fileName, mimeType
     """
     session_id = str(uuid.uuid4())
-    
     try:
         logging.info(f"[train_predict_base64] Начало обработки для session_id={session_id}")
-        
         # Обрабатываем static_feature_columns если это строка JSON
         if isinstance(request.static_feature_columns, str) and request.static_feature_columns.strip():
             try:
@@ -246,34 +281,27 @@ async def train_predict_base64(request: TrainPredictRequest):
             except json.JSONDecodeError as e:
                 logging.warning(f"[train_predict_base64] Не удалось парсить static_feature_columns как JSON: {e}")
                 request.static_feature_columns = []
-        
         # Создаем параметры обучения из запроса
         training_params = get_default_training_params(request)
-
-        # Декодируем base64 файл
+        # Получаем файл из MinIO
         try:
-            train_file_bytes = base64.b64decode(request.train_file_base64)
+            train_file_bytes = get_file_from_minio(request.minio_file_id)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Ошибка декодирования base64: {str(e)}")
-        
+            raise HTTPException(status_code=400, detail=f"Ошибка получения файла из MinIO: {str(e)}")
         # Загружаем данные для обучения
         try:
             df_train = pd.read_excel(io.BytesIO(train_file_bytes))
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Ошибка чтения Excel файла: {str(e)}")
-        
-        logging.info(f"[train_predict_base64] Файл загружен. Train shape: {df_train.shape}")
-        
+        logging.info(f"[train_predict_base64] Файл из MinIO загружен. Train shape: {df_train.shape}")
         # Создаем сессию
         session_path = create_session_directory(session_id)
-        
         # Инициализируем статус сессии
         training_sessions[session_id] = {
             "status": "initializing",
             "session_id": session_id,
             "session_path": session_path
         }
-        
         # Запускаем обучение синхронно (внутри уже происходит и прогноз)
         await run_training_prediction_async(
             session_id=session_id,
@@ -282,43 +310,51 @@ async def train_predict_base64(request: TrainPredictRequest):
             original_filename="train_file.xlsx",
             token=""  # Пустой токен для того, чтобы не загружать в БД
         )
-        
         # Проверяем статус выполнения
         session_status = training_sessions.get(session_id, {})
         if session_status.get("status") != "completed":
             error_msg = session_status.get("error", "Неизвестная ошибка обучения")
             raise HTTPException(status_code=500, detail=f"Ошибка обучения: {error_msg}")
-        
         logging.info(f"[train_predict_base64] Обучение и прогноз завершены для session_id={session_id}")
-        
-        # Создаём расширенный файл с метаинформацией
+        # --- Новый блок: загрузка прогноза в MinIO ---
+        # Определяем bucket и папку исходного файла
+        src_file_id = request.minio_file_id
+        if '/' not in src_file_id:
+            raise HTTPException(status_code=400, detail='minio_file_id должен быть в формате <bucket>/<object>')
+        bucket, src_object = src_file_id.split('/', 1)
+        src_dir = os.path.dirname(src_object)
+        pred_filename = f"prediction_with_metadata_{session_id}.xlsx"
+        if src_dir and src_dir != ".":
+            pred_object = f"{src_dir}/{pred_filename}"
+        else:
+            pred_object = pred_filename
+        # Генерируем файл прогноза
         try:
             enhanced_file_bytes = create_enhanced_prediction_file(session_id)
-            prediction_base64 = base64.b64encode(enhanced_file_bytes).decode('utf-8')
-            filename = f"prediction_with_metadata_{session_id}.xlsx"
-            logging.info(f"[train_predict_base64] Создан расширенный файл с метаинформацией для session_id={session_id}")
         except Exception as e:
-            logging.warning(f"[train_predict_base64] Ошибка создания расширенного файла: {e}")
-            # Fallback к обычному файлу прогноза
-            try:
-                basic_file_bytes = create_basic_prediction_file(session_id)
-                prediction_base64 = base64.b64encode(basic_file_bytes).decode('utf-8')
-                filename = f"prediction_{session_id}.xlsx"
-                logging.info(f"[train_predict_base64] Использован базовый файл прогноза для session_id={session_id}")
-            except Exception as e:
-                logging.error(f"[train_predict_base64] Ошибка при использовании базового файла прогноза: {e}")
-                raise HTTPException(status_code=500, detail="Файл с прогнозом не найден")
-        
-        logging.info(f"[train_predict_base64] Успешно завершено для session_id={session_id}")
-        
+            logging.error(f"[train_predict_base64] Ошибка создания файла прогноза: {e}")
+            raise HTTPException(status_code=500, detail="Ошибка создания файла прогноза")
+        # Загружаем прогноз в MinIO
+        try:
+            upload_file_to_minio(
+                enhanced_file_bytes,
+                bucket=bucket,
+                object_name=pred_object,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            logging.error(f"[train_predict_base64] Ошибка загрузки прогноза в MinIO: {e}")
+            raise HTTPException(status_code=500, detail="Ошибка загрузки прогноза в MinIO")
+        # Возвращаем fileId, fileName, mimeType
+        file_id = f"{bucket}/{pred_object}"
         return TrainPredictResponse(
             files=[FileResponse(
-                name=filename,
-                content=prediction_base64
+                fileId=file_id,
+                fileName=pred_filename,
+                mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )],
             session_id=session_id
         )
-        
     except HTTPException:
         raise
     except Exception as e:

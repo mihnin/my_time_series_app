@@ -32,6 +32,8 @@ class AutoMLManager:
         session_path = get_session_path(session_id)
         leaderboard_path = os.path.join(session_path, "leaderboard.csv")
         leaderboard = pd.read_csv(leaderboard_path)
+        if leaderboard is None or len(leaderboard) == 0:
+            return None
         best_strategy = leaderboard.iloc[0]["strategy"]
         if best_strategy == 'autogluon':
             return autogluon_strategy

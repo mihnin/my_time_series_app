@@ -71,6 +71,9 @@ def predict_timeseries(session_id: str):
 
     if len(df) != 0:
         best_strategy = automl_manager.get_best_strategy(session_id)
+        if best_strategy is None:
+            logging.error(f"Нет обученных моделей для session_id={session_id}")
+            raise HTTPException(status_code=400, detail="Не удалось обучить ни одной модели. Проверьте параметры обучения и качество данных.")
         preds = best_strategy.predict(df, session_id, params)
     else:
         preds = pd.DataFrame()

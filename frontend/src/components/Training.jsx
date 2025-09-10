@@ -144,6 +144,13 @@ export default function Training() {
           openPycaretModal={openPycaretModal}
           formatCellValue={formatCellValue}
         />
+        {/* Предупреждение если обучение завершено, но моделей нет */}
+        {globalTrainingStatus?.status === 'completed' &&
+          (Array.isArray(globalTrainingStatus.leaderboard) && globalTrainingStatus.leaderboard.length === 0) && (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm mb-4">
+              <b>Внимание:</b> Не удалось обучить ни одной модели. Проверьте параметры обучения и качество исходных данных.
+            </div>
+        )}
         <ForecastChart
             uploadedData={uploadedData}
             predictionRows={predictionRows}

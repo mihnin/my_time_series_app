@@ -355,3 +355,4 @@ zict==3.0.0
 zipp==3.22.0
 zope.event==5.0
 zope.interface==7.2
+minio==7.2.16

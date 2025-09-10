@@ -62,10 +62,10 @@ export default function TrainingControl({
             <div className="flex items-center space-x-2">
               <CheckCircle className="text-green-600" size={20} />
               <div>
-                <p className="font-medium text-green-800">Обучение завершено успешно</p>
-                <p className="text-sm text-green-600">
-                  Все модели обучены. Результаты доступны в таблице ниже.
-                </p>
+                  <p className="font-medium text-green-800">Обучение завершено успешно</p>
+                  <p className="text-sm text-green-600">
+                    Модели обучены. Результаты доступны для экспорта.
+                  </p>
               </div>
             </div>
           </div>

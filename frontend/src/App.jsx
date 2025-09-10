@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import './App.css'
 import { DataProvider, useData } from './contexts/DataContext'
+import LogoImage from './assets/logo.png'
 
 // Import page components (to be created)
 import Dashboard from './components/Dashboard'
@@ -91,9 +92,9 @@ function Navigation() {
 
   return (
     <nav className="w-64 bg-sidebar border-r border-sidebar-border p-4 relative">
-      <div className="mb-8">
-        <h1 className="text-xl font-bold text-primary mb-2">Logo</h1>
-        <p className="text-sm text-muted-foreground">Прогнозирование временных рядов</p>
+      <div className="mb-8 flex flex-col items-center">
+  <img src={LogoImage} alt="Логотип" className="h-16 w-auto object-contain mb-2 rounded-md" />
+        <div className="text-sm text-center text-muted-foreground">Прогнозирование временных рядов</div>
       </div>
       
       <div className="space-y-2">

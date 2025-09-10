@@ -55,7 +55,7 @@ async def get_timeseries_by_id(req: TimeSeriesRequest):
     if not session_id or not id_column or not ts_id:
         raise HTTPException(status_code=400, detail="session_id, id_column и ts_id обязательны")
     session_dir = os.path.join("training_sessions", session_id)
-    parquet_path = os.path.join(session_dir, "training_data.parquet")
+    parquet_path = os.path.join(session_dir, "original_file.parquet")
     if not os.path.exists(parquet_path):
         raise HTTPException(status_code=404, detail="Файл training_data.parquet не найден")
     try:
