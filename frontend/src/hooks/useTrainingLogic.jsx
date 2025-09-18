@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import * as ExcelJS from 'exceljs';
 import { API_BASE_URL } from '../apiConfig.js';
 import { useData } from '../contexts/DataContext';
 
@@ -290,10 +291,20 @@ export function useTrainingLogic({
             if (!fileResp.ok) throw new Error('Ошибка скачивания прогноза');
             const blob = await fileResp.blob();
             const arrayBuffer = await blob.arrayBuffer();
-            const XLSX = await import('xlsx');
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(arrayBuffer);
+            const worksheet = workbook.worksheets[0];
+            // convert worksheet rows to array-of-arrays (header row included)
+            const rows = [];
+            worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+              const values = [];
+              // exceljs row.values is 1-based index; skip index 0
+              for (let i = 1; i <= row.cellCount; i++) {
+                const cell = row.getCell(i);
+                values.push(cell.value == null ? null : (typeof cell.value === 'object' && cell.value.text ? cell.value.text : cell.value));
+              }
+              rows.push(values);
+            });
             if (rows.length > 1) {
               const headers = rows[0];
               // Фильтруем технические колонки 0.1-0.9

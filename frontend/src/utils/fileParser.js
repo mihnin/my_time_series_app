@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+// removed unused xlsx import; parsing handled where needed using ExcelJS in components/hooks
 import Papa from 'papaparse'
 import { API_BASE_URL } from '../apiConfig'
 

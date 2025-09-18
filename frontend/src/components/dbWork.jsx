@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import * as ExcelJS from 'exceljs';
 import { useData } from '../contexts/DataContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
@@ -276,13 +277,20 @@ export default function DbWork() {
     if (!file) return [];
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-      if (rows.length > 0) {
-        return rows[0].map(h=>h?.toString().trim());
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(arrayBuffer);
+      const worksheet = workbook.worksheets[0];
+      // get first row as headers
+      const headerRow = worksheet.getRow(1);
+      if (!headerRow) return [];
+      const headers = [];
+      for (let i = 1; i <= headerRow.cellCount; i++) {
+        const cell = headerRow.getCell(i);
+        const val = cell.value == null ? '' : (typeof cell.value === 'object' && cell.value.text ? cell.value.text : cell.value);
+        headers.push(val?.toString().trim());
       }
+      return headers;
     }catch(e){ console.error(e); }
     return [];
   };
