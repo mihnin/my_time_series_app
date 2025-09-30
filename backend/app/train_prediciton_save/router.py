@@ -191,8 +191,28 @@ async def run_training_prediction_async(
         training_sessions[session_id] = status
 
 
+def safe_convert_for_parquet(df):
+    """Безопасное преобразование DataFrame для сохранения в Parquet"""
+    df_copy = df.copy()
+    
+    # Преобразуем все столбцы object в string для избежания ошибок смешанных типов
+    for col in df_copy.columns:
+        if df_copy[col].dtype == 'object':
+            # Приводим к строке, заменяя NaN на пустые строки
+            df_copy[col] = df_copy[col].astype(str).replace('nan', '')
+        elif df_copy[col].dtype in ['int64', 'float64']:
+            # Для числовых колонок убеждаемся, что нет смешанных типов
+            try:
+                df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
+            except:
+                # Если не получается преобразовать в число, делаем строкой  
+                df_copy[col] = df_copy[col].astype(str)
+    
+    return df_copy
+
 def save_df_to_parquet(df, path):
-    df.to_parquet(path)
+    df_safe = safe_convert_for_parquet(df)
+    df_safe.to_parquet(path)
 
 
 

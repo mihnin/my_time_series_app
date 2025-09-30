@@ -37,6 +37,24 @@ from sessions.utils import (
 
 # Global training status tracking
 
+def safe_convert_for_parquet(df):
+    """Безопасное преобразование DataFrame для сохранения в Parquet"""
+    df_copy = df.copy()
+    
+    # Преобразуем все столбцы object в string для избежания ошибок смешанных типов
+    for col in df_copy.columns:
+        if df_copy[col].dtype == 'object':
+            # Приводим к строке, заменяя NaN на пустые строки
+            df_copy[col] = df_copy[col].astype(str).replace('nan', '')
+        elif df_copy[col].dtype in ['int64', 'float64']:
+            # Для числовых колонок убеждаемся, что нет смешанных типов
+            try:
+                df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
+            except:
+                # Если не получается преобразовать в число, делаем строкой  
+                df_copy[col] = df_copy[col].astype(str)
+    
+    return df_copy
 
 # Run cleanup of old sessions at startup
 cleanup_old_sessions()
@@ -248,7 +266,8 @@ def fill_to_frequency(df: pd.DataFrame, training_params: TrainingParameters, ses
     if session_id is not None:
         session_path = get_session_path(session_id)
         parquet_file_path = os.path.join(session_path, "training_data.parquet")
-        df.to_parquet(parquet_file_path, index=False)
+        df_safe = safe_convert_for_parquet(df)
+        df_safe.to_parquet(parquet_file_path, index=False)
     # Сохраняем messages и путь к наивному прогнозу в metadata.json если есть session_id
     if session_id is not None and session_id in training_sessions:
         # ВАЖНО: Загружаем актуальный статус из metadata.json перед добавлением messages
@@ -309,7 +328,8 @@ def train_model(
                 static_df = df2[[id_col] + static_cols].drop_duplicates(subset=[id_col])
                 session_path = get_session_path(session_id)
                 static_path = os.path.join(session_path, 'static_data.parquet')
-                static_df.to_parquet(static_path, index=False)
+                static_df_safe = safe_convert_for_parquet(static_df)
+                static_df_safe.to_parquet(static_path, index=False)
                 logging.info(f"[train_model] Статические данные сохранены: {static_path}")
 
         # Add holidays if requested
@@ -537,7 +557,8 @@ async def prepare_training_data_and_status(
         df_train = await fetch_table_as_dataframe(table_name, username, password)
         if df_train.empty:
             raise HTTPException(status_code=400, detail=f"Таблица {table_name} пуста или не найдена")
-        await asyncio.to_thread(df_train.to_parquet, parquet_file_path)
+        df_train_safe = safe_convert_for_parquet(df_train)
+        await asyncio.to_thread(df_train_safe.to_parquet, parquet_file_path)
         original_filename = f"from_db_{table_name}.parquet"
     else:
         # DEBUG: log filename for troubleshooting
@@ -557,12 +578,18 @@ async def prepare_training_data_and_status(
                 return modin_pd.read_csv(stream)
             else:
                 return modin_pd.read_excel(stream)
+        
+        
         df_train = await asyncio.to_thread(read_data_from_stream, file_like_object, training_file.filename)
         file_like_object.close()
+        
+        # Безопасно преобразуем DataFrame перед сохранением в Parquet
+        df_train_safe = await asyncio.to_thread(safe_convert_for_parquet, df_train)
+        
         # Сохраняем оригинальный датасет в parquet с фиксированным именем original_file.parquet
         original_parquet_path = os.path.join(session_path, "original_file.parquet")
-        await asyncio.to_thread(df_train.to_parquet, original_parquet_path)
-        await asyncio.to_thread(df_train.to_parquet, parquet_file_path)
+        await asyncio.to_thread(df_train_safe.to_parquet, original_parquet_path)
+        await asyncio.to_thread(df_train_safe.to_parquet, parquet_file_path)
         original_filename = training_file.filename
     initial_status = {
         "status": "initializing",
@@ -574,4 +601,4 @@ async def prepare_training_data_and_status(
     }
     training_sessions[session_id] = initial_status
     save_session_metadata(session_id, initial_status)
-    return df_train, original_filename, parquet_file_path, session_path, initial_status
+    return df_train_safe, original_filename, parquet_file_path, session_path, initial_status
