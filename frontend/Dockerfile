@@ -1,7 +1,7 @@
 # --- СТАДИЯ 1: BUILDER (Сборка фронтенд-приложения) ---
 # Используем конкретную slim-версию Node.js для сборки
 # 18-alpine - это компактный вариант, но если есть проблемы с glibc, можно взять 18-slim-buster
-FROM node:18.19.1-alpine as builder 
+FROM --platform=linux/amd64 node:18.19.1-alpine as builder 
 
 # Устанавливаем рабочую директорию внутри контейнера для сборки
 WORKDIR /app
@@ -22,7 +22,7 @@ RUN npm run build
 
 # --- СТАДИЯ 2: NGINX (Финальный образ для обслуживания статики) ---
 # Используем официальный легковесный образ Nginx
-FROM nginx:alpine
+FROM --platform=linux/amd64 nginx:alpine
 
 # Копируем собранные статические файлы из стадии 'builder'
 # Vue.js (Vite) собирает в папку 'dist'

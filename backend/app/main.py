@@ -38,7 +38,7 @@ app = FastAPI(
 )
 
 # Load frontend URL from environment
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://172.16.33.12:9080')
 
 # Настройка CORS для работы с Vue.js фронтендом
 app.add_middleware(
